@@ -1,0 +1,19 @@
+{
+  "name": "hightowers-web-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "csv-parse": "^5.5.6",
+    "express": "^4.21.0",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
