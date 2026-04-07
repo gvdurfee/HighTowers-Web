@@ -56,7 +56,7 @@ export function MeasureLinesPanel({
   return (
     <div
       ref={containerRef}
-      className="relative flex-1 flex flex-col overflow-hidden bg-gray-900 rounded-lg"
+      className="relative flex-1 flex flex-col overflow-hidden bg-cap-silver rounded-lg"
       style={{ minHeight: 300 }}
     >
       {/* Image area - we measure this for slider coordinate system */}
@@ -77,7 +77,7 @@ export function MeasureLinesPanel({
           />
           {/* Red line - top of tower */}
           <div
-            className="absolute left-0 right-0 h-0.5 bg-cap-scarlet pointer-events-none z-10"
+            className="absolute left-0 right-0 h-0.5 bg-cap-pimento pointer-events-none z-10"
             style={{ top: topY }}
           />
           {/* Blue line - base of tower */}
@@ -89,8 +89,9 @@ export function MeasureLinesPanel({
       </div>
 
       {/* Sliders - symmetric fill: white ahead of thumb, colored behind */}
-      <div className="flex-shrink-0 p-3 space-y-2 bg-gray-800/50">
+      <div className="flex-shrink-0 p-3 space-y-2 border-t border-gray-500/25 bg-black/[0.06]">
         <div className="space-y-0.5">
+          <label className="text-xs text-cap-pimento font-medium block">Top of tower</label>
           <input
             type="range"
             min={0}
@@ -101,6 +102,7 @@ export function MeasureLinesPanel({
             className="w-full h-2 slider-fill-red cursor-pointer appearance-none bg-transparent"
             style={{ ['--fill-pct' as string]: `${(topSlider / maxVal) * 100}%` }}
             tabIndex={1}
+            aria-label="Top of tower"
           />
         </div>
         <div className="space-y-0.5">
@@ -115,6 +117,7 @@ export function MeasureLinesPanel({
             className="w-full h-2 slider-fill-blue cursor-pointer appearance-none bg-transparent"
             style={{ ['--fill-pct' as string]: `${(baseSlider / maxVal) * 100}%` }}
             tabIndex={2}
+            aria-label="Bottom of tower"
           />
         </div>
       </div>

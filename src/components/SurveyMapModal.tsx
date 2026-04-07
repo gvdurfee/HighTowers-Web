@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Map, MapRef } from 'react-map-gl'
+import { Map, MapRef, Source, Layer } from 'react-map-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { apiConfig } from '@/config/apiConfig'
+import { apiConfig, isMapboxConfigured } from '@/config/apiConfig'
+import { fetchRecentImageryOverlay } from '@/services/recentImageryOverlay'
+import type { RecentImageryOverlay } from '@/services/recentImageryOverlay'
 
 /** Convert decimal degrees to DMS components (DD, MM.mm, N/S or E/W) */
 function toDms(decimal: number, isLat: boolean): { deg: number; min: number; hem: 'N' | 'S' | 'E' | 'W' } {
@@ -16,6 +18,19 @@ function toDms(decimal: number, isLat: boolean): { deg: number; min: number; hem
 function fromDms(deg: number, min: number, hem: 'N' | 'S' | 'E' | 'W'): number {
   const abs = deg + min / 60
   return (hem === 'S' || hem === 'W') ? -abs : abs
+}
+
+/** Minutes for display: always two digits after the decimal (MM.mm) */
+function formatMinutesDisplay(minStr: string): string {
+  if (!minStr.trim()) return '—'
+  const n = Number(minStr)
+  if (!Number.isFinite(n)) return minStr
+  return n.toFixed(2)
+}
+
+/** Minutes when syncing from map center (avoid long float strings in inputs) */
+function formatMinutesFromMap(minutes: number): string {
+  return minutes.toFixed(2)
 }
 
 interface SurveyMapModalProps {
@@ -57,6 +72,21 @@ export function SurveyMapModal({
   const lonHemRef = useRef<HTMLSelectElement>(null)
   const closeBtnRef = useRef<HTMLButtonElement>(null)
   const recordBtnRef = useRef<HTMLButtonElement>(null)
+  const overlayBlobRef = useRef<string | null>(null)
+  /** When true, next map moveend came from coordinate fields / programatic fly — do not overwrite inputs */
+  const skipNextMapCenterSyncRef = useRef(false)
+
+  const [imageryOverlay, setImageryOverlay] = useState<RecentImageryOverlay | null>(null)
+  const [overlayLoading, setOverlayLoading] = useState(false)
+  const [overlayError, setOverlayError] = useState<string | null>(null)
+  const [mapError, setMapError] = useState<string | null>(null)
+
+  const revokeOverlayBlob = useCallback(() => {
+    if (overlayBlobRef.current) {
+      URL.revokeObjectURL(overlayBlobRef.current)
+      overlayBlobRef.current = null
+    }
+  }, [])
 
   const getOrderedFocusables = useCallback((): HTMLElement[] => {
     const els = [
@@ -92,9 +122,6 @@ export function SurveyMapModal({
     [getOrderedFocusables]
   )
 
-  const lat = fromDms(Number(latDeg) || 0, Number(latMin) || 0, latHem)
-  const lon = fromDms(Number(lonDeg) || 0, Number(lonMin) || 0, lonHem)
-
   const [viewState, setViewState] = useState({
     longitude: defLon,
     latitude: defLat,
@@ -110,6 +137,11 @@ export function SurveyMapModal({
       setLonDeg('')
       setLonMin('')
       setLonHem('W')
+      revokeOverlayBlob()
+      setImageryOverlay(null)
+      setOverlayError(null)
+      setOverlayLoading(false)
+      setMapError(null)
       setViewState({
         longitude: initialLon || -106.6504,
         latitude: initialLat || 35.0844,
@@ -119,7 +151,7 @@ export function SurveyMapModal({
       const t = setTimeout(() => setMapReady(true), 100)
       return () => clearTimeout(t)
     }
-  }, [initialLat, initialLon, isOpen])
+  }, [initialLat, initialLon, isOpen, revokeOverlayBlob])
 
   useEffect(() => {
     if (isOpen && modalRef.current) {
@@ -133,17 +165,20 @@ export function SurveyMapModal({
     const latM = Number(latMin)
     const lonM = Number(lonMin)
     if ((latMin && (latM < 0 || latM >= 60)) || (lonMin && (lonM < 0 || lonM >= 60))) return
-    setViewState((prev) => ({ ...prev, longitude: lon, latitude: lat }))
+    const nextLat = fromDms(Number(latDeg) || 0, Number(latMin) || 0, latHem)
+    const nextLon = fromDms(Number(lonDeg) || 0, Number(lonMin) || 0, lonHem)
+    skipNextMapCenterSyncRef.current = true
+    setViewState((prev) => ({ ...prev, longitude: nextLon, latitude: nextLat }))
   }, [latDeg, latMin, latHem, lonDeg, lonMin, lonHem])
 
   const syncCenterToCoords = (lng: number, latVal: number) => {
     const dLat = toDms(latVal, true)
     const dLon = toDms(lng, false)
     setLatDeg(String(dLat.deg))
-    setLatMin(String(dLat.min))
+    setLatMin(formatMinutesFromMap(dLat.min))
     setLatHem(dLat.hem as 'N' | 'S')
     setLonDeg(String(dLon.deg))
-    setLonMin(String(dLon.min))
+    setLonMin(formatMinutesFromMap(dLon.min))
     setLonHem(dLon.hem as 'E' | 'W')
   }
 
@@ -162,6 +197,33 @@ export function SurveyMapModal({
       return false
     }
     return true
+  }
+
+  const handleLoadImageryOverlay = async () => {
+    setOverlayError(null)
+    setOverlayLoading(true)
+    revokeOverlayBlob()
+    setImageryOverlay(null)
+    try {
+      const result = await fetchRecentImageryOverlay(
+        viewState.latitude,
+        viewState.longitude
+      )
+      if (result.url.startsWith('blob:')) {
+        overlayBlobRef.current = result.url
+      }
+      setImageryOverlay(result)
+    } catch (e) {
+      setOverlayError(e instanceof Error ? e.message : 'Failed to load overlay')
+    } finally {
+      setOverlayLoading(false)
+    }
+  }
+
+  const handleRemoveImageryOverlay = () => {
+    revokeOverlayBlob()
+    setImageryOverlay(null)
+    setOverlayError(null)
   }
 
   const handleRecord = async () => {
@@ -184,15 +246,24 @@ export function SurveyMapModal({
   if (!isOpen) return null
 
   const token = apiConfig.mapboxAccessToken
-  if (!token) {
+  if (!isMapboxConfigured()) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl p-6 max-w-md">
-          <p className="text-cap-scarlet">Mapbox token not configured.</p>
+        <div className="bg-white rounded-xl p-6 max-w-md space-y-3">
+          <p className="text-cap-pimento font-medium">Mapbox access token missing or still set to the placeholder.</p>
+          <p className="text-sm text-gray-700">
+            Add a real token from{' '}
+            <a href="https://account.mapbox.com/" className="text-cap-ultramarine underline" target="_blank" rel="noreferrer">
+              account.mapbox.com
+            </a>{' '}
+            to <code className="bg-gray-100 px-1 rounded">HighTowers-Web/.env</code> as{' '}
+            <code className="bg-gray-100 px-1 rounded">VITE_MAPBOX_ACCESS_TOKEN=pk.…</code>
+            , then restart <code className="bg-gray-100 px-1 rounded">npm run dev:all</code>.
+          </p>
           <button
             type="button"
             onClick={onClose}
-            className="mt-4 px-4 py-2 bg-gray-200 rounded-lg"
+            className="mt-2 px-4 py-2 bg-gray-200 rounded-lg"
           >
             Close
           </button>
@@ -225,6 +296,42 @@ export function SurveyMapModal({
         <p className="text-sm text-gray-600 px-4 pb-2">
           Pan and zoom the map so the center crosshair is over the tower base, or enter coordinates below.
         </p>
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-2">
+          <button
+            type="button"
+            onClick={handleLoadImageryOverlay}
+            disabled={overlayLoading}
+            className="text-sm px-3 py-1.5 border border-cap-ultramarine text-cap-ultramarine rounded-lg hover:bg-cap-ultramarine/10 disabled:opacity-50"
+            aria-label="Load recent imagery overlay for this area"
+          >
+            {overlayLoading ? 'Loading overlay…' : 'Load recent imagery overlay'}
+          </button>
+          {imageryOverlay && (
+            <button
+              type="button"
+              onClick={handleRemoveImageryOverlay}
+              className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50"
+              aria-label="Remove imagery overlay"
+            >
+              Remove overlay
+            </button>
+          )}
+        </div>
+        {mapError && (
+          <p className="text-xs text-cap-pimento px-4 pb-1">
+            Map: {mapError} Check VITE_MAPBOX_ACCESS_TOKEN and restart the dev server.
+          </p>
+        )}
+        {overlayError && (
+          <p className="text-xs text-cap-pimento px-4 pb-1">{overlayError}</p>
+        )}
+        {imageryOverlay && (
+          <p className="text-xs text-gray-500 px-4 pb-1">
+            Sentinel-2 is ~10&nbsp;m resolution (often softer than Mapbox). Overlay is visual only; Record
+            Location still uses the map center (crosshair). Use <strong>Remove overlay</strong> for the
+            sharpest Mapbox view.
+          </p>
+        )}
         <div
           className="relative w-full overflow-hidden"
           style={{ height: 400 }}
@@ -236,10 +343,38 @@ export function SurveyMapModal({
               mapboxAccessToken={token}
               {...viewState}
               onMove={(evt) => setViewState(evt.viewState)}
-              onMoveEnd={(evt) => syncCenterToCoords(evt.viewState.longitude, evt.viewState.latitude)}
+              onMoveEnd={(evt) => {
+                if (skipNextMapCenterSyncRef.current) {
+                  skipNextMapCenterSyncRef.current = false
+                  return
+                }
+                syncCenterToCoords(evt.viewState.longitude, evt.viewState.latitude)
+              }}
+              onError={(e) => {
+                const msg =
+                  e.error && typeof (e.error as Error).message === 'string'
+                    ? (e.error as Error).message
+                    : String((e as { error?: unknown }).error ?? 'Map failed to load')
+                setMapError(msg)
+              }}
               style={{ width: '100%', height: '100%' }}
               mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
-            />
+            >
+              {imageryOverlay && (
+                <Source
+                  id="recent-imagery-overlay"
+                  type="image"
+                  url={imageryOverlay.url}
+                  coordinates={imageryOverlay.coordinates}
+                >
+                  <Layer
+                    id="recent-imagery-overlay-layer"
+                    type="raster"
+                    paint={{ 'raster-opacity': 0.55 }}
+                  />
+                </Source>
+              )}
+            </Map>
           )}
           {/* Center crosshair - iPad style: semi-transparent circle with white cross */}
           <div
@@ -250,7 +385,7 @@ export function SurveyMapModal({
               className="relative w-[60px] h-[60px] rounded-full border-2 flex items-center justify-center"
               style={{
                 backgroundColor: 'rgba(0, 20, 137, 0.3)',
-                borderColor: '#001489',
+                borderColor: '#0E2B8D',
               }}
             >
               <div className="absolute w-[2px] h-6 bg-white" />
@@ -282,7 +417,7 @@ export function SurveyMapModal({
                     latMinRef.current?.focus()
                   }
                 }}
-                className="w-10 px-2 py-1.5 border rounded font-mono text-sm"
+                className="w-10 px-2 py-1.5 border border-gray-300 rounded font-mono text-sm bg-white text-gray-900"
                 tabIndex={0}
                 aria-label="Latitude degrees"
                 placeholder=""
@@ -311,7 +446,7 @@ export function SurveyMapModal({
                     lonDegRef.current?.focus()
                   }
                 }}
-                className="w-16 px-2 py-1.5 border rounded font-mono text-sm"
+                className="w-16 px-2 py-1.5 border border-gray-300 rounded font-mono text-sm bg-white text-gray-900"
                 tabIndex={0}
                 aria-label="Latitude minutes"
                 placeholder=""
@@ -327,7 +462,7 @@ export function SurveyMapModal({
                     lonDegRef.current?.focus()
                   }
                 }}
-                className="px-2 py-1.5 border rounded font-mono text-sm"
+                className="px-2 py-1.5 border border-gray-300 rounded font-mono text-sm bg-white text-gray-900"
                 tabIndex={0}
                 aria-label="Latitude hemisphere"
               >
@@ -351,7 +486,7 @@ export function SurveyMapModal({
                     lonMinRef.current?.focus()
                   }
                 }}
-                className="w-12 px-2 py-1.5 border rounded font-mono text-sm"
+                className="w-12 px-2 py-1.5 border border-gray-300 rounded font-mono text-sm bg-white text-gray-900"
                 tabIndex={0}
                 aria-label="Longitude degrees"
                 placeholder=""
@@ -381,7 +516,7 @@ export function SurveyMapModal({
                     handleRecord()
                   }
                 }}
-                className="w-16 px-2 py-1.5 border rounded font-mono text-sm"
+                className="w-16 px-2 py-1.5 border border-gray-300 rounded font-mono text-sm bg-white text-gray-900"
                 tabIndex={0}
                 aria-label="Longitude minutes"
                 placeholder=""
@@ -398,7 +533,7 @@ export function SurveyMapModal({
                     handleRecord()
                   }
                 }}
-                className="px-2 py-1.5 border rounded font-mono text-sm"
+                className="px-2 py-1.5 border border-gray-300 rounded font-mono text-sm bg-white text-gray-900"
                 tabIndex={0}
                 aria-label="Longitude hemisphere"
               >
@@ -408,13 +543,15 @@ export function SurveyMapModal({
             </fieldset>
           </div>
           {coordWarning && (
-            <p className="text-cap-scarlet text-sm">{coordWarning}</p>
+            <p className="text-cap-pimento text-sm">{coordWarning}</p>
           )}
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="text-sm text-gray-500">
-              {latDeg || lonDeg ? `${latDeg || '—'}°${latMin || '—'}′ ${latHem}, ${lonDeg || '—'}°${lonMin || '—'}′ ${lonHem}` : 'Pan map or enter coordinates'}
+              {latDeg || lonDeg
+                ? `${latDeg || '—'}°${formatMinutesDisplay(latMin)}′ ${latHem}, ${lonDeg || '—'}°${formatMinutesDisplay(lonMin)}′ ${lonHem}`
+                : 'Pan map or enter coordinates'}
             </div>
-            {error && <p className="text-cap-scarlet text-sm">{error}</p>}
+            {error && <p className="text-cap-pimento text-sm">{error}</p>}
             <button
               ref={recordBtnRef}
               type="submit"

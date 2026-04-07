@@ -1,17 +1,31 @@
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, PDFTextField, rgb, StandardFonts, type PDFForm } from 'pdf-lib'
 import { db } from '@/db/schema'
 import type {
   TowerReportRecord,
   TowerLocationRecord,
   WaypointRecord,
 } from '@/db/schema'
-import { nearestWaypointInfo, shortWaypointId } from '@/utils/towerWaypointGeometry'
+import {
+  formatDistanceBearingNotes,
+  mergeBearingNotesWithManual,
+} from '@/utils/towerWaypointGeometry'
 import { compressImageForEmail } from '@/utils/imageCompression'
+import { fetchMissionMapStaticPng } from '@/utils/missionMapStaticImage'
 import type { TowerEntry } from '@/types/reportForm'
 
-const LETTER_WIDTH = 612
-const LETTER_HEIGHT = 792
+/** US Letter landscape for tower photos and mission map appendix */
+const LANDSCAPE_WIDTH = 792
+const LANDSCAPE_HEIGHT = 612
 const MARGIN = 36
+
+/** Tuned between fitting IR111 / notes in comb fields and readability. */
+const FORM_FIELD_FONT_SIZE = 12
+
+const PHOTO_OVERLAY_FONT_SIZE = 11
+
+/** CAP brand colors (tailwind cap.ultramarine, cap.pimento) */
+const CAP_ULTRAMARINE = rgb(14 / 255, 43 / 255, 141 / 255)
+const CAP_PIMENTO = rgb(219 / 255, 0, 41 / 255)
 
 function formatLatitude(value: number): string {
   const dir = value >= 0 ? 'N' : 'S'
@@ -27,18 +41,6 @@ function formatLongitude(value: number): string {
   const d = Math.floor(abs)
   const m = (abs - d) * 60
   return `${dir}${d}°${m.toFixed(2)}'`
-}
-
-function buildNotesWithBearingDistance(
-  towerLat: number,
-  towerLon: number,
-  waypoints: WaypointRecord[]
-): string {
-  if (!waypoints.length) return ''
-  const info = nearestWaypointInfo(towerLat, towerLon, waypoints)
-  if (!info) return ''
-  const wpShortId = shortWaypointId((info.waypoint as WaypointRecord).originalName ?? '')
-  return `${info.distanceNm.toFixed(1)} nm, ${Math.round(info.bearingDeg)}° True from point ${wpShortId}`
 }
 
 /** Extract base field name from hierarchical PDF field names */
@@ -68,6 +70,100 @@ function resolveFieldValue(
   return undefined
 }
 
+/** Map Adobe table cell field names (e.g. NotesRow3, …Row3[0]…Notes[0]) to 0-based row index. */
+function inferTowerTableNoteRow(fieldName: string): number | null {
+  const notesRow = fieldName.match(/^NotesRow(\d+)$/i)
+  if (notesRow) {
+    const num = parseInt(notesRow[1], 10)
+    if (num >= 1 && num <= 6) return num - 1
+  }
+  const rowMatches = [...fieldName.matchAll(/[Rr]ow[_\s.]?(\d+)/gi)]
+  if (rowMatches.length > 0) {
+    const num = parseInt(rowMatches[rowMatches.length - 1][1], 10)
+    if (num >= 1 && num <= 6) return num - 1
+  }
+  const m2 = fieldName.match(/[Rr](\d)[_\s]?(?:NOTE|Notes)/i)
+  if (m2) {
+    const num = parseInt(m2[1], 10)
+    if (num >= 1 && num <= 6) return num - 1
+  }
+  const m3 = fieldName.match(/(?:NOTE|Notes)[_\s]?(\d)/i)
+  if (m3) {
+    const num = parseInt(m3[1], 10)
+    if (num >= 1 && num <= 6) return num - 1
+  }
+  return null
+}
+
+/**
+ * Many AF form templates use hierarchical names that do not match our key list.
+ * Second pass: find Note/Comment fields and set bearing/distance text by row.
+ */
+function forceTowerNotesIntoPdfFields(form: PDFForm, rowNotes: string[]): void {
+  const fields = form.getFields()
+  const noteFields: PDFTextField[] = []
+  for (const f of fields) {
+    if (!(f instanceof PDFTextField)) continue
+    const n = f.getName().toLowerCase()
+    if (!/notes?|comment|remark/.test(n)) continue
+    if (
+      /additional|instruction|footer|subject|email|e-mail|poc|cap unit|phone|fax|mission|date|mtr/.test(
+        n
+      )
+    ) {
+      continue
+    }
+    noteFields.push(f)
+  }
+
+  const byRow = new Map<number, PDFTextField[]>()
+  const unassigned: PDFTextField[] = []
+  for (const f of noteFields) {
+    const row = inferTowerTableNoteRow(f.getName())
+    if (row != null) {
+      const list = byRow.get(row) ?? []
+      list.push(f)
+      byRow.set(row, list)
+    } else {
+      unassigned.push(f)
+    }
+  }
+
+  const assignedRows = new Set<number>()
+  for (let r = 0; r < 6; r++) {
+    const text = rowNotes[r]
+    if (!text) continue
+    const list = byRow.get(r)
+    if (!list?.length) continue
+    for (const field of list) {
+      try {
+        field.setFontSize(FORM_FIELD_FONT_SIZE)
+        field.setText(text)
+      } catch {
+        /* ignore */
+      }
+    }
+    assignedRows.add(r)
+  }
+
+  unassigned.sort((a, b) => a.getName().localeCompare(b.getName()))
+  let ui = 0
+  for (let r = 0; r < 6; r++) {
+    if (assignedRows.has(r) || !rowNotes[r]) continue
+    while (ui < unassigned.length) {
+      try {
+        unassigned[ui].setFontSize(FORM_FIELD_FONT_SIZE)
+        unassigned[ui].setText(rowNotes[r])
+      } catch {
+        /* ignore */
+      }
+      ui += 1
+      assignedRows.add(r)
+      break
+    }
+  }
+}
+
 function buildFieldMappings(
   reports: TowerReportRecord[],
   locations: (TowerLocationRecord | undefined)[],
@@ -95,7 +191,10 @@ function buildFieldMappings(
     formData.pocName
   )
   add(['CAP_UNIT', 'CapUnit', 'CAP Unit', 'cap_unit', 'Cap_Unit'], formData.capUnit)
-  add(['PHONE', 'Phone', 'phone', 'PHONE_NUMBER'], formData.phone)
+  add(
+    ['PHONE', 'Phone', 'phone', 'PHONE_NUMBER', 'Phone Number'],
+    formData.phone
+  )
   add(['EMAIL', 'Email', 'email', 'E-mail', 'E-mail Address'], formData.email)
   add(
     ['MISSION_NUMBER', 'MissionNumber', 'Mission Number', 'mission_number', 'Mission_Number'],
@@ -128,10 +227,10 @@ function buildFieldMappings(
     const row = i + 1
     const r0 = i
 
-    let notes = e.notes
-    if (loc && waypoints.length > 0) {
-      notes = buildNotesWithBearingDistance(loc.latitude, loc.longitude, waypoints)
-    }
+    const notes = mergeBearingNotesWithManual(
+      formatDistanceBearingNotes(loc, waypoints),
+      (e.notes ?? '').trim()
+    )
     const latStr = loc ? formatLatitude(loc.latitude) : e.latitude
     const lonStr = loc ? formatLongitude(loc.longitude) : e.longitude
     const mslStr = loc ? String(Math.round(loc.elevation)) : e.msl
@@ -149,19 +248,49 @@ function buildFieldMappings(
       `Lighting${r0}`, `Light_${r0}`,
       ...(row === 1 ? ['LIGHT', 'Lighting', 'Light'] : []),
     ]
+    // Blank Route Survey Form 2: row 1 uses N, w, MSL, AGL; rows 2–6 use N_2, w_2, MSL_2, AGL_2, …
     const latKeys = [
-      `R${row}_LAT`, `ROW${row}_LAT`, `Lat${row}`, `Lat${r0}`,
-      ...(row === 1 ? ['LAT', 'Lat', 'Latitude', 'N'] : []),
+      `R${row}_LAT`,
+      `ROW${row}_LAT`,
+      `Lat${row}`,
+      `Lat${r0}`,
+      ...(row === 1 ? ['LAT', 'Lat', 'Latitude', 'N'] : [`N_${row}`]),
     ]
     const lonKeys = [
-      `R${row}_LON`, `ROW${row}_LON`, `Lon${row}`, `Lon${r0}`,
-      ...(row === 1 ? ['LON', 'Lon', 'Longitude', 'W'] : []),
+      `R${row}_LON`,
+      `ROW${row}_LON`,
+      `Lon${row}`,
+      `Lon${r0}`,
+      ...(row === 1 ? ['LON', 'Lon', 'Longitude', 'W', 'w'] : [`w_${row}`]),
     ]
-    const mslKeys = [`R${row}_MSL`, `MSL${row}`, `MSL${r0}`, ...(row === 1 ? ['MSL', 'Msl'] : [])]
-    const aglKeys = [`R${row}_AGL`, `AGL${row}`, `AGL${r0}`, ...(row === 1 ? ['AGL', 'Agl'] : [])]
+    const mslKeys = [
+      `R${row}_MSL`,
+      `MSL${row}`,
+      `MSL${r0}`,
+      ...(row === 1 ? ['MSL', 'Msl'] : [`MSL_${row}`]),
+    ]
+    const aglKeys = [
+      `R${row}_AGL`,
+      `AGL${row}`,
+      `AGL${r0}`,
+      ...(row === 1 ? ['AGL', 'Agl'] : [`AGL_${row}`]),
+    ]
     const notesKeys = [
-      `R${row}_NOTES`, `Notes${row}`, `Notes${r0}`, `Row${row}.Notes`,
-      ...(row === 1 ? ['NOTES', 'NOTE', 'Note', 'Remarks', 'Comments'] : []),
+      `NotesRow${row}`,
+      `R${row}_NOTES`,
+      `Notes${row}`,
+      `Notes${r0}`,
+      `Row${row}.Notes`,
+      ...(row === 1
+        ? [
+            'NOTES',
+            'NOTE',
+            'Note',
+            'Remarks',
+            'Comments',
+            'TextField_Notes',
+          ]
+        : []),
     ]
 
     add(structKeys, structType)
@@ -238,20 +367,51 @@ export async function generateAirForceReportPdf(
 
   const fields = form.getFields()
   for (const field of fields) {
+    if (!(field instanceof PDFTextField)) continue
+    try {
+      field.setFontSize(FORM_FIELD_FONT_SIZE)
+      if (field.isCombed()) {
+        field.disableCombing()
+      }
+      try {
+        field.setMaxLength(240)
+      } catch {
+        /* ignore if unsupported */
+      }
+    } catch {
+      /* ignore per-field appearance quirks */
+    }
+  }
+
+  for (const field of fields) {
     const name = field.getName()
     const value = resolveFieldValue(name, mappings)
     if (value == null || value === '') continue
     try {
-      const tf = field as { setText?: (v: string) => void }
-      if (typeof tf.setText === 'function') tf.setText(value)
+      if (field instanceof PDFTextField && typeof field.setText === 'function') {
+        field.setText(value)
+      }
     } catch {
-      // Field might not be a text field, skip
+      // Field might not accept text, skip
     }
   }
 
+  const rowNotesForForce: string[] = ['', '', '', '', '', '']
+  for (let i = 0; i < Math.min(6, reports.length, formData.towerEntries.length); i++) {
+    const loc = locations[i]
+    rowNotesForForce[i] = mergeBearingNotesWithManual(
+      formatDistanceBearingNotes(loc, waypoints),
+      (formData.towerEntries[i]?.notes ?? '').trim()
+    )
+  }
+  forceTowerNotesIntoPdfFields(form, rowNotesForForce)
+
   form.updateFieldAppearances()
 
-  // Append tower image pages (compressed for email)
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  // Append tower image pages (compressed for email), then mission map — all landscape appendix
   const sortedReportsWithImages = reports.filter(
     (r) => r.annotatedImageDataUrl && r.annotatedImageDataUrl.length > 0
   )
@@ -268,14 +428,95 @@ export async function generateAirForceReportPdf(
       continue
     }
 
-    const contentWidth = LETTER_WIDTH - MARGIN * 2
-    const contentHeight = LETTER_HEIGHT - MARGIN * 2
+    const contentWidth = LANDSCAPE_WIDTH - MARGIN * 2
+    const contentHeight = LANDSCAPE_HEIGHT - MARGIN * 2
     const dims = image.scaleToFit(contentWidth, contentHeight)
     const x = MARGIN + (contentWidth - dims.width) / 2
-    const y = LETTER_HEIGHT - MARGIN - dims.height
+    const y = LANDSCAPE_HEIGHT - MARGIN - dims.height
 
-    const page = pdfDoc.addPage([LETTER_WIDTH, LETTER_HEIGHT])
+    const page = pdfDoc.addPage([LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT])
     page.drawImage(image, { x, y, width: dims.width, height: dims.height })
+
+    const loc = await db.towerLocations.get(report.towerLocationId)
+    if (loc) {
+      const line1 = `${formatLatitude(loc.latitude)}  ${formatLongitude(loc.longitude)}`
+      const aglFt =
+        report.estimatedHeight != null ? String(Math.round(report.estimatedHeight)) : '—'
+      const line2 = `Height AGL: ${aglFt} ft`
+      const line3 = `Height MSL: ${Math.round(loc.elevation)} ft`
+      const lines = [line1, line2, line3]
+      const ovPad = 6
+      const lineSpacing = 11
+      const fontSize = PHOTO_OVERLAY_FONT_SIZE
+      const ovW = Math.min(228, dims.width - 12)
+      const ovH = lines.length * lineSpacing + ovPad * 2 + 4
+      const imgTop = y + dims.height
+      const ovX = x + 8
+      const ovY = imgTop - 8 - ovH
+
+      page.drawRectangle({
+        x: ovX,
+        y: ovY,
+        width: ovW,
+        height: ovH,
+        color: CAP_ULTRAMARINE,
+        opacity: 0.55,
+        borderWidth: 0,
+      })
+
+      let textBaseline = ovY + ovH - ovPad - fontSize
+      for (const line of lines) {
+        page.drawText(line, {
+          x: ovX + 6,
+          y: textBaseline,
+          size: fontSize,
+          font: helvetica,
+          color: CAP_PIMENTO,
+        })
+        textBaseline -= lineSpacing
+      }
+    }
+  }
+
+  const mapPngBytes = await fetchMissionMapStaticPng(missionId)
+  if (mapPngBytes && mapPngBytes.length > 0) {
+    try {
+      let mapImage
+      const isJpeg = mapPngBytes[0] === 0xff && mapPngBytes[1] === 0xd8
+      if (isJpeg) {
+        mapImage = await pdfDoc.embedJpg(mapPngBytes)
+      } else {
+        try {
+          mapImage = await pdfDoc.embedPng(mapPngBytes)
+        } catch {
+          mapImage = await pdfDoc.embedJpg(mapPngBytes)
+        }
+      }
+      const page = pdfDoc.addPage([LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT])
+      const title = 'Mission map — route and reported tower locations'
+      page.drawText(title, {
+        x: MARGIN,
+        y: LANDSCAPE_HEIGHT - MARGIN - 18,
+        size: 11,
+        font: helveticaBold,
+        color: rgb(0, 0, 0),
+      })
+      const mapAreaTop = LANDSCAPE_HEIGHT - MARGIN - 32
+      const mapAreaBottom = MARGIN
+      const mapAreaH = mapAreaTop - mapAreaBottom
+      const mapAreaW = LANDSCAPE_WIDTH - MARGIN * 2
+      const scaled = mapImage.scaleToFit(mapAreaW, mapAreaH)
+      const mx = MARGIN + (mapAreaW - scaled.width) / 2
+      const my = mapAreaBottom + (mapAreaH - scaled.height) / 2
+      page.drawImage(mapImage, {
+        x: mx,
+        y: my,
+        width: scaled.width,
+        height: scaled.height,
+      })
+    } catch {
+      /* omit map page on embed failure */
+    }
   }
 
   return pdfDoc.save()

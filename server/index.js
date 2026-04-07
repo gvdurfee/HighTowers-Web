@@ -4,6 +4,7 @@
  * SR routes fall back to ArcGIS (not in FAA MTR CSV).
  */
 
+import dotenv from 'dotenv'
 import express from 'express'
 import { createReadStream } from 'fs'
 import { createWriteStream } from 'fs'
@@ -13,9 +14,13 @@ import { parse } from 'csv-parse'
 import fetch from 'node-fetch'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { computeSquareBbox, fetchSentinel2TrueColorPng } from './sentinelHubImagery.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.join(__dirname, '..', '.env') })
+
 const app = express()
+app.use(express.json({ limit: '2mb' }))
 const PORT = process.env.PORT ?? 3001
 
 const NASR_INDEX_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
@@ -269,6 +274,98 @@ app.get('/api/mtr/cycle', async (_req, res) => {
   } catch (err) {
     console.error('MTR cycle error:', err)
     res.status(500).json({ error: err.message })
+  }
+})
+
+/**
+ * Proxy Mapbox Static Images API — browser fetch() to api.mapbox.com is often blocked by CORS;
+ * PDF export uses this route when the dev server (or any host that mounts this API) is running.
+ * Uses the same token as the Vite app: VITE_MAPBOX_ACCESS_TOKEN or MAPBOX_ACCESS_TOKEN in .env.
+ */
+app.post('/api/mapbox-static', async (req, res) => {
+  const token =
+    process.env.VITE_MAPBOX_ACCESS_TOKEN || process.env.MAPBOX_ACCESS_TOKEN || ''
+  const placeholder = 'your_mapbox_token_here'
+  if (!token || token === placeholder) {
+    res.status(503).json({ error: 'Mapbox token not configured on server (.env)' })
+    return
+  }
+  try {
+    const {
+      overlayPath,
+      width = 1280,
+      height = 720,
+      style = 'mapbox/satellite-streets-v12',
+    } = req.body ?? {}
+    if (!overlayPath || typeof overlayPath !== 'string') {
+      res.status(400).json({ error: 'overlayPath (string) required' })
+      return
+    }
+    if (overlayPath.length > 12000) {
+      res.status(400).json({ error: 'overlayPath too long' })
+      return
+    }
+    const w = Math.min(1280, Math.max(200, Number(width) || 1280))
+    const h = Math.min(1280, Math.max(200, Number(height) || 720))
+    const url = `https://api.mapbox.com/styles/v1/${style}/static/${overlayPath}/auto/${w}x${h}?padding=80&attribution=false&logo=false&access_token=${token}`
+    const mapRes = await fetch(url)
+    if (!mapRes.ok) {
+      const snippet = (await mapRes.text()).slice(0, 300)
+      console.error('Mapbox static failed:', mapRes.status, snippet)
+      res.status(502).json({ error: 'Mapbox static request failed', status: mapRes.status })
+      return
+    }
+    const buf = Buffer.from(await mapRes.arrayBuffer())
+    res.setHeader('Content-Type', mapRes.headers.get('content-type') || 'image/png')
+    res.setHeader('Cache-Control', 'private, no-store')
+    res.send(buf)
+  } catch (err) {
+    console.error('mapbox-static proxy:', err)
+    res.status(500).json({ error: err?.message ?? 'proxy error' })
+  }
+})
+
+// Recent Sentinel-2 imagery (Copernicus Data Space / Sentinel Hub Process API)
+// @see ../docs/IMAGERY_OVERLAY_IMPLEMENTATION.md
+app.get('/api/recent-imagery', async (req, res) => {
+  const lat = Number(req.query.lat)
+  const lon = Number(req.query.lon)
+  const halfMiles = req.query.halfMiles != null ? Number(req.query.halfMiles) : 0.5
+  const width = req.query.w != null ? Number(req.query.w) : 1024
+  const height = req.query.h != null ? Number(req.query.h) : 1024
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    res.status(400).json({ error: 'Invalid or missing lat/lon' })
+    return
+  }
+  if (!Number.isFinite(halfMiles) || halfMiles <= 0 || halfMiles > 5) {
+    res.status(400).json({ error: 'halfMiles must be between 0 and 5' })
+    return
+  }
+
+  try {
+    const bbox = computeSquareBbox(lat, lon, halfMiles)
+    const png = await fetchSentinel2TrueColorPng(bbox, {
+      width: Number.isFinite(width) ? Math.min(1024, Math.max(256, width)) : 1024,
+      height: Number.isFinite(height) ? Math.min(1024, Math.max(256, height)) : 1024,
+    })
+    res.setHeader('Content-Type', 'image/png')
+    res.setHeader('Cache-Control', 'private, max-age=3600')
+    res.send(png)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('CDSE_OAUTH_CLIENT_ID')) {
+      res.status(503).json({
+        error: msg,
+        doc: 'server/README.md (Copernicus OAuth)',
+      })
+      return
+    }
+    console.error('recent-imagery error:', msg)
+    res.status(502).json({
+      error: msg,
+      doc: 'docs/IMAGERY_OVERLAY_IMPLEMENTATION.md',
+    })
   }
 })
 

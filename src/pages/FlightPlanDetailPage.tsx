@@ -7,8 +7,21 @@ import type {
   WaypointRecord,
   AirportRecord,
   PendingWaypoint,
+  FlightPlanCreationLoadMethod,
 } from '@/db/schema'
+
+function creationLoadMethodLabel(m: FlightPlanCreationLoadMethod): string {
+  switch (m) {
+    case 'route':
+      return 'Load full route'
+    case 'sequenceLibrary':
+      return 'G1000 user waypoint library'
+    default:
+      return 'Waypoint sequence'
+  }
+}
 import { G1000Service } from '@/services/g1000'
+import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
 
 type LocationState = { skippedWaypoints?: string[]; message?: string } | null
 
@@ -93,19 +106,20 @@ export function FlightPlanDetailPage() {
 
   if (loading || !plan) {
     return (
-      <div className="p-6">
-        <p className="text-gray-500">
-          {loading ? 'Loading...' : 'Flight plan not found.'}
-        </p>
+      <div className="app-page-shell overflow-auto">
+        <div className="app-panel max-w-3xl mx-auto p-6">
+          <p className="text-gray-600">
+            {loading ? 'Loading...' : 'Flight plan not found.'}
+          </p>
+        </div>
       </div>
     )
   }
 
   const pendingWaypoints = plan?.pendingWaypoints ?? []
-  const showSkippedWarning =
-    pendingWaypoints.length > 0 &&
-    (!!navState?.message || true) &&
-    !dismissedSkippedWarning
+  const showPostCreateBanner =
+    !dismissedSkippedWarning &&
+    (!!navState?.message?.trim() || pendingWaypoints.length > 0)
 
   // Merge waypoints and pending into display order by sequence
   const displayList: DisplayItem[] = []
@@ -143,7 +157,7 @@ export function FlightPlanDetailPage() {
     setSupplyingCode(code)
     try {
       const name = code.trim().toUpperCase()
-      const g1000Name = toG1000Name(name)
+      const g1000Name = convertWaypointNameToG1000(name)
       const routeType = name.startsWith('IR') ? 'IR' : name.startsWith('SR') ? 'SR' : 'VR'
       await db.waypoints.add({
         id: generateId(),
@@ -192,14 +206,19 @@ export function FlightPlanDetailPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl">
-      {showSkippedWarning && (
+    <div className="app-page-shell overflow-auto">
+      <div className="app-panel max-w-3xl mx-auto p-6 md:p-8">
+      {showPostCreateBanner && (
         <div className="mb-4 p-4 bg-cap-yellow/20 border border-cap-yellow rounded-lg flex items-start justify-between gap-3">
-          <p className="text-sm text-gray-800">
-            {pendingWaypoints.length > 0
-              ? `Could not find ${pendingWaypoints.length} waypoint(s) in the database: ${pendingWaypoints.map((p) => p.code).join(', ')}. Supply coordinates for each (e.g. from ForeFlight or AP/1B).`
-              : navState?.message}
-          </p>
+          <div className="text-sm text-gray-800 space-y-2">
+            {navState?.message?.trim() ? <p>{navState.message}</p> : null}
+            {pendingWaypoints.length > 0 ? (
+              <p>
+                Supply coordinates below for pending waypoints:{' '}
+                {pendingWaypoints.map((p) => p.code).join(', ')} (e.g. from ForeFlight or AP/1B).
+              </p>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={() => setDismissedSkippedWarning(true)}
@@ -228,6 +247,12 @@ export function FlightPlanDetailPage() {
             <dd>{new Date(plan.dateCreated).toLocaleString()}</dd>
             <dt className="text-gray-500">Modified:</dt>
             <dd>{new Date(plan.dateModified).toLocaleString()}</dd>
+            {plan.creationLoadMethod ? (
+              <>
+                <dt className="text-gray-500">Load method:</dt>
+                <dd>{creationLoadMethodLabel(plan.creationLoadMethod)}</dd>
+              </>
+            ) : null}
           </dl>
         </section>
 
@@ -282,8 +307,8 @@ export function FlightPlanDetailPage() {
                     <>
                       <span>{item.pending.code}</span>
                       <span className="text-gray-400">→</span>
-                      <span className="px-2 py-0.5 bg-cap-scarlet/30 text-cap-scarlet rounded text-xs">
-                        {toG1000Name(item.pending.code)}
+                      <span className="px-2 py-0.5 bg-cap-pimento/30 text-cap-pimento rounded text-xs">
+                        {convertWaypointNameToG1000(item.pending.code)}
                       </span>
                       <span className="text-xs text-gray-500 ml-1">
                         Enter degrees and minutes (from ForeFlight)
@@ -397,14 +422,8 @@ export function FlightPlanDetailPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
 
-function toG1000Name(original: string): string {
-  const upper = original.toUpperCase()
-  const match = upper.match(/^(IR|SR|VR)(\d+)([A-Z0-9]+)$/)
-  if (!match) return original.slice(0, 8).replace(/[^A-Z0-9]/gi, '')
-  const [, , num, suffix] = match
-  return (suffix + num).slice(0, 8)
-}

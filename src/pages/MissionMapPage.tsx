@@ -7,7 +7,7 @@ import type { FlightPlanRecord, WaypointRecord, AirportRecord } from '@/db/schem
 import { apiConfig } from '@/config/apiConfig'
 import { nearestWaypointInfo } from '@/utils/towerWaypointGeometry'
 
-const CAP_SCARLET = '#BA0C2F'
+const CAP_PIMENTO = '#DB0029'
 
 type TowerOverlayItem = {
   id: string
@@ -233,23 +233,25 @@ export function MissionMapPage() {
 
   if (!token || (token && token === 'your_mapbox_token_here')) {
     return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Map View</h1>
-        <p className="text-cap-scarlet">
-          Mapbox access token not configured. Set VITE_MAPBOX_ACCESS_TOKEN in your .env file.
-        </p>
+      <div className="app-page-shell overflow-auto">
+        <div className="app-panel max-w-xl mx-auto p-6 md:p-8">
+          <h1 className="text-2xl font-bold text-cap-ultramarine mb-2">Map View</h1>
+          <p className="text-cap-pimento">
+            Mapbox access token not configured. Set VITE_MAPBOX_ACCESS_TOKEN in your .env file.
+          </p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
-      <div className="p-4 border-b bg-white flex items-center gap-4 flex-wrap">
-        <h1 className="text-xl font-bold text-gray-900">Map View</h1>
+    <div className="flex flex-col flex-1 min-h-0 h-full min-h-[320px]">
+      <div className="shrink-0 p-4 border-b border-white/15 bg-black/25 backdrop-blur-sm flex items-center gap-4 flex-wrap text-white">
+        <h1 className="text-xl font-bold text-white tracking-tight">Map View</h1>
         <select
           value={selectedPlanId ?? ''}
           onChange={(e) => setSelectedPlanId(e.target.value || null)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent max-w-xs"
+          className="px-3 py-2 border border-white/25 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-cap-yellow focus:border-cap-yellow max-w-xs shadow-sm"
         >
           <option value="">Select flight plan</option>
           {(plans ?? []).map((p) => (
@@ -263,7 +265,7 @@ export function MissionMapPage() {
             value={selectedMissionId ?? ''}
             onChange={(e) => setSelectedMissionId(e.target.value || null)}
             aria-label="Select mission to show towers"
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent max-w-xs"
+            className="px-3 py-2 border border-white/25 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-cap-yellow focus:border-cap-yellow max-w-xs shadow-sm"
           >
             <option value="">Select mission (towers)</option>
             {(missionsForPlan ?? []).map((m) => (
@@ -277,12 +279,12 @@ export function MissionMapPage() {
           <button
             type="button"
             onClick={fitMapToRoute}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="px-3 py-2 text-sm border border-white/40 rounded-lg bg-white/10 text-white hover:bg-white/20"
           >
             Fit display to route
           </button>
         )}
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-white/80">
           {planData
             ? `${planData.waypoints.length} waypoints${planData.departure || planData.destination ? ' • Airports connected' : ''}${(towerOverlayData ?? []).length > 0 ? ` • ${(towerOverlayData ?? []).length} towers` : ''}`
             : 'Select a flight plan to view the route'}
@@ -312,7 +314,7 @@ export function MissionMapPage() {
                   'line-cap': 'round',
                 }}
                 paint={{
-                  'line-color': '#FFCD00',
+                  'line-color': '#FFD911',
                   'line-width': 3,
                 }}
               />
@@ -329,7 +331,7 @@ export function MissionMapPage() {
                   'line-cap': 'round',
                 }}
                 paint={{
-                  'line-color': CAP_SCARLET,
+                  'line-color': CAP_PIMENTO,
                   'line-width': 2,
                 }}
               />
@@ -345,7 +347,7 @@ export function MissionMapPage() {
             >
               <div
                 className="px-2 py-1 rounded text-xs font-bold text-white shadow"
-                style={{ backgroundColor: CAP_SCARLET }}
+                style={{ backgroundColor: CAP_PIMENTO }}
                 title={`Tower ${item.label}`}
               >
                 {item.label}
@@ -363,7 +365,7 @@ export function MissionMapPage() {
             >
               <div
                 className="px-2 py-1 rounded text-xs font-medium text-white shadow"
-                style={{ backgroundColor: '#001489' }}
+                style={{ backgroundColor: '#0E2B8D' }}
                 title={planData.departure.name}
               >
                 {planData.departure.identifier}

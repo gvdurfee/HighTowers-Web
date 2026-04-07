@@ -39,6 +39,86 @@ function formatDate(d: Date): string {
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z')
 }
 
+type TableRow =
+  | { kind: 'airport'; identifier: string; lat: number; lon: number }
+  | { kind: 'user'; identifier: string; lat: number; lon: number }
+
+/**
+ * Build waypoint-table rows with no duplicate identifiers.
+ * Round-robin (same dep/dest): one airport row; route still has both legs.
+ */
+function buildWaypointTableRows(
+  departureAirport: AirportInput | undefined,
+  destinationAirport: AirportInput | undefined,
+  waypointsSorted: WaypointInput[]
+): TableRow[] {
+  const rows: TableRow[] = []
+  const seen = new Set<string>()
+
+  const depId = departureAirport?.identifier.trim() ?? ''
+  const destId = destinationAirport?.identifier.trim() ?? ''
+  const roundRobin =
+    depId.length > 0 && depId.toUpperCase() === destId.toUpperCase()
+
+  if (departureAirport) {
+    const id = departureAirport.identifier
+    rows.push({
+      kind: 'airport',
+      identifier: id,
+      lat: departureAirport.latitude,
+      lon: departureAirport.longitude,
+    })
+    seen.add(id)
+  }
+
+  for (const wp of waypointsSorted) {
+    const id = wp.g1000Name
+    if (seen.has(id)) continue
+    seen.add(id)
+    rows.push({ kind: 'user', identifier: id, lat: wp.latitude, lon: wp.longitude })
+  }
+
+  if (destinationAirport && !roundRobin) {
+    const id = destinationAirport.identifier
+    if (!seen.has(id)) {
+      rows.push({
+        kind: 'airport',
+        identifier: id,
+        lat: destinationAirport.latitude,
+        lon: destinationAirport.longitude,
+      })
+      seen.add(id)
+    }
+  }
+
+  return rows
+}
+
+function emitWaypointTableLine(row: TableRow): string[] {
+  if (row.kind === 'airport') {
+    return [
+      '    <waypoint>',
+      `      <identifier>${escapeXml(row.identifier)}</identifier>`,
+      '      <type>AIRPORT</type>',
+      '      <country-code>K2</country-code>',
+      `      <lat>${row.lat.toFixed(6)}</lat>`,
+      `      <lon>${row.lon.toFixed(6)}</lon>`,
+      '      <comment/>',
+      '    </waypoint>',
+    ]
+  }
+  return [
+    '    <waypoint>',
+    `      <identifier>${escapeXml(row.identifier)}</identifier>`,
+    '      <type>USER WAYPOINT</type>',
+    '      <country-code/>',
+    `      <lat>${row.lat.toFixed(6)}</lat>`,
+    `      <lon>${row.lon.toFixed(6)}</lon>`,
+    '      <comment/>',
+    '    </waypoint>',
+  ]
+}
+
 export const G1000Service = {
   generateFlightPlan(flightPlan: FlightPlanInput): string {
     const waypoints = [...flightPlan.waypoints].sort(
@@ -52,6 +132,12 @@ export const G1000Service = {
       .join(' ')
       .trim()
 
+    const tableRows = buildWaypointTableRows(
+      flightPlan.departureAirport,
+      flightPlan.destinationAirport,
+      waypoints
+    )
+
     const lines: string[] = []
     lines.push(
       '<?xml version="1.0" encoding="UTF-8"?>',
@@ -60,45 +146,8 @@ export const G1000Service = {
       '  <waypoint-table>'
     )
 
-    if (flightPlan.departureAirport) {
-      const a = flightPlan.departureAirport
-      lines.push(
-        '    <waypoint>',
-        `      <identifier>${escapeXml(a.identifier)}</identifier>`,
-        '      <type>AIRPORT</type>',
-        '      <country-code>K2</country-code>',
-        `      <lat>${a.latitude.toFixed(6)}</lat>`,
-        `      <lon>${a.longitude.toFixed(6)}</lon>`,
-        '      <comment/>',
-        '    </waypoint>'
-      )
-    }
-
-    for (const wp of waypoints) {
-      lines.push(
-        '    <waypoint>',
-        `      <identifier>${escapeXml(wp.g1000Name)}</identifier>`,
-        '      <type>USER WAYPOINT</type>',
-        '      <country-code/>',
-        `      <lat>${wp.latitude.toFixed(6)}</lat>`,
-        `      <lon>${wp.longitude.toFixed(6)}</lon>`,
-        '      <comment/>',
-        '    </waypoint>'
-      )
-    }
-
-    if (flightPlan.destinationAirport) {
-      const a = flightPlan.destinationAirport
-      lines.push(
-        '    <waypoint>',
-        `      <identifier>${escapeXml(a.identifier)}</identifier>`,
-        '      <type>AIRPORT</type>',
-        '      <country-code>K2</country-code>',
-        `      <lat>${a.latitude.toFixed(6)}</lat>`,
-        `      <lon>${a.longitude.toFixed(6)}</lon>`,
-        '      <comment/>',
-        '    </waypoint>'
-      )
+    for (const row of tableRows) {
+      lines.push(...emitWaypointTableLine(row))
     }
 
     lines.push(

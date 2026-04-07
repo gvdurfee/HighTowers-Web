@@ -2,12 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* CAP color palette - HighTowers */
+@layer components {
+  /* Ultramarine shell: main fills layout; children use app-panel for readable light content */
+  .app-page-shell {
+    @apply flex flex-1 flex-col min-h-0 w-full bg-cap-ultramarine p-4 md:p-6;
+  }
+  .app-panel {
+    @apply w-full max-w-full bg-white text-gray-900 rounded-2xl shadow-xl border border-white/15;
+  }
+}
+
+/* CAPR 900-2 color palette - HighTowers. Ultramarine is written #OE2B8D in CAPR (OE = hex 0E). */
 :root {
-  --cap-ultramarine-blue: #001489;
-  --cap-silver-gray: #9EA2A2;
-  --cap-scarlet-red: #BA0C2F;
-  --cap-air-force-yellow: #FFCD00;
+  --cap-ultramarine-blue: #0E2B8D;
+  --cap-silver-gray: #ABABAB;
+  --cap-pimento-red: #DB0029;
+  --cap-air-force-yellow: #FFD911;
 }
 
 * {
@@ -32,6 +42,7 @@ body {
     Ubuntu, Cantarell, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  @apply bg-cap-ultramarine text-white;
 }
 
 /* Range sliders: colored fill behind thumb, white ahead */
@@ -61,10 +72,10 @@ body {
   );
 }
 .slider-fill-red {
-  --fill-color: #BA0C2F;
+  --fill-color: #DB0029;
 }
 .slider-fill-blue {
-  --fill-color: #001489;
+  --fill-color: #0E2B8D;
 }
 .slider-fill-red::-webkit-slider-thumb,
 .slider-fill-blue::-webkit-slider-thumb {

@@ -1,4 +1,5 @@
 /** @type {import('tailwindcss').Config} */
+// CAP ultramarine: CAPR 900-2 uses “OE” for the first byte; standard hex is #0E2B8D.
 export default {
   content: [
     "./index.html",
@@ -8,10 +9,10 @@ export default {
     extend: {
       colors: {
         cap: {
-          ultramarine: '#001489',
-          silver: '#9EA2A2',
-          scarlet: '#BA0C2F',
-          yellow: '#FFCD00',
+          ultramarine: '#0E2B8D',
+          silver: '#ABABAB',
+          pimento: '#DB0029',
+          yellow: '#FFD911',
         },
       },
     },

@@ -12,6 +12,7 @@ import { ExportDataPage } from '@/pages/ExportDataPage'
 function App() {
   return (
     <BrowserRouter>
+      <div className="h-full">
       <Routes>
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Navigate to="/flight-plans" replace />} />
@@ -26,6 +27,7 @@ function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </div>
     </BrowserRouter>
   )
 }

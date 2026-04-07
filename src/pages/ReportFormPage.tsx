@@ -57,6 +57,11 @@ function formatDateForDisplay(date: Date): string {
   })
 }
 
+/** MTR route: uppercase letters and digits only (e.g. IR111, VR108) */
+function normalizeMtrRouteInput(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
 export function ReportFormPage() {
   const navigate = useNavigate()
   const missions = useLiveQuery(() =>
@@ -144,7 +149,7 @@ export function ReportFormPage() {
     setPhone(mission.phone ?? '')
     setEmail(mission.email ?? '')
     setMissionNumber(mission.missionNumber ?? '')
-    setMtrRoute(mission.mtrRoute ?? '')
+    setMtrRoute(normalizeMtrRouteInput(mission.mtrRoute ?? ''))
     setDate(mission.date ? formatDateForDisplay(new Date(mission.date)) : '')
     setAdditionalNotes(mission.notes ?? '')
   }, [])
@@ -289,14 +294,15 @@ export function ReportFormPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="app-page-shell overflow-auto">
+      <div className="app-panel max-w-4xl mx-auto p-6 md:p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Air Force Report Form</h1>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setShowHelp(true)}
-            className="p-2 text-cap-scarlet hover:bg-red-50 rounded-full"
+            className="p-2 text-cap-pimento hover:bg-red-50 rounded-full"
             aria-label="Help"
           >
             ❓
@@ -465,9 +471,11 @@ export function ReportFormPage() {
               <input
                 type="text"
                 value={mtrRoute}
-                onChange={(e) => setMtrRoute(e.target.value)}
+                onChange={(e) => setMtrRoute(normalizeMtrRouteInput(e.target.value))}
                 placeholder="e.g. IR111"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg uppercase"
+                autoCapitalize="characters"
+                spellCheck={false}
               />
             </div>
           </div>
@@ -544,8 +552,9 @@ export function ReportFormPage() {
         </div>
 
         {errorMessage && (
-          <div className="p-4 bg-red-50 text-cap-scarlet rounded-lg">{errorMessage}</div>
+          <div className="p-4 bg-red-50 text-cap-pimento rounded-lg">{errorMessage}</div>
         )}
+      </div>
       </div>
 
       {showHelp && (

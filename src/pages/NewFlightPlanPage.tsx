@@ -3,22 +3,28 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { db } from '@/db/schema'
 import { generateId } from '@/utils/id'
+import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
 import { apiService, type AirportResult } from '@/services/api'
+import { FlightPlanLoadMethodHelpModal } from '@/components/FlightPlanLoadMethodHelpModal'
 
 type FormData = {
   name: string
   departureCode: string
   destinationCode: string
+  /** e.g. IR109 — combined with suffix-only sequence tokens as IR109-AM */
+  routeIdentifier: string
   waypointSequence: string
 }
 
 type RoutePreview = { count: number; routeId: string } | { error: string }
 
+type LoadMethod = 'route' | 'sequence' | 'sequenceLibrary'
+
 export function NewFlightPlanPage() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [loadMethod, setLoadMethod] = useState<'sequence' | 'route'>('route')
+  const [loadMethod, setLoadMethod] = useState<LoadMethod>('route')
   const [routeInput, setRouteInput] = useState('')
   const [entryWaypoint, setEntryWaypoint] = useState('A')
   const [exitWaypoint, setExitWaypoint] = useState('Q')
@@ -27,6 +33,9 @@ export function NewFlightPlanPage() {
   const [routePreview, setRoutePreview] = useState<RoutePreview | null>(null)
   const [fetchingAirport, setFetchingAirport] = useState<'departure' | 'destination' | null>(null)
   const [fetchingRoute, setFetchingRoute] = useState(false)
+  const [sequencePreview, setSequencePreview] = useState<RoutePreview | null>(null)
+  const [fetchingSequence, setFetchingSequence] = useState(false)
+  const [showFlightPlanHelp, setShowFlightPlanHelp] = useState(false)
 
   const {
     register,
@@ -38,12 +47,15 @@ export function NewFlightPlanPage() {
       name: '',
       departureCode: '',
       destinationCode: '',
+      routeIdentifier: '',
       waypointSequence: '',
     },
   })
 
   const depCode = watch('departureCode')
   const destCode = watch('destinationCode')
+  const routeIdentifierWatch = watch('routeIdentifier')
+  const waypointSequenceWatch = watch('waypointSequence')
 
   useEffect(() => {
     setDepartureAirport(null)
@@ -54,6 +66,10 @@ export function NewFlightPlanPage() {
   useEffect(() => {
     setRoutePreview(null)
   }, [routeInput, entryWaypoint, exitWaypoint])
+
+  useEffect(() => {
+    setSequencePreview(null)
+  }, [routeIdentifierWatch, waypointSequenceWatch, loadMethod])
 
   const fetchDepartureAirport = async () => {
     const code = depCode?.trim()
@@ -129,6 +145,105 @@ export function NewFlightPlanPage() {
     }
   }
 
+  const fetchSequencePreview = async () => {
+    const seq = waypointSequenceWatch?.trim()
+    if (!seq) {
+      setSequencePreview({ error: 'Enter at least one waypoint suffix or full waypoint ID.' })
+      return
+    }
+    const routeId = routeIdentifierWatch?.trim() ?? ''
+    if (routeId && !parseRouteInput(routeId)) {
+      setSequencePreview({ error: 'Invalid route identifier. Use IR109, SR45, or VR108.' })
+      return
+    }
+    setFetchingSequence(true)
+    setError(null)
+    setSequencePreview(null)
+    try {
+      const parts = seq.split(/[\s,]+/).filter(Boolean)
+
+      if (loadMethod === 'sequenceLibrary') {
+        const seenG1000 = new Set<string>()
+        const duplicateLabels: string[] = []
+        const uniqueResolved: { resolved: string; g1000: string }[] = []
+        for (const part of parts) {
+          const resolved = resolveWaypointToken(routeId || undefined, part)
+          if (!resolved) continue
+          const g1000 = convertWaypointNameToG1000(resolved)
+          if (seenG1000.has(g1000)) {
+            duplicateLabels.push(`${part.trim().toUpperCase()} → ${g1000}`)
+            continue
+          }
+          seenG1000.add(g1000)
+          uniqueResolved.push({ resolved, g1000 })
+        }
+        if (uniqueResolved.length === 0) {
+          setSequencePreview({
+            error:
+              duplicateLabels.length > 0
+                ? 'Every token duplicates an earlier G1000 waypoint name. List each unique point only once.'
+                : 'No waypoints resolved. Set Route identifier and suffixes, or use full waypoint IDs.',
+          })
+          return
+        }
+        let found = 0
+        for (const { resolved } of uniqueResolved) {
+          const parsed = parseWaypointCode(resolved)
+          if (!parsed) continue
+          const coords = await apiService.fetchWaypointCoordinate(
+            parsed.routeType,
+            parsed.routeNumber,
+            parsed.waypointLetter
+          )
+          if (coords) found++
+        }
+        if (found === 0) {
+          setSequencePreview({
+            error:
+              'No waypoints found in the database for your unique list. Check identifiers and the MTR database.',
+          })
+        } else {
+          setSequencePreview({
+            count: found,
+            routeId: `${found} unique in DB / ${uniqueResolved.length} unique / ${parts.length} tokens${
+              duplicateLabels.length ? ` (${duplicateLabels.length} duplicate G1000 names skipped)` : ''
+            }`,
+          })
+        }
+        return
+      }
+
+      let found = 0
+      for (const part of parts) {
+        const resolved = resolveWaypointToken(routeId || undefined, part)
+        if (!resolved) continue
+        const parsed = parseWaypointCode(resolved)
+        if (!parsed) continue
+        const coords = await apiService.fetchWaypointCoordinate(
+          parsed.routeType,
+          parsed.routeNumber,
+          parsed.waypointLetter
+        )
+        if (coords) found++
+      }
+      if (found === 0) {
+        setSequencePreview({
+          error:
+            'No waypoints found. Check route identifier and suffixes (e.g. IR109 + AM, P1, AQ), or use full IDs like IR109-AM.',
+        })
+      } else {
+        setSequencePreview({
+          count: found,
+          routeId: `${found}/${parts.length} resolved`,
+        })
+      }
+    } catch {
+      setSequencePreview({ error: 'Failed to fetch waypoint data. Check your connection.' })
+    } finally {
+      setFetchingSequence(false)
+    }
+  }
+
   const onSubmit = async (data: FormData) => {
     setLoading(true)
     setError(null)
@@ -179,6 +294,7 @@ export function NewFlightPlanPage() {
       const waypoints: { originalName: string; g1000Name: string; lat: number; lon: number; routeType: 'IR' | 'SR' | 'VR'; sequence: number }[] = []
       let skippedWaypoints: string[] = []
       let pendingWithPosition: { code: string; sequence: number }[] = []
+      let postCreateDuplicateMessage = ''
 
       if (loadMethod === 'route' && routeInput.trim()) {
         const parsed = parseRouteInput(routeInput.trim())
@@ -207,15 +323,56 @@ export function NewFlightPlanPage() {
           setLoading(false)
           return
         }
-      } else if (loadMethod === 'sequence' && data.waypointSequence.trim()) {
+      } else if (
+        (loadMethod === 'sequence' || loadMethod === 'sequenceLibrary') &&
+        data.waypointSequence.trim()
+      ) {
+        const routeId = data.routeIdentifier.trim()
+        if (routeId && !parseRouteInput(routeId)) {
+          setError('Invalid route identifier. Use IR109, SR45, or VR108.')
+          setLoading(false)
+          return
+        }
+        if (loadMethod === 'sequenceLibrary') {
+          const d = data.departureCode.trim().toUpperCase()
+          const dst = data.destinationCode.trim().toUpperCase()
+          if (!d || !dst) {
+            setError(
+              'G1000 user waypoint library requires both departure and destination (ICAO or FAA location ID / NASR identifier), and they must be different.'
+            )
+            setLoading(false)
+            return
+          }
+          if (d === dst) {
+            setError(
+              'G1000 user waypoint library cannot be used for round-robin flights (same departure and destination). Use standard Waypoint sequence or Load full route for that case.'
+            )
+            setLoading(false)
+            return
+          }
+        }
         const parts = data.waypointSequence.split(/[\s,]+/).filter(Boolean)
         const skipped: string[] = []
+        const duplicateSkipped: string[] = []
+        const seenG1000Library = new Set<string>()
         for (let i = 0; i < parts.length; i++) {
-          const code = parts[i].trim().toUpperCase()
-          const parsed = parseWaypointCode(code)
+          const raw = parts[i]
+          const resolved = resolveWaypointToken(routeId || undefined, raw)
+          if (!resolved) {
+            const label = raw.trim().toUpperCase()
+            skipped.push(label)
+            pendingWithPosition.push({ code: label, sequence: i })
+            continue
+          }
+          const parsed = parseWaypointCode(resolved)
           if (!parsed) {
-            skipped.push(code)
-            pendingWithPosition.push({ code, sequence: i })
+            skipped.push(resolved)
+            pendingWithPosition.push({ code: resolved, sequence: i })
+            continue
+          }
+          const g1000Name = convertWaypointNameToG1000(resolved)
+          if (loadMethod === 'sequenceLibrary' && seenG1000Library.has(g1000Name)) {
+            duplicateSkipped.push(`${raw.trim().toUpperCase()} (${g1000Name})`)
             continue
           }
           const coords = await apiService.fetchWaypointCoordinate(
@@ -224,21 +381,35 @@ export function NewFlightPlanPage() {
             parsed.waypointLetter
           )
           if (coords) {
+            if (loadMethod === 'sequenceLibrary') {
+              seenG1000Library.add(g1000Name)
+            }
             waypoints.push({
-              originalName: code,
-              g1000Name: convertToG1000Name(code),
+              originalName: resolved,
+              g1000Name,
               lat: coords.latitude,
               lon: coords.longitude,
               routeType: parsed.routeType,
-              sequence: i,
+              sequence: loadMethod === 'sequenceLibrary' ? waypoints.length : i,
             })
           } else {
-            skipped.push(code)
-            pendingWithPosition.push({ code, sequence: i })
+            skipped.push(resolved)
+            pendingWithPosition.push({ code: resolved, sequence: i })
           }
         }
         skippedWaypoints = skipped
+        if (duplicateSkipped.length > 0) {
+          postCreateDuplicateMessage =
+            `Omitted ${duplicateSkipped.length} duplicate token(s) (same G1000 name as an earlier point): ${duplicateSkipped.join(', ')}. `
+        }
       }
+
+      const creationLoadMethod =
+        loadMethod === 'route'
+          ? 'route'
+          : loadMethod === 'sequenceLibrary'
+            ? 'sequenceLibrary'
+            : 'sequence'
 
       await db.flightPlans.add({
         id: planId,
@@ -248,6 +419,7 @@ export function NewFlightPlanPage() {
         departureAirportId,
         destinationAirportId,
         isActive: false,
+        creationLoadMethod,
         pendingWaypoints:
           pendingWithPosition.length > 0 ? pendingWithPosition : undefined,
       })
@@ -267,14 +439,28 @@ export function NewFlightPlanPage() {
 
       if (loadMethod === 'route' && waypoints.length === 0) {
         setError('No waypoints found for that route. Check the route ID (e.g. IR111, VR108).')
+      } else if (
+        (loadMethod === 'sequence' || loadMethod === 'sequenceLibrary') &&
+        data.waypointSequence.trim() &&
+        waypoints.length === 0
+      ) {
+        setError(
+          'No waypoints resolved. Set Route identifier (e.g. IR109) and suffixes (AM, P1, AQ), or enter full IDs like IR109-AM.'
+        )
       } else {
+        const skipMessage =
+          skippedWaypoints.length > 0
+            ? `Could not find ${skippedWaypoints.length} waypoint(s) in the database: ${skippedWaypoints.join(', ')}. The MTR database may be incomplete compared to current AP/1B.`
+            : ''
+        const combinedMessage = [postCreateDuplicateMessage.trim(), skipMessage].filter(Boolean).join(' ')
+        const showPostCreateInfo =
+          postCreateDuplicateMessage.length > 0 || skippedWaypoints.length > 0
         navigate(`/flight-plans/${planId}`, {
-          state: skippedWaypoints.length > 0
+          state: showPostCreateInfo
             ? {
-                skippedWaypoints,
-                message:
-                  `Could not find ${skippedWaypoints.length} waypoint(s) in the database: ${skippedWaypoints.join(', ')}. ` +
-                  'The MTR database may be incomplete compared to current AP/1B.',
+                skippedWaypoints:
+                  skippedWaypoints.length > 0 ? skippedWaypoints : undefined,
+                message: combinedMessage || undefined,
               }
             : undefined,
         })
@@ -292,17 +478,40 @@ export function NewFlightPlanPage() {
     routePreview !== null &&
     'error' in routePreview
 
+  const isSequencePreviewFailed =
+    (loadMethod === 'sequence' || loadMethod === 'sequenceLibrary') &&
+    !!waypointSequenceWatch?.trim() &&
+    sequencePreview !== null &&
+    'error' in sequencePreview
+
+  const librarySequenceInvalid =
+    loadMethod === 'sequenceLibrary' &&
+    (!depCode?.trim() ||
+      !destCode?.trim() ||
+      depCode.trim().toUpperCase() === destCode.trim().toUpperCase())
+
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="app-page-shell overflow-auto">
+      <div className="app-panel max-w-2xl mx-auto p-6 md:p-8">
       <div className="flex items-center gap-4 mb-6">
         <button
           type="button"
           onClick={() => navigate('/flight-plans')}
-          className="text-cap-ultramarine hover:underline"
+          className="text-cap-ultramarine hover:underline shrink-0"
         >
           ← Back
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">New Flight Plan</h1>
+        <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900 truncate">New Flight Plan</h1>
+          <button
+            type="button"
+            onClick={() => setShowFlightPlanHelp(true)}
+            className="p-2 text-cap-pimento hover:bg-red-50 rounded-full shrink-0"
+            aria-label="Help: waypoint loading options"
+          >
+            ❓
+          </button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -317,20 +526,20 @@ export function NewFlightPlanPage() {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent"
           />
           {errors.name && (
-            <p className="text-cap-scarlet text-sm mt-1">{errors.name.message}</p>
+            <p className="text-cap-pimento text-sm mt-1">{errors.name.message}</p>
           )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Departure (ICAO)
+              Departure (ICAO or FAA location ID / NASR identifier)
             </label>
             <div className="flex gap-2">
               <input
                 type="text"
                 {...register('departureCode')}
-                placeholder="e.g. KABQ"
+                placeholder="e.g. KABQ or 0E0"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent uppercase"
               />
               <button
@@ -350,13 +559,13 @@ export function NewFlightPlanPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Destination (ICAO)
+              Destination (ICAO or FAA location ID / NASR identifier)
             </label>
             <div className="flex gap-2">
               <input
                 type="text"
                 {...register('destinationCode')}
-                placeholder="e.g. KPRZ"
+                placeholder="e.g. KPRZ or 0E0"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent uppercase"
               />
               <button
@@ -377,15 +586,7 @@ export function NewFlightPlanPage() {
         </div>
 
         <div>
-          <div className="flex gap-4 mb-2">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={loadMethod === 'sequence'}
-                onChange={() => setLoadMethod('sequence')}
-              />
-              Waypoint sequence
-            </label>
+          <div className="flex flex-col gap-2 mb-2">
             <label className="flex items-center gap-2">
               <input
                 type="radio"
@@ -394,7 +595,38 @@ export function NewFlightPlanPage() {
               />
               Load full route
             </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                checked={loadMethod === 'sequence'}
+                onChange={() => setLoadMethod('sequence')}
+              />
+              Waypoint sequence
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="radio"
+                className="mt-1"
+                checked={loadMethod === 'sequenceLibrary'}
+                onChange={() => setLoadMethod('sequenceLibrary')}
+              />
+              <span>
+                <span className="font-medium">G1000 user waypoint library</span>
+                <span className="block text-xs text-gray-600 font-normal mt-0.5">
+                  Unique G1000 names only—good for importing a clean waypoint list into the avionics.
+                  Requires <strong>different</strong> departure and destination identifiers (ICAO
+                  or FAA location ID / NASR—not round-robin).
+                </span>
+              </span>
+            </label>
           </div>
+          {librarySequenceInvalid && loadMethod === 'sequenceLibrary' && (
+            <p className="text-sm text-cap-pimento mb-2">
+              Enter two different airport identifiers (ICAO or FAA location ID / NASR identifier).
+              Round-robin (same airport both ends) is not available for this mode—use Waypoint
+              sequence or Load full route instead.
+            </p>
+          )}
           {loadMethod === 'route' && (
             <div className="space-y-3">
               <div>
@@ -451,7 +683,7 @@ export function NewFlightPlanPage() {
               {routePreview && (
                 <p
                   className={`text-sm mt-1.5 font-medium ${
-                    'error' in routePreview ? 'text-cap-scarlet' : 'text-green-700'
+                    'error' in routePreview ? 'text-cap-pimento' : 'text-green-700'
                   }`}
                 >
                   {'error' in routePreview ? (
@@ -463,34 +695,104 @@ export function NewFlightPlanPage() {
               )}
             </div>
           )}
-          {loadMethod === 'sequence' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Waypoints (comma or space separated)
-              </label>
-              <input
-                type="text"
-                {...register('waypointSequence')}
-                placeholder="e.g. IR111A, VR108EK"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Format: IR/SR/VR + number + letter(s), e.g. IR107A, VR108EK. If a waypoint is
-                not found (e.g. in AP/1B but missing from our database), it will be skipped and
-                you&apos;ll see a warning on the flight plan.
-              </p>
+          {(loadMethod === 'sequence' || loadMethod === 'sequenceLibrary') && (
+            <div className="space-y-3">
+              {loadMethod === 'sequenceLibrary' && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-950">
+                  <p className="font-medium mb-1">Import-focused list</p>
+                  <p>
+                    Duplicate tokens that resolve to the same G1000 name are skipped. After import,
+                    you can delete this flight plan from the G1000 catalog; user waypoints typically
+                    remain until you remove them. Clear survey-specific user waypoints at end of
+                    season—fixes can change next year.
+                  </p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Route identifier (optional)
+                </label>
+                <input
+                  type="text"
+                  {...register('routeIdentifier')}
+                  placeholder="e.g. IR109"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent uppercase"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  If set, list only <strong>waypoint suffixes</strong> below (e.g.{' '}
+                  <code className="bg-gray-100 px-0.5 rounded">AM, P1, AQ</code>
+                  ). The app resolves{' '}
+                  <code className="bg-gray-100 px-0.5 rounded">IR109-AM</code>, fetches coordinates
+                  like full-route mode, then builds G1000 names (
+                  <code className="bg-gray-100 px-0.5 rounded">AM109</code>,{' '}
+                  <code className="bg-gray-100 px-0.5 rounded">P1109</code>, …). Leave blank to enter
+                  full waypoint IDs per point (e.g. IR109-AM, VR108EK).
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Waypoint sequence (comma or space separated)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    {...register('waypointSequence')}
+                    placeholder="With route ID: AM, P1, AQ — or full: IR109-AM, IR109-P1"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={fetchSequencePreview}
+                    disabled={!waypointSequenceWatch?.trim() || fetchingSequence}
+                    className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {fetchingSequence ? '...' : 'Fetch'}
+                  </button>
+                </div>
+                {sequencePreview && (
+                  <p
+                    className={`text-sm mt-1.5 font-medium ${
+                      'error' in sequencePreview ? 'text-cap-pimento' : 'text-green-700'
+                    }`}
+                  >
+                    {'error' in sequencePreview ? (
+                      sequencePreview.error
+                    ) : (
+                      <>✓ {sequencePreview.count} waypoint(s) found ({sequencePreview.routeId})</>
+                    )}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Full IDs still work: <code className="bg-gray-100 px-0.5 rounded">IR107A</code>,{' '}
+                  <code className="bg-gray-100 px-0.5 rounded">IR109-P1</code>. Missing points are
+                  listed on the flight plan for manual coordinates.
+                </p>
+                {loadMethod === 'sequence' && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Repeating the same waypoint in this list is allowed when departure and
+                    destination differ. The exported <code className="bg-gray-100 px-0.5">.fpl</code>{' '}
+                    deduplicates the waypoint <em>table</em> for the G1000 while keeping your full
+                    route order.
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </div>
 
         {error && (
-          <p className="text-cap-scarlet text-sm">{error}</p>
+          <p className="text-cap-pimento text-sm">{error}</p>
         )}
 
         <div className="flex gap-3">
           <button
             type="submit"
-            disabled={loading || isRoutePreviewFailed}
+            disabled={
+              loading ||
+              librarySequenceInvalid ||
+              isRoutePreviewFailed ||
+              isSequencePreviewFailed
+            }
             className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
           >
             {loading ? 'Creating...' : 'Create Flight Plan'}
@@ -504,8 +806,41 @@ export function NewFlightPlanPage() {
           </button>
         </div>
       </form>
+      </div>
+
+      <FlightPlanLoadMethodHelpModal
+        isOpen={showFlightPlanHelp}
+        onClose={() => setShowFlightPlanHelp(false)}
+      />
     </div>
   )
+}
+
+/**
+ * Build full MTR id (e.g. IR109-AM) from optional route identifier + token.
+ * If token is already a full waypoint id, it is returned unchanged.
+ */
+function resolveWaypointToken(
+  routeIdentifier: string | undefined,
+  token: string
+): string | null {
+  const t = token.trim().toUpperCase()
+  if (!t) return null
+
+  if (parseWaypointCode(t)) {
+    return t
+  }
+
+  const rid = (routeIdentifier ?? '').trim().toUpperCase()
+  if (!rid) return null
+
+  const route = parseRouteInput(rid)
+  if (!route) return null
+
+  const suffix = t.replace(/^-+/, '')
+  if (!suffix || !/^[A-Z0-9]+$/.test(suffix)) return null
+
+  return `${route.routeType}${route.routeNumber}-${suffix}`
 }
 
 function parseRouteInput(
@@ -530,20 +865,12 @@ function parseWaypointCode(
   else if (upper.startsWith('VR')) routeType = 'VR'
   if (!routeType) return null
   const rest = upper.slice(2)
-  const match = rest.match(/^(\d+)([A-Z]+)$/)
+  // Optional hyphen after route number (IR111-A) or concatenated (IR111A)
+  const match = rest.match(/^(\d+)(?:-)?([A-Z0-9]+)$/)
   if (!match) return null
   return {
     routeType,
     routeNumber: match[1],
     waypointLetter: match[2],
   }
-}
-
-function convertToG1000Name(original: string): string {
-  const upper = original.toUpperCase()
-  const match = upper.match(/^(IR|SR|VR)(\d+)([A-Z]+)$/)
-  if (!match) return original.slice(0, 8).replace(/[^A-Z0-9]/g, '')
-  const [, , num, suffix] = match
-  const combined = suffix + num
-  return combined.slice(0, 8)
 }

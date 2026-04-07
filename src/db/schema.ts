@@ -28,6 +28,9 @@ export interface PendingWaypoint {
   sequence: number
 }
 
+/** How the plan was created (for reference; export behavior is unified). */
+export type FlightPlanCreationLoadMethod = 'route' | 'sequence' | 'sequenceLibrary'
+
 /** Flight plan */
 export interface FlightPlanRecord {
   id: string
@@ -39,6 +42,8 @@ export interface FlightPlanRecord {
   isActive: boolean
   /** Waypoints not found during create; user supplies coords on detail page */
   pendingWaypoints?: PendingWaypoint[]
+  /** Set when created from New Flight Plan (optional on older records). */
+  creationLoadMethod?: FlightPlanCreationLoadMethod
 }
 
 /** Tower base location */

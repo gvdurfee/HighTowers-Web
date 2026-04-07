@@ -7,7 +7,10 @@ import {
   fromPersistedStructure,
   fromPersistedLighting,
 } from '@/types/reportForm'
-import { nearestWaypointInfo, shortWaypointId } from '@/utils/towerWaypointGeometry'
+import {
+  formatDistanceBearingNotes,
+  mergeBearingNotesWithManual,
+} from '@/utils/towerWaypointGeometry'
 import type { WaypointRecord } from '@/db/schema'
 import {
   generateAirForceReportPdf,
@@ -29,18 +32,6 @@ function formatCoordinate(value: number, isLatitude: boolean): string {
   const d = Math.floor(absVal)
   const m = (absVal - d) * 60
   return `${direction}${d}°${m.toFixed(2)}'`
-}
-
-function buildNotesWithBearingDistance(
-  towerLat: number,
-  towerLon: number,
-  waypoints: WaypointRecord[]
-): string {
-  if (!waypoints.length) return ''
-  const info = nearestWaypointInfo(towerLat, towerLon, waypoints)
-  if (!info) return ''
-  const wpShortId = shortWaypointId((info.waypoint as WaypointRecord).originalName ?? '')
-  return `${info.distanceNm.toFixed(1)} nm, ${Math.round(info.bearingDeg)}° True from point ${wpShortId}`
 }
 
 export function ExportDataPage() {
@@ -98,10 +89,10 @@ export function ExportDataPage() {
         const r = reports[i]
         const loc = locations[i]
         if (!loc) continue
-        let notes = r.notes ?? ''
-        if (m.flightPlanId && wps.length > 0) {
-          notes = buildNotesWithBearingDistance(loc.latitude, loc.longitude, wps)
-        }
+        const notes = mergeBearingNotesWithManual(
+          formatDistanceBearingNotes(loc, wps),
+          (r.notes ?? '').trim()
+        )
         entries[i] = {
           structureType: fromPersistedStructure(r.structureType),
           lighting: fromPersistedLighting(r.structureLighting),
@@ -166,11 +157,13 @@ export function ExportDataPage() {
     !!formData.date.trim()
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="app-page-shell overflow-auto">
+      <div className="app-panel max-w-2xl mx-auto p-6 md:p-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Export Data</h1>
       <p className="text-gray-600 mb-6">
-        Generate and download the Air Force Route Survey Report PDF. Tower images are
-        compressed to ~500KB each for email sharing.
+        Generate and download the Air Force Route Survey Report PDF. Includes a mission map
+        (route and towers) when Mapbox is configured. Tower photos use a CAP-style location
+        overlay and are compressed to ~500KB each for email sharing.
       </p>
 
       {!selectedMissionId && (missions ?? []).length > 0 && (
@@ -227,12 +220,13 @@ export function ExportDataPage() {
       </div>
 
       {errorMessage && (
-        <div className="mt-4 p-4 bg-red-50 text-cap-scarlet rounded-lg">{errorMessage}</div>
+        <div className="mt-4 p-4 bg-red-50 text-cap-pimento rounded-lg">{errorMessage}</div>
       )}
 
       {selectedMissionId && !formData && (
         <p className="mt-4 text-sm text-gray-500">Loading mission data…</p>
       )}
+      </div>
     </div>
   )
 }

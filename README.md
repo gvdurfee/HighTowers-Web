@@ -35,6 +35,9 @@ Web-based version of the HighTowers iPadOS app for Civil Air Patrol Air Force Ro
    ```
    Same app URL (typically http://localhost:5173). Requires network for FAA downloads and map tiles.
 
+5. **Optional: “Recent imagery overlay” (Survey Location)**  
+   Add Copernicus Data Space OAuth credentials to `.env` as `CDSE_OAUTH_CLIENT_ID` and `CDSE_OAUTH_CLIENT_SECRET` (create an OAuth client in the [CDSE dashboard](https://shapps.dataspace.copernicus.eu/dashboard/#/account/settings)). Requires `npm run dev:all`. See `server/README.md` and `docs/IMAGERY_OVERLAY_IMPLEMENTATION.md`.
+
 ---
 
 ## Training install checklist (one page)

@@ -4,6 +4,8 @@
  * Ports logic from HighTowers-2025 APIService.swift
  */
 
+import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
+
 const MTR_BACKEND_BASE = '/api'
 
 const FAA_URL =
@@ -179,7 +181,7 @@ export const apiService = {
         const originalName = `${routeType}${num}-${ptIdent}`
         results.push({
           originalName,
-          g1000Name: toG1000Name(originalName),
+          g1000Name: convertWaypointNameToG1000(originalName),
           latitude: lat,
           longitude: lon,
           ptIdent,
@@ -261,11 +263,4 @@ export const apiService = {
       throw new Error('No elevation result')
     return elev * 3.28084
   },
-}
-
-function toG1000Name(original: string): string {
-  const match = original.match(/^(IR|SR|VR)(\d+)-([A-Z0-9]+)$/i)
-  if (!match) return original.slice(0, 8).replace(/[^A-Z0-9]/gi, '')
-  const [, , num, suffix] = match
-  return (suffix + num).slice(0, 8)
 }

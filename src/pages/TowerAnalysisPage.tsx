@@ -12,56 +12,26 @@ import { TowerImagePicker } from '@/components/TowerImagePicker'
 import { SurveyMapModal } from '@/components/SurveyMapModal'
 import { MeasureLinesPanel } from '@/components/MeasureLinesPanel'
 
-function formatCoord(value: number, isLat: boolean): string {
-  const dir = isLat ? (value >= 0 ? 'N' : 'S') : value >= 0 ? 'E' : 'W'
+function formatCoord(value: number, isLatitude: boolean): string {
+  const dir = isLatitude ? (value >= 0 ? 'N' : 'S') : value >= 0 ? 'E' : 'W'
   const abs = Math.abs(value)
   const d = Math.floor(abs)
   const m = (abs - d) * 60
-  return `${dir}${d}° ${m.toFixed(2)}'`
+  return `${dir}${d}°${m.toFixed(2)}'`
 }
 
+/** Re-encodes the analysis image as JPEG; measurement lines are omitted (PDF adds the info overlay). */
 function buildAnnotatedImageDataUrl(
   image: HTMLImageElement,
-  topY: number,
-  baseY: number,
-  measH: number,
-  towerLat: number,
-  towerLon: number,
-  estimatedHeight: number,
-  groundElev: number
+  _baseY: number,
+  _measH: number
 ): string {
   const canvas = document.createElement('canvas')
   canvas.width = image.width
   canvas.height = image.height
   const ctx = canvas.getContext('2d')
   if (!ctx) return image.src
-
   ctx.drawImage(image, 0, 0)
-  const scale = image.height / measH
-  const topPx = topY * scale
-  const basePx = baseY * scale
-
-  ctx.strokeStyle = '#BA0C2F'
-  ctx.lineWidth = 3
-  ctx.beginPath()
-  ctx.moveTo(0, topPx)
-  ctx.lineTo(image.width, topPx)
-  ctx.stroke()
-
-  ctx.strokeStyle = '#001489'
-  ctx.beginPath()
-  ctx.moveTo(0, basePx)
-  ctx.lineTo(image.width, basePx)
-  ctx.stroke()
-
-  ctx.font = `bold ${Math.max(14, image.height / 30)}px sans-serif`
-  ctx.fillStyle = '#BA0C2F'
-  ctx.strokeStyle = '#000'
-  ctx.lineWidth = 2
-  const text = `Location: ${formatCoord(towerLat, true)}, ${formatCoord(towerLon, false)}\nHeight AGL: ${Math.round(estimatedHeight)} ft\nHeight MSL: ${Math.round(groundElev + estimatedHeight)} ft`
-  ctx.strokeText(text, 20, 50)
-  ctx.fillText(text, 20, 50)
-
   return canvas.toDataURL('image/jpeg', 0.9)
 }
 
@@ -251,13 +221,8 @@ export function TowerAnalysisPage() {
 
       const annotatedDataUrl = buildAnnotatedImageDataUrl(
         selectedImage,
-        topSlider,
         baseSlider,
-        measurementHeight,
-        towerLat,
-        towerLon,
-        estimatedHeight,
-        groundElevation
+        measurementHeight
       )
 
       await db.towerReports.add({
@@ -283,10 +248,12 @@ export function TowerAnalysisPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="app-page-shell overflow-hidden relative">
+      <div className="app-panel flex flex-col flex-1 min-h-0 overflow-hidden p-0 shadow-xl">
+      <div className="flex flex-col flex-1 min-h-0">
       <div className="flex-1 flex min-h-0">
         {/* Left panel - compact to maximize image area */}
-        <div className="w-56 flex-shrink-0 p-4 border-r bg-white flex flex-col gap-4">
+        <div className="w-56 flex-shrink-0 p-4 border-r border-gray-200 bg-slate-50 flex flex-col gap-4">
           <div className="flex items-start justify-between gap-2">
             <h1 className="text-lg font-bold text-gray-900 leading-tight">
               Tower Data
@@ -296,7 +263,7 @@ export function TowerAnalysisPage() {
             <button
               type="button"
               onClick={() => setShowHelp(true)}
-              className="p-1.5 text-cap-scarlet hover:bg-red-50 rounded-full flex-shrink-0"
+              className="p-1.5 text-cap-pimento hover:bg-red-50 rounded-full flex-shrink-0"
               aria-label="Help"
             >
               ❓
@@ -342,10 +309,8 @@ export function TowerAnalysisPage() {
                   <span className="font-medium">{Math.round(estimatedHeight)} ft</span>
                 </p>
                 <p className="text-sm">
-                  <span className="text-gray-500">MSL:</span>{' '}
-                  <span className="font-medium">
-                    {Math.round(groundElevation + estimatedHeight)} ft
-                  </span>
+                  <span className="text-gray-500">MSL (terrain):</span>{' '}
+                  <span className="font-medium">{Math.round(groundElevation)} ft</span>
                 </p>
               </div>
               <div className="mt-auto flex flex-col gap-2">
@@ -370,7 +335,7 @@ export function TowerAnalysisPage() {
         </div>
 
         {/* Right panel - measurement; maximize image + sliders */}
-        <div className="flex-1 flex flex-col min-w-0 p-4 min-h-0">
+        <div className="flex-1 flex flex-col min-w-0 p-4 min-h-0 bg-white">
           <h2 className="font-semibold text-gray-900 mb-1 text-sm">Height Measurement</h2>
           <p className="text-xs text-gray-500 mb-2">
             Red = top. Blue = bottom. Drag sliders to align.
@@ -386,6 +351,8 @@ export function TowerAnalysisPage() {
           />
         </div>
       </div>
+      </div>
+      </div>
 
       {!activeMission && (
         <div className="absolute top-20 right-4 max-w-sm p-4 bg-cap-yellow/20 border border-cap-yellow rounded-lg shadow-lg">
@@ -400,7 +367,7 @@ export function TowerAnalysisPage() {
       {bannerMessage && (
         <div
           className={`fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg ${
-            bannerSuccess ? 'bg-green-600 text-white' : 'bg-cap-scarlet text-white'
+            bannerSuccess ? 'bg-green-600 text-white' : 'bg-cap-pimento text-white'
           }`}
         >
           {bannerMessage}

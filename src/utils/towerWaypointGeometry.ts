@@ -3,6 +3,8 @@
  * Ported from HighTowers-2025 TowerWaypointGeometry.
  */
 
+import type { TowerLocationRecord, WaypointRecord } from '@/db/schema'
+
 export interface WaypointLike {
   latitude: number
   longitude: number
@@ -172,4 +174,104 @@ export function destination(
 export function shortWaypointId(originalName: string): string {
   const parts = originalName.split('-')
   return parts[parts.length - 1] ?? originalName
+}
+
+/**
+ * Text for PDF / report Notes: prefer values stored when the tower was saved
+ * (distanceFromWaypoint, bearingFromWaypoint, nearestWaypointId), else recompute.
+ */
+export function formatDistanceBearingNotes(
+  loc: TowerLocationRecord | undefined,
+  waypoints: WaypointRecord[]
+): string {
+  if (!loc) return ''
+  if (
+    loc.distanceFromWaypoint != null &&
+    loc.bearingFromWaypoint != null &&
+    loc.nearestWaypointId &&
+    waypoints.length > 0
+  ) {
+    const wp = waypoints.find((w) => w.id === loc.nearestWaypointId)
+    const id = wp ? shortWaypointId(wp.originalName ?? '') : '?'
+    return `${loc.distanceFromWaypoint.toFixed(1)} nm, ${Math.round(loc.bearingFromWaypoint)}° True from point ${id}`
+  }
+  if (waypoints.length > 0) {
+    const info = nearestWaypointInfo(loc.latitude, loc.longitude, waypoints)
+    if (!info) return ''
+    const wpShortId = shortWaypointId((info.waypoint as WaypointRecord).originalName ?? '')
+    return `${info.distanceNm.toFixed(1)} nm, ${Math.round(info.bearingDeg)}° True from point ${wpShortId}`
+  }
+  return ''
+}
+
+function normalizeNoteClause(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/**
+ * Split on ". " and remove clauses that repeat or are a strict prefix of another clause
+ * (e.g. "4.9 nm, 359° True from point I" + "4.9 nm, 359°" → keep the longer once).
+ */
+export function dedupeNoteClauses(text: string): string {
+  const raw = text.trim()
+  if (!raw) return ''
+  const segments = raw
+    .split(/\.\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (segments.length <= 1) return segments[0] ?? ''
+
+  const out: string[] = []
+  for (const seg of segments) {
+    const sn = normalizeNoteClause(seg)
+    let handled = false
+    for (let i = 0; i < out.length; i++) {
+      const o = out[i]!
+      const on = normalizeNoteClause(o)
+      if (sn === on) {
+        handled = true
+        break
+      }
+      const onStartsSn = on.startsWith(sn + ' ') || (on.startsWith(sn) && o.length > seg.length)
+      if (onStartsSn) {
+        handled = true
+        break
+      }
+      const snStartsOn = sn.startsWith(on + ' ') || (sn.startsWith(on) && seg.length > o.length)
+      if (snStartsOn) {
+        out[i] = seg
+        handled = true
+        break
+      }
+    }
+    if (!handled) out.push(seg)
+  }
+  return out.join('. ')
+}
+
+/**
+ * Combine auto-generated bearing/distance text with optional manual notes and remove redundancy.
+ */
+export function mergeBearingNotesWithManual(computed: string, manual: string): string {
+  const c = computed.trim()
+  const m = manual.trim()
+  let merged: string
+  if (!m) merged = c
+  else if (!c) merged = m
+  else if (c === m) merged = c
+  else if (m.startsWith(c)) {
+    const rest = m.slice(c.length).replace(/^[\s.]+/, '').trim()
+    merged = rest ? `${c}. ${rest}` : c
+  } else if (c.startsWith(m)) merged = c
+  else if (m.includes(c)) {
+    const rest = m
+      .replace(c, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^\.+\s*/, '')
+    merged = rest ? `${c}. ${rest}` : c
+  } else {
+    merged = `${c}. ${m}`
+  }
+  return dedupeNoteClauses(merged)
 }
