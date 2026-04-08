@@ -99,6 +99,89 @@ function inferTowerTableNoteRow(fieldName: string): number | null {
  * Many AF form templates use hierarchical names that do not match our key list.
  * Second pass: find Note/Comment fields and set bearing/distance text by row.
  */
+/**
+ * Blank Route Survey Form 2.pdf — structure (left column) and lighting (right), top to bottom:
+ * Cell/Microwave, Multiple Towers, Airfield, Other | None, Strobes, Red, Other.
+ * Verified via widget positions (x≈58 vs x≈160).
+ */
+const BLANK_ROUTE_STRUCTURE_CHECKBOXES: readonly string[][] = [
+  ['Check Box1.0', 'Check Box1.1', 'Check Box1.2', 'Check Box1.3'],
+  ['Check Box1.4', 'Check Box1.5', 'Check Box1.6', 'Check Box1.7'],
+  ['Check Box1.8', 'Check Box1.9', 'Check Box1.10', 'Check Box1.11'],
+  ['Check Box1.12', 'Check Box1.13', 'Check Box1.14', 'Check Box1.15'],
+  ['Check Box1.16', 'Check Box1.17', 'Check Box1.18', 'Check Box1.19'],
+  ['Check Box1.20', 'Check Box1.21', 'Check Box1.22', 'Check Box1.23'],
+]
+
+const BLANK_ROUTE_LIGHTING_CHECKBOXES: readonly string[][] = [
+  ['Check Box1.00.0', 'Check Box1.00.1', 'Check Box1.00.2', 'Check Box1.00.3'],
+  ['Check Box1.00.4', 'Check Box1.00.5', 'Check Box1.00.6', 'Check Box1.00.7'],
+  ['Check Box1.00.8', 'Check Box1.00.9', 'Check Box1.00.10', 'Check Box1.00.11'],
+  ['Check Box1.00.12', 'Check Box1.00.13', 'Check Box1.00.14', 'Check Box1.00.15'],
+  ['Check Box1.00.16', 'Check Box1.00.17', 'Check Box1.00.18', 'Check Box1.00.19'],
+  ['Check Box1.00.20', 'Check Box1.00.21', 'Check Box1.00.22', 'Check Box1.00.23'],
+]
+
+function setPdfCheckBox(form: PDFForm, name: string, checked: boolean): void {
+  try {
+    const cb = form.getCheckBox(name)
+    if (checked) cb.check()
+    else cb.uncheck()
+  } catch {
+    /* missing or not a checkbox */
+  }
+}
+
+/** Map app structure type to PDF column index (0 = top checkbox). */
+function structureTypeToCheckboxIndex(structType: string): number | null {
+  const t = structType.trim()
+  if (!t) return null
+  if (t === 'Cell/Microwave') return 0
+  if (t === 'Multiple Towers') return 1
+  if (t === 'Airfield') return 2
+  if (t === 'Other') return 3
+  return 3
+}
+
+/** Map app lighting to PDF column index (0 = top). */
+function lightingToCheckboxIndex(lighting: string): number | null {
+  const l = lighting.trim()
+  if (!l) return null
+  const order = ['None', 'Strobes', 'Red', 'Other'] as const
+  const i = order.indexOf(l as (typeof order)[number])
+  return i >= 0 ? i : null
+}
+
+function applyBlankRouteSurveyStructureLightingCheckboxes(
+  form: PDFForm,
+  reports: TowerReportRecord[],
+  towerEntries: TowerEntry[]
+): void {
+  for (let row = 0; row < 6; row++) {
+    const structNames = BLANK_ROUTE_STRUCTURE_CHECKBOXES[row]
+    const lightNames = BLANK_ROUTE_LIGHTING_CHECKBOXES[row]
+    if (!structNames || !lightNames) continue
+
+    for (const n of structNames) setPdfCheckBox(form, n, false)
+    for (const n of lightNames) setPdfCheckBox(form, n, false)
+
+    const r = reports[row]
+    const e = towerEntries[row]
+    const structType = (e?.structureType || r?.structureType || '').trim()
+    const lighting = (e?.lighting || r?.structureLighting || '').trim()
+
+    const si = structureTypeToCheckboxIndex(structType)
+    if (si != null && structNames[si]) {
+      setPdfCheckBox(form, structNames[si], true)
+    }
+
+    const li = lightingToCheckboxIndex(lighting)
+    if (li != null && lightNames[li]) {
+      setPdfCheckBox(form, lightNames[li], true)
+    }
+  }
+}
+
 function forceTowerNotesIntoPdfFields(form: PDFForm, rowNotes: string[]): void {
   const fields = form.getFields()
   const noteFields: PDFTextField[] = []
@@ -410,6 +493,8 @@ export async function generateAirForceReportPdf(
     )
   }
   forceTowerNotesIntoPdfFields(form, rowNotesForForce)
+
+  applyBlankRouteSurveyStructureLightingCheckboxes(form, reports, formData.towerEntries)
 
   form.updateFieldAppearances()
 
