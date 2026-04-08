@@ -10,8 +10,11 @@ import { ReportFormPage } from '@/pages/ReportFormPage'
 import { ExportDataPage } from '@/pages/ExportDataPage'
 
 function App() {
+  const basename =
+    import.meta.env.BASE_URL === '/' ? undefined : import.meta.env.BASE_URL.replace(/\/$/, '')
+
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <div className="h-full">
       <Routes>
         <Route path="/" element={<MainLayout />}>
