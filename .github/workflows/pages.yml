@@ -32,6 +32,8 @@ jobs:
         env:
           VITE_MAPBOX_ACCESS_TOKEN: ${{ secrets.VITE_MAPBOX_ACCESS_TOKEN }}
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          # Repository variable: HTTPS origin of deployed Node API (no path), e.g. https://api.example.com
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
         run: npm run build
 
       - name: SPA fallback for GitHub Pages

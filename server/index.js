@@ -4,6 +4,7 @@
  * SR routes fall back to ArcGIS (not in FAA MTR CSV).
  */
 
+import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
 import { createReadStream } from 'fs'
@@ -20,6 +21,35 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '..', '.env') })
 
 const app = express()
+
+/** Comma-separated browser origins allowed to call this API (required for GitHub Pages + wing sites). */
+function corsAllowedOrigins() {
+  const raw = process.env.CORS_ORIGINS
+  if (raw && String(raw).trim()) {
+    return String(raw)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }
+  return [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:4173',
+    'http://127.0.0.1:4173',
+  ]
+}
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      const allowed = corsAllowedOrigins()
+      if (!origin) return callback(null, true)
+      if (allowed.includes(origin)) return callback(null, true)
+      callback(null, false)
+    },
+  })
+)
+
 app.use(express.json({ limit: '2mb' }))
 const PORT = process.env.PORT ?? 3001
 

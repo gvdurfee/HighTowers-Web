@@ -4,9 +4,8 @@
  * Ports logic from HighTowers-2025 APIService.swift
  */
 
+import { apiUrl } from '@/config/apiConfig'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
-
-const MTR_BACKEND_BASE = '/api'
 
 const FAA_URL =
   'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/US_Airport/FeatureServer/0/query'
@@ -142,7 +141,7 @@ export const apiService = {
           ...(entryLetter && { entry: entryLetter }),
           ...(exitLetter && { exit: exitLetter }),
         })
-        const res = await fetch(`${MTR_BACKEND_BASE}/mtr/waypoints?${params}`)
+        const res = await fetch(`${apiUrl('/api/mtr/waypoints')}?${params}`)
         if (!res.ok) throw new Error(`MTR API error: ${res.status}`)
         const data: { waypoints: { originalName: string; g1000Name: string; latitude: number; longitude: number; ptIdent?: string; nxPoint?: string }[] } = await res.json()
         const results = data.waypoints ?? []

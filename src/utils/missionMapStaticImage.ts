@@ -7,7 +7,7 @@
  */
 import { db } from '@/db/schema'
 import type { AirportRecord, FlightPlanRecord, WaypointRecord } from '@/db/schema'
-import { apiConfig, isMapboxConfigured } from '@/config/apiConfig'
+import { apiConfig, apiUrl, isMapboxConfigured } from '@/config/apiConfig'
 
 const STYLE = 'mapbox/satellite-streets-v12'
 /** Landscape; stay ≤1280 per Mapbox static API limits (no @2x). */
@@ -147,11 +147,11 @@ async function fetchMapboxStaticPng(
       warnMapExport(`Direct Mapbox HTTP ${res.status} (often CORS in the browser). Trying API proxy…`)
     }
   } catch {
-    warnMapExport('Direct Mapbox fetch failed (usually CORS). Trying same-origin /api/mapbox-static…')
+    warnMapExport('Direct Mapbox fetch failed (usually CORS). Trying API proxy (/api/mapbox-static)…')
   }
 
   try {
-    const res = await fetch('/api/mapbox-static', {
+    const res = await fetch(apiUrl('/api/mapbox-static'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -174,7 +174,7 @@ async function fetchMapboxStaticPng(
       }
       const hint =
         detail ||
-        'Run npm run server (or dev:all). Set VITE_MAPBOX_ACCESS_TOKEN in .env and restart Vite.'
+        'Run npm run server (or dev:all), or set VITE_API_BASE_URL for hosted API. Set VITE_MAPBOX_ACCESS_TOKEN in .env and restart.'
       warnMapExport(`/api/mapbox-static HTTP ${res.status}. ${hint}`)
     } else {
       warnMapExport(
@@ -183,7 +183,7 @@ async function fetchMapboxStaticPng(
     }
   } catch {
     warnMapExport(
-      'Could not reach /api/mapbox-static. Use npm run dev:all or run server on port 3001 with Vite proxy.'
+      'Could not reach /api/mapbox-static. Use npm run dev:all locally, or configure VITE_API_BASE_URL + hosted API (see docs/API_HOSTING.md).'
     )
   }
 

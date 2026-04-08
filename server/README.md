@@ -23,6 +23,7 @@ npm run dev:all       # Backend + Vite (proxy /api -> 3001)
 
 ## Environment
 
+- `CORS_ORIGINS` (recommended for production): Comma-separated **browser** origins allowed to call this API (e.g. `https://youruser.github.io` for GitHub Pages, or your wing site origin). If unset, only local Vite/preview origins are allowed. See **`docs/API_HOSTING.md`**.
 - `MTR_CYCLE_DATE` (optional): Override cycle date (YYYY-MM-DD) when the FAA index is unreachable (e.g. 403).
 - `PORT` (optional): Server port (default 3001).
 

@@ -1,0 +1,5 @@
+node_modules
+.mtr-cache
+*.zip
+.env
+.env.*

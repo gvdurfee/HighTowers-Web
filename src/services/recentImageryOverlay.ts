@@ -1,3 +1,4 @@
+import { apiUrl } from '@/config/apiConfig'
 import type { LngLat } from '@/utils/mapOverlayGeometry'
 import { computeOneMileSquareImageCoordinates } from '@/utils/mapOverlayGeometry'
 
@@ -13,7 +14,7 @@ export type RecentImageryOverlay = {
 }
 
 const NETWORK_HELP =
-  'Cannot reach /api/recent-imagery. Run npm run dev:all (Vite + Node on port 3001) or add CDSE_OAUTH_* to .env — see server/README.md'
+  'Cannot reach /api/recent-imagery. Run npm run dev:all (Vite + Node on port 3001), set VITE_API_BASE_URL for a hosted API, and ensure CDSE_OAUTH_* on the server — see server/README.md and docs/API_HOSTING.md'
 
 async function readErrorMessage(res: Response): Promise<string> {
   const text = await res.text().catch(() => '')
@@ -46,7 +47,7 @@ export async function fetchRecentImageryOverlay(
 
   let res: Response
   try {
-    res = await fetch(`/api/recent-imagery?${params}`)
+    res = await fetch(`${apiUrl('/api/recent-imagery')}?${params}`)
   } catch {
     throw new Error(NETWORK_HELP)
   }
