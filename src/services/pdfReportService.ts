@@ -351,11 +351,12 @@ export async function generateAirForceReportPdf(
       .sortBy('sequence')
   }
 
-  const templateUrl = new URL(
-    'Blank Route Survey Form 2.pdf',
-    import.meta.env.BASE_URL
-  ).href
-  const templateRes = await fetch(templateUrl)
+  // BASE_URL is path-only (e.g. /HighTowers-Web/) — `new URL(rel, base)` requires an absolute base and throws.
+  const base = import.meta.env.BASE_URL.endsWith('/')
+    ? import.meta.env.BASE_URL
+    : `${import.meta.env.BASE_URL}/`
+  const templatePath = `${base}${encodeURI('Blank Route Survey Form 2.pdf')}`
+  const templateRes = await fetch(templatePath)
   if (!templateRes.ok) throw new Error('Template PDF not found')
   const templateBytes = new Uint8Array(await templateRes.arrayBuffer())
 
