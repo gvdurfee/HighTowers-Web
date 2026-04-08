@@ -278,12 +278,12 @@ export function SurveyMapModal({
         ref={modalRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="survey-location-title"
+        aria-labelledby="fly-over-location-title"
         className="bg-white rounded-xl flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden"
         onKeyDown={handleKeyDown}
       >
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 id="survey-location-title" className="text-lg font-semibold">Survey Location</h2>
+          <h2 id="fly-over-location-title" className="text-lg font-semibold">Fly-Over Location</h2>
           <button
             ref={closeBtnRef}
             type="button"

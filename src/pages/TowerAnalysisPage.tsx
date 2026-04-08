@@ -283,7 +283,7 @@ export function TowerAnalysisPage() {
                   onClick={() => setShowSurveyMap(true)}
                   className="w-full py-2 px-3 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm"
                 >
-                  Survey Location
+                  Fly-Over Location
                 </button>
                 {hasLocationData && (
                   <div className="mt-3 text-sm space-y-1">
@@ -378,7 +378,7 @@ export function TowerAnalysisPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-md">
             <p className="text-gray-700">
-              This image has no GPS metadata. Use Survey Location to set the tower
+              This image has no GPS metadata. Use Fly-Over Location to set the tower
               position manually.
             </p>
             <button
@@ -414,9 +414,9 @@ export function TowerAnalysisPage() {
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold">Survey Location</h3>
+                <h3 className="font-semibold">Fly-Over Location</h3>
                 <p>
-                  Select an image with GPS first, then open Survey Location to pin the
+                  Select an image with GPS first, then open Fly-Over Location to pin the
                   tower base on the map and fetch ground elevation.
                 </p>
               </div>

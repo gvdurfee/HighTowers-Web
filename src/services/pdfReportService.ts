@@ -351,7 +351,11 @@ export async function generateAirForceReportPdf(
       .sortBy('sequence')
   }
 
-  const templateRes = await fetch('/Blank Route Survey Form 2.pdf')
+  const templateUrl = new URL(
+    'Blank Route Survey Form 2.pdf',
+    import.meta.env.BASE_URL
+  ).href
+  const templateRes = await fetch(templateUrl)
   if (!templateRes.ok) throw new Error('Template PDF not found')
   const templateBytes = new Uint8Array(await templateRes.arrayBuffer())
 
