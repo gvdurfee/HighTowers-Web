@@ -39,6 +39,12 @@ function buildNotesWithBearingDistance(
 function parseDate(s: string): Date | null {
   const trimmed = s.trim()
   if (!trimmed) return null
+  const mmddyyyyNoSlashes = trimmed.match(/^(\d{2})(\d{2})(\d{4})$/)
+  if (mmddyyyyNoSlashes) {
+    const [, m, d, y] = mmddyyyyNoSlashes
+    const date = new Date(parseInt(y!, 10), parseInt(m!, 10) - 1, parseInt(d!, 10))
+    return isNaN(date.getTime()) ? null : date
+  }
   const mmddyyyy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (mmddyyyy) {
     const [, m, d, y] = mmddyyyy
@@ -60,6 +66,26 @@ function formatDateForDisplay(date: Date): string {
 /** MTR route: uppercase letters and digits only (e.g. IR111, VR108) */
 function normalizeMtrRouteInput(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+function formatDateInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8) // MMDDYYYY
+  const mm = digits.slice(0, 2)
+  const dd = digits.slice(2, 4)
+  const yyyy = digits.slice(4, 8)
+  if (digits.length <= 2) return mm
+  if (digits.length <= 4) return `${mm}/${dd}`
+  return `${mm}/${dd}/${yyyy}`
+}
+
+function formatPhoneInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 10) // XXXXXXXXXX
+  const a = digits.slice(0, 3)
+  const b = digits.slice(3, 6)
+  const c = digits.slice(6, 10)
+  if (digits.length <= 3) return a
+  if (digits.length <= 6) return `${a}-${b}`
+  return `${a}-${b}-${c}`
 }
 
 export function ReportFormPage() {
@@ -146,7 +172,7 @@ export function ReportFormPage() {
   const populateFromMission = useCallback((mission: MissionRecord) => {
     setPocName(mission.pocName ?? '')
     setCapUnit(mission.capUnit ?? '')
-    setPhone(mission.phone ?? '')
+    setPhone(formatPhoneInput(mission.phone ?? ''))
     setEmail(mission.email ?? '')
     setMissionNumber(mission.missionNumber ?? '')
     setMtrRoute(normalizeMtrRouteInput(mission.mtrRoute ?? ''))
@@ -340,8 +366,10 @@ export function ReportFormPage() {
             <input
               type="text"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => setDate(formatDateInput(e.target.value))}
               placeholder="MM/DD/YYYY"
+              inputMode="numeric"
+              maxLength={10}
               className="flex-1 max-w-xs px-3 py-2 border border-gray-300 rounded-lg"
             />
           </div>
@@ -437,7 +465,10 @@ export function ReportFormPage() {
               <input
                 type="text"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
+                inputMode="numeric"
+                maxLength={12}
+                placeholder="XXX-XXX-XXXX"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               />
             </div>

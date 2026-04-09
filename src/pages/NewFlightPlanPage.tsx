@@ -57,6 +57,15 @@ export function NewFlightPlanPage() {
   const routeIdentifierWatch = watch('routeIdentifier')
   const waypointSequenceWatch = watch('waypointSequence')
 
+  const normalizeFlightPlanNameInput = (value: string): string => {
+    // Uppercase IR / VR / SR when followed by a digit (MTR-style id), regardless of shift/caps.
+    return value.replace(/(^|[\s(])(ir|vr|sr)(?=\d)/gi, (_, sep: string, code: string) => {
+      return `${sep}${code.toUpperCase()}`
+    })
+  }
+
+  const nameField = register('name', { required: 'Name is required' })
+
   useEffect(() => {
     setDepartureAirport(null)
   }, [depCode])
@@ -521,7 +530,12 @@ export function NewFlightPlanPage() {
           </label>
           <input
             type="text"
-            {...register('name', { required: 'Name is required' })}
+            {...nameField}
+            onChange={(e) => {
+              const el = e.target as HTMLInputElement
+              el.value = normalizeFlightPlanNameInput(el.value)
+              void nameField.onChange(e)
+            }}
             placeholder="e.g. IR111 Survey"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent"
           />
