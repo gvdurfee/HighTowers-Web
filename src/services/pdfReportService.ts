@@ -9,6 +9,7 @@ import {
   formatDistanceBearingNotes,
   mergeBearingNotesWithManual,
 } from '@/utils/towerWaypointGeometry'
+import { towerHeightsUseSeeNotes } from '@/utils/routeSurveyTowerRow'
 import { compressImageForEmail } from '@/utils/imageCompression'
 import { fetchMissionMapStaticPng } from '@/utils/missionMapStaticImage'
 import type { TowerEntry } from '@/types/reportForm'
@@ -310,13 +311,17 @@ function buildFieldMappings(
     const row = i + 1
     const r0 = i
 
-    const notes = mergeBearingNotesWithManual(
-      formatDistanceBearingNotes(loc, waypoints),
-      (e.notes ?? '').trim()
-    )
+    const computed = formatDistanceBearingNotes(loc, waypoints)
+    const manual = (e.notes ?? '').trim()
+    const notes = loc && towerHeightsUseSeeNotes(loc)
+      ? manual
+      : mergeBearingNotesWithManual(computed, manual)
     const latStr = loc ? formatLatitude(loc.latitude) : e.latitude
     const lonStr = loc ? formatLongitude(loc.longitude) : e.longitude
-    const mslStr = loc ? String(Math.round(loc.elevation)) : e.msl
+    const mslStr =
+      loc && !towerHeightsUseSeeNotes(loc)
+        ? String(Math.round(loc.elevation))
+        : e.msl
     const aglStr = e.agl
     const structType = e.structureType || r?.structureType || ''
     const lighting = e.lighting || r?.structureLighting || ''

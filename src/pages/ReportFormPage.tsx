@@ -14,7 +14,11 @@ import {
   type StructureType,
   type Lighting,
 } from '@/types/reportForm'
-import { nearestWaypointInfo, shortWaypointId } from '@/utils/towerWaypointGeometry'
+import {
+  buildRouteSurveyTowerNotes,
+  routeSurveyAglField,
+  routeSurveyMslField,
+} from '@/utils/routeSurveyTowerRow'
 
 function formatCoordinate(value: number, isLatitude: boolean): string {
   const direction = isLatitude ? (value >= 0 ? 'N' : 'S') : value >= 0 ? 'E' : 'W'
@@ -22,18 +26,6 @@ function formatCoordinate(value: number, isLatitude: boolean): string {
   const d = Math.floor(absVal)
   const m = (absVal - d) * 60
   return `${direction}${d}°${m.toFixed(2)}'`
-}
-
-function buildNotesWithBearingDistance(
-  towerLat: number,
-  towerLon: number,
-  waypoints: WaypointRecord[]
-): string {
-  if (!waypoints.length) return ''
-  const info = nearestWaypointInfo(towerLat, towerLon, waypoints)
-  if (!info) return ''
-  const wpShortId = shortWaypointId((info.waypoint as WaypointRecord).originalName ?? '')
-  return `${info.distanceNm.toFixed(1)} nm, ${Math.round(info.bearingDeg)}° True from point ${wpShortId}`
 }
 
 function parseDate(s: string): Date | null {
@@ -146,21 +138,14 @@ export function ReportFormPage() {
         const r = reports[i]
         const loc = locations[i]
         if (!loc) continue
-        let notes = r.notes ?? ''
-        if (mission.flightPlanId && wps.length > 0) {
-          notes = buildNotesWithBearingDistance(
-            loc.latitude,
-            loc.longitude,
-            wps
-          )
-        }
+        const notes = buildRouteSurveyTowerNotes(loc, wps, r.notes)
         entries[i] = {
           structureType: fromPersistedStructure(r.structureType),
           lighting: fromPersistedLighting(r.structureLighting),
           latitude: formatCoordinate(loc.latitude, true),
           longitude: formatCoordinate(loc.longitude, false),
-          agl: r.estimatedHeight != null ? String(Math.round(r.estimatedHeight)) : '',
-          msl: String(Math.round(loc.elevation)),
+          agl: routeSurveyAglField(loc, r.estimatedHeight),
+          msl: routeSurveyMslField(loc),
           notes,
         }
       }

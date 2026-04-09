@@ -55,6 +55,10 @@ export interface TowerLocationRecord {
   nearestWaypointId?: string
   distanceFromWaypoint?: number
   bearingFromWaypoint?: number
+  /** Photo had no GPS; position set via Fly-Over Location. */
+  noImageGps?: boolean
+  /** Tower could not be identified on the map; user recorded best-effort position. */
+  towerNotVisibleOnMap?: boolean
 }
 
 /** Camera metadata at time of photo */

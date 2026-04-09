@@ -8,9 +8,10 @@ import {
   fromPersistedLighting,
 } from '@/types/reportForm'
 import {
-  formatDistanceBearingNotes,
-  mergeBearingNotesWithManual,
-} from '@/utils/towerWaypointGeometry'
+  buildRouteSurveyTowerNotes,
+  routeSurveyAglField,
+  routeSurveyMslField,
+} from '@/utils/routeSurveyTowerRow'
 import type { WaypointRecord } from '@/db/schema'
 import {
   generateAirForceReportPdf,
@@ -89,17 +90,14 @@ export function ExportDataPage() {
         const r = reports[i]
         const loc = locations[i]
         if (!loc) continue
-        const notes = mergeBearingNotesWithManual(
-          formatDistanceBearingNotes(loc, wps),
-          (r.notes ?? '').trim()
-        )
+        const notes = buildRouteSurveyTowerNotes(loc, wps, r.notes)
         entries[i] = {
           structureType: fromPersistedStructure(r.structureType),
           lighting: fromPersistedLighting(r.structureLighting),
           latitude: formatCoordinate(loc.latitude, true),
           longitude: formatCoordinate(loc.longitude, false),
-          agl: r.estimatedHeight != null ? String(Math.round(r.estimatedHeight)) : '',
-          msl: String(Math.round(loc.elevation)),
+          agl: routeSurveyAglField(loc, r.estimatedHeight),
+          msl: routeSurveyMslField(loc),
           notes,
         }
       }

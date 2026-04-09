@@ -33,12 +33,17 @@ function formatMinutesFromMap(minutes: number): string {
   return minutes.toFixed(2)
 }
 
+export interface SurveyMapRecordOptions {
+  /** Tower could not be identified on the map; best-effort map position / estimated bearing. */
+  towerNotVisibleOnMap?: boolean
+}
+
 interface SurveyMapModalProps {
   isOpen: boolean
   onClose: () => void
   initialLat: number
   initialLon: number
-  onRecord: (lat: number, lon: number, elevationFt: number) => void
+  onRecord: (lat: number, lon: number, elevationFt: number, options?: SurveyMapRecordOptions) => void
   fetchElevation: (lat: number, lon: number) => Promise<number>
 }
 
@@ -72,6 +77,7 @@ export function SurveyMapModal({
   const lonHemRef = useRef<HTMLSelectElement>(null)
   const closeBtnRef = useRef<HTMLButtonElement>(null)
   const recordBtnRef = useRef<HTMLButtonElement>(null)
+  const towerNotVisibleRef = useRef<HTMLInputElement>(null)
   const overlayBlobRef = useRef<string | null>(null)
   /** When true, next map moveend came from coordinate fields / programatic fly — do not overwrite inputs */
   const skipNextMapCenterSyncRef = useRef(false)
@@ -96,6 +102,7 @@ export function SurveyMapModal({
       lonDegRef.current,
       lonMinRef.current,
       lonHemRef.current,
+      towerNotVisibleRef.current,
       recordBtnRef.current,
       closeBtnRef.current,
     ].filter((el) => el != null) as HTMLElement[]
@@ -122,6 +129,7 @@ export function SurveyMapModal({
     [getOrderedFocusables]
   )
 
+  const [towerNotVisibleOnMap, setTowerNotVisibleOnMap] = useState(false)
   const [viewState, setViewState] = useState({
     longitude: defLon,
     latitude: defLat,
@@ -142,6 +150,7 @@ export function SurveyMapModal({
       setOverlayError(null)
       setOverlayLoading(false)
       setMapError(null)
+      setTowerNotVisibleOnMap(false)
       setViewState({
         longitude: initialLon || -106.6504,
         latitude: initialLat || 35.0844,
@@ -234,7 +243,9 @@ export function SurveyMapModal({
     const recordLon = viewState.longitude
     try {
       const elev = await fetchElevation(recordLat, recordLon)
-      onRecord(recordLat, recordLon, elev)
+      onRecord(recordLat, recordLon, elev, {
+        towerNotVisibleOnMap: towerNotVisibleOnMap || undefined,
+      })
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to fetch elevation')
@@ -545,6 +556,24 @@ export function SurveyMapModal({
           {coordWarning && (
             <p className="text-cap-pimento text-sm">{coordWarning}</p>
           )}
+          <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+            <input
+              ref={towerNotVisibleRef}
+              type="checkbox"
+              checked={towerNotVisibleOnMap}
+              onChange={(e) => setTowerNotVisibleOnMap(e.target.checked)}
+              className="mt-1 rounded border-gray-300"
+              aria-describedby="tower-not-visible-hint"
+            />
+            <span>
+              <span className="font-medium">Tower not visible on map</span>
+              <span id="tower-not-visible-hint" className="block text-gray-600 text-xs mt-0.5">
+                Check if the structure cannot be identified on the imagery. Record the best map position
+                (e.g. nearest route segment). Heights and bearing/distance on the survey form will be
+                marked as estimated — see Notes.
+              </span>
+            </span>
+          </label>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="text-sm text-gray-500">
               {latDeg || lonDeg

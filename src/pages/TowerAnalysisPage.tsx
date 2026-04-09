@@ -9,7 +9,7 @@ import { getSensorHeight } from '@/utils/cameraMetadata'
 import { calculateTowerHeight } from '@/utils/heightCalculation'
 import type { ImageMetadata } from '@/components/TowerImagePicker'
 import { TowerImagePicker } from '@/components/TowerImagePicker'
-import { SurveyMapModal } from '@/components/SurveyMapModal'
+import { SurveyMapModal, type SurveyMapRecordOptions } from '@/components/SurveyMapModal'
 import { MeasureLinesPanel } from '@/components/MeasureLinesPanel'
 
 function formatCoord(value: number, isLatitude: boolean): string {
@@ -56,6 +56,8 @@ export function TowerAnalysisPage() {
   const [estimatedHeight, setEstimatedHeight] = useState(0)
   const [showSurveyMap, setShowSurveyMap] = useState(false)
   const [showNoGpsAlert, setShowNoGpsAlert] = useState(false)
+  /** From Fly-Over modal: tower could not be identified on the map. */
+  const [surveyTowerNotVisibleOnMap, setSurveyTowerNotVisibleOnMap] = useState(false)
   const [bannerMessage, setBannerMessage] = useState<string | null>(null)
   const [bannerSuccess, setBannerSuccess] = useState(true)
   const [showHelp, setShowHelp] = useState(false)
@@ -128,16 +130,23 @@ export function TowerAnalysisPage() {
     } else {
       setShowNoGpsAlert(true)
     }
+    setSurveyTowerNotVisibleOnMap(false)
     setTopSlider(0)
     setBaseSlider(measurementHeight || 300)
     setEstimatedHeight(0)
   }
 
-  const handleSurveyRecord = (lat: number, lon: number, elev: number) => {
+  const handleSurveyRecord = (
+    lat: number,
+    lon: number,
+    elev: number,
+    options?: SurveyMapRecordOptions
+  ) => {
     setTowerLat(lat)
     setTowerLon(lon)
     setGroundElevation(Math.round(elev))
     setHasLocationData(true)
+    setSurveyTowerNotVisibleOnMap(!!options?.towerNotVisibleOnMap)
     setShowSurveyMap(false)
   }
 
@@ -149,6 +158,7 @@ export function TowerAnalysisPage() {
     setMeasurementHeight(0)
     setEstimatedHeight(0)
     setHasLocationData(false)
+    setSurveyTowerNotVisibleOnMap(false)
   }
 
   const saveTower = async () => {
@@ -199,6 +209,9 @@ export function TowerAnalysisPage() {
         }
       }
 
+      const noImageGps =
+        imageMeta?.latitude == null || imageMeta?.longitude == null
+
       await db.towerLocations.add({
         id: towerLocId,
         latitude: towerLat,
@@ -207,6 +220,8 @@ export function TowerAnalysisPage() {
         nearestWaypointId,
         distanceFromWaypoint,
         bearingFromWaypoint,
+        noImageGps,
+        towerNotVisibleOnMap: surveyTowerNotVisibleOnMap || undefined,
       })
 
       await db.cameraData.add({
@@ -416,8 +431,11 @@ export function TowerAnalysisPage() {
               <div>
                 <h3 className="font-semibold">Fly-Over Location</h3>
                 <p>
-                  Select an image with GPS first, then open Fly-Over Location to pin the
-                  tower base on the map and fetch ground elevation.
+                  Pan the map so the crosshair is on the tower base (or best position), then
+                  record to fetch ground elevation. If the photo has no GPS, Fly-Over supplies the
+                  tower coordinates for the survey form. If the tower cannot be seen on the map,
+                  use the checkbox before recording — MSL/AGL will read “See Notes” with an
+                  explanation and bearing/distance from the route.
                 </p>
               </div>
               <div>
