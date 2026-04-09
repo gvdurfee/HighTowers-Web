@@ -58,8 +58,9 @@ export function NewFlightPlanPage() {
   const waypointSequenceWatch = watch('waypointSequence')
 
   const normalizeFlightPlanNameInput = (value: string): string => {
-    // Uppercase IR / VR / SR when followed by a digit (MTR-style id), regardless of shift/caps.
-    return value.replace(/(^|[\s(])(ir|vr|sr)(?=\d)/gi, (_, sep: string, code: string) => {
+    // Uppercase IR / VR / SR for MTR-style names as soon as the prefix is typed (before digits too),
+    // when it looks like a route id (not a substring like "iron": require digit, space, or end next).
+    return value.replace(/(^|[\s(])(ir|vr|sr)(?=\d|\s|$)/gi, (_, sep: string, code: string) => {
       return `${sep}${code.toUpperCase()}`
     })
   }
