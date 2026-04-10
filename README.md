@@ -38,6 +38,13 @@ Web-based version of the HighTowers iPadOS app for Civil Air Patrol Air Force Ro
 5. **Optional: “Recent imagery overlay” (Survey Location)**  
    Add Copernicus Data Space OAuth credentials to `.env` as `CDSE_OAUTH_CLIENT_ID` and `CDSE_OAUTH_CLIENT_SECRET` (create an OAuth client in the [CDSE dashboard](https://shapps.dataspace.copernicus.eu/dashboard/#/account/settings)). Requires `npm run dev:all`. See `server/README.md` and `docs/IMAGERY_OVERLAY_IMPLEMENTATION.md`.
 
+## GitHub Pages (live app)
+
+**URL:** https://gvdurfee.github.io/HighTowers-Web/  
+Deployed from `main` via GitHub Actions.
+
+**Smoke tests:** Run **Pages first**, then local production-style preview — see [`docs/SMOKE_TEST.md`](docs/SMOKE_TEST.md).
+
 ---
 
 ## Training install checklist (one page)
