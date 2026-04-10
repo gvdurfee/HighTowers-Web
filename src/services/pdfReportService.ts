@@ -21,12 +21,13 @@ const MARGIN = 36
 
 /** Tuned between fitting IR111 / notes in comb fields and readability. */
 const FORM_FIELD_FONT_SIZE = 12
+/** Long Notes lines (bearing + “No Image GPS.”) need a smaller size to avoid clipping in narrow PDF cells. */
+const TOWER_NOTES_FORM_FONT_SIZE = 9
 
 const PHOTO_OVERLAY_FONT_SIZE = 11
 
-/** CAP brand colors (tailwind cap.ultramarine, cap.pimento) */
-const CAP_ULTRAMARINE = rgb(14 / 255, 43 / 255, 141 / 255)
-const CAP_PIMENTO = rgb(219 / 255, 0, 41 / 255)
+/** CAP brand — tower photo label uses tailwind cap.yellow #FFD911 */
+const CAP_YELLOW = rgb(255 / 255, 217 / 255, 17 / 255)
 
 function formatLatitude(value: number): string {
   const dir = value >= 0 ? 'N' : 'S'
@@ -221,7 +222,7 @@ function forceTowerNotesIntoPdfFields(form: PDFForm, rowNotes: string[]): void {
     if (!list?.length) continue
     for (const field of list) {
       try {
-        field.setFontSize(FORM_FIELD_FONT_SIZE)
+        field.setFontSize(TOWER_NOTES_FORM_FONT_SIZE)
         field.setText(text)
       } catch {
         /* ignore */
@@ -236,7 +237,7 @@ function forceTowerNotesIntoPdfFields(form: PDFForm, rowNotes: string[]): void {
     if (assignedRows.has(r) || !rowNotes[r]) continue
     while (ui < unassigned.length) {
       try {
-        unassigned[ui].setFontSize(FORM_FIELD_FONT_SIZE)
+        unassigned[ui].setFontSize(TOWER_NOTES_FORM_FONT_SIZE)
         unassigned[ui].setText(rowNotes[r])
       } catch {
         /* ignore */
@@ -492,10 +493,13 @@ export async function generateAirForceReportPdf(
   const rowNotesForForce: string[] = ['', '', '', '', '', '']
   for (let i = 0; i < Math.min(6, reports.length, formData.towerEntries.length); i++) {
     const loc = locations[i]
-    rowNotesForForce[i] = mergeBearingNotesWithManual(
-      formatDistanceBearingNotes(loc, waypoints),
-      (formData.towerEntries[i]?.notes ?? '').trim()
-    )
+    const e = formData.towerEntries[i]
+    const computed = formatDistanceBearingNotes(loc, waypoints)
+    const manual = (e?.notes ?? '').trim()
+    rowNotesForForce[i] =
+      loc && towerHeightsUseSeeNotes(loc)
+        ? manual
+        : mergeBearingNotesWithManual(computed, manual)
   }
   forceTowerNotesIntoPdfFields(form, rowNotesForForce)
 
@@ -505,6 +509,8 @@ export async function generateAirForceReportPdf(
 
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+  /** Dark text on CAP yellow label for readability */
+  const overlayLabelTextColor = rgb(0.12, 0.1, 0.08)
 
   // Append tower image pages (compressed for email), then mission map — all landscape appendix
   const sortedReportsWithImages = reports.filter(
@@ -541,9 +547,14 @@ export async function generateAirForceReportPdf(
       const line3 = `Height MSL: ${Math.round(loc.elevation)} ft`
       const lines = [line1, line2, line3]
       const ovPad = 6
+      const innerPadX = 6
       const lineSpacing = 11
       const fontSize = PHOTO_OVERLAY_FONT_SIZE
-      const ovW = Math.min(228, dims.width - 12)
+      const maxLineW = Math.max(
+        0,
+        ...lines.map((ln) => helvetica.widthOfTextAtSize(ln, fontSize))
+      )
+      const ovW = Math.min(maxLineW + innerPadX * 2, dims.width - 16)
       const ovH = lines.length * lineSpacing + ovPad * 2 + 4
       const imgTop = y + dims.height
       const ovX = x + 8
@@ -554,19 +565,19 @@ export async function generateAirForceReportPdf(
         y: ovY,
         width: ovW,
         height: ovH,
-        color: CAP_ULTRAMARINE,
-        opacity: 0.55,
+        color: CAP_YELLOW,
+        opacity: 0.92,
         borderWidth: 0,
       })
 
       let textBaseline = ovY + ovH - ovPad - fontSize
       for (const line of lines) {
         page.drawText(line, {
-          x: ovX + 6,
+          x: ovX + innerPadX,
           y: textBaseline,
           size: fontSize,
           font: helvetica,
-          color: CAP_PIMENTO,
+          color: overlayLabelTextColor,
         })
         textBaseline -= lineSpacing
       }
