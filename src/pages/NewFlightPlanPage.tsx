@@ -66,6 +66,7 @@ export function NewFlightPlanPage() {
   }
 
   const nameField = register('name', { required: 'Name is required' })
+  const waypointSequenceField = register('waypointSequence')
 
   useEffect(() => {
     setDepartureAirport(null)
@@ -725,7 +726,7 @@ export function NewFlightPlanPage() {
               )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Route identifier (optional)
+                  Route identifier (optional) — Leave blank for blended routes
                 </label>
                 <input
                   type="text"
@@ -740,8 +741,14 @@ export function NewFlightPlanPage() {
                   <code className="bg-gray-100 px-0.5 rounded">IR109-AM</code>, fetches coordinates
                   like full-route mode, then builds G1000 names (
                   <code className="bg-gray-100 px-0.5 rounded">AM109</code>,{' '}
-                  <code className="bg-gray-100 px-0.5 rounded">P1109</code>, …). Leave blank to enter
-                  full waypoint IDs per point (e.g. IR109-AM, VR108EK).
+                  <code className="bg-gray-100 px-0.5 rounded">P1109</code>, …). For a{' '}
+                  <strong>blended</strong> sequence that mixes two or more routes (e.g. SR213 and
+                  SR214), leave this blank and enter each point as a full waypoint ID below (
+                  <code className="bg-gray-100 px-0.5 rounded">SR213A</code>,{' '}
+                  <code className="bg-gray-100 px-0.5 rounded">SR214D</code>, …). You can also leave
+                  blank for a single route if you prefer typing full IDs (
+                  <code className="bg-gray-100 px-0.5 rounded">IR109-AM</code>,{' '}
+                  <code className="bg-gray-100 px-0.5 rounded">VR108EK</code>).
                 </p>
               </div>
               <div>
@@ -751,9 +758,13 @@ export function NewFlightPlanPage() {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    {...register('waypointSequence')}
-                    placeholder="With route ID: AM, P1, AQ — or full: IR109-AM, IR109-P1"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent"
+                    {...waypointSequenceField}
+                    onChange={(e) => {
+                      e.target.value = e.target.value.toUpperCase()
+                      waypointSequenceField.onChange(e)
+                    }}
+                    placeholder="With route ID: AM, P1 — full or blended: IR109-AM, SR213A, SR214D"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent uppercase"
                   />
                   <button
                     type="button"
@@ -778,8 +789,14 @@ export function NewFlightPlanPage() {
                   </p>
                 )}
                 <p className="text-xs text-gray-500 mt-1">
-                  Full IDs still work: <code className="bg-gray-100 px-0.5 rounded">IR107A</code>,{' '}
-                  <code className="bg-gray-100 px-0.5 rounded">IR109-P1</code>. Missing points are
+                  <strong>Blended routes</strong> (waypoints on more than one published route): leave
+                  Route identifier blank and enter each waypoint in full (
+                  <code className="bg-gray-100 px-0.5 rounded">SR213A</code>,{' '}
+                  <code className="bg-gray-100 px-0.5 rounded">SR214D</code>, …)—suffix-only tokens
+                  are not enough because they assume one route. <strong>Single route:</strong> either
+                  set Route identifier and use suffixes, or leave it blank and use full IDs (
+                  <code className="bg-gray-100 px-0.5 rounded">IR107A</code>,{' '}
+                  <code className="bg-gray-100 px-0.5 rounded">IR109-P1</code>). Missing points are
                   listed on the flight plan for manual coordinates.
                 </p>
                 {loadMethod === 'sequence' && (
