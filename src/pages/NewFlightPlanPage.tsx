@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { db } from '@/db/schema'
 import { generateId } from '@/utils/id'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
@@ -39,6 +39,7 @@ export function NewFlightPlanPage() {
 
   const {
     register,
+    control,
     handleSubmit,
     watch,
     formState: { errors },
@@ -66,7 +67,6 @@ export function NewFlightPlanPage() {
   }
 
   const nameField = register('name', { required: 'Name is required' })
-  const waypointSequenceField = register('waypointSequence')
 
   useEffect(() => {
     setDepartureAirport(null)
@@ -756,15 +756,21 @@ export function NewFlightPlanPage() {
                   Waypoint sequence (comma or space separated)
                 </label>
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    {...waypointSequenceField}
-                    onChange={(e) => {
-                      e.target.value = e.target.value.toUpperCase()
-                      waypointSequenceField.onChange(e)
-                    }}
-                    placeholder="With route ID: AM, P1 — full or blended: IR109-AM, SR213A, SR214D"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent uppercase"
+                  <Controller
+                    name="waypointSequence"
+                    control={control}
+                    render={({ field }) => (
+                      <input
+                        type="text"
+                        ref={field.ref}
+                        name={field.name}
+                        onBlur={field.onBlur}
+                        value={field.value ?? ''}
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                        placeholder="With route ID: AM, P1 — full or blended: IR109-AM, SR213A, SR214D"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent"
+                      />
+                    )}
                   />
                   <button
                     type="button"
