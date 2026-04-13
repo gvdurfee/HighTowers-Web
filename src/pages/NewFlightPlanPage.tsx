@@ -16,7 +16,9 @@ type FormData = {
   waypointSequence: string
 }
 
-type RoutePreview = { count: number; routeId: string } | { error: string }
+type RoutePreview =
+  | { count: number; routeId: string; resolvedCount?: number; totalTokens?: number }
+  | { error: string }
 
 type LoadMethod = 'route' | 'sequence' | 'sequenceLibrary'
 
@@ -794,13 +796,14 @@ export function NewFlightPlanPage() {
                     ) : (
                       <>
                         ✓ {sequencePreview.count} waypoint(s) found ({sequencePreview.routeId})
-                        {'resolvedCount' in sequencePreview &&
-                          'totalTokens' in sequencePreview &&
+                        {typeof sequencePreview.resolvedCount === 'number' &&
+                          typeof sequencePreview.totalTokens === 'number' &&
                           sequencePreview.resolvedCount < sequencePreview.totalTokens && (
                             <>
                               {' '}
-                              — Press <strong>Create Flight Plan</strong> and scroll on the next page to add missing
-                              coordinates, then export.
+                              <strong>
+                                <em>add coordinates on page after “Create Flight Plan”</em>
+                              </strong>
                             </>
                           )}
                       </>
