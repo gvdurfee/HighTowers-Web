@@ -245,6 +245,8 @@ export function NewFlightPlanPage() {
       } else {
         setSequencePreview({
           count: found,
+          resolvedCount: found,
+          totalTokens: parts.length,
           routeId: `${found}/${parts.length} resolved`,
         })
       }
@@ -790,7 +792,18 @@ export function NewFlightPlanPage() {
                     {'error' in sequencePreview ? (
                       sequencePreview.error
                     ) : (
-                      <>✓ {sequencePreview.count} waypoint(s) found ({sequencePreview.routeId})</>
+                      <>
+                        ✓ {sequencePreview.count} waypoint(s) found ({sequencePreview.routeId})
+                        {'resolvedCount' in sequencePreview &&
+                          'totalTokens' in sequencePreview &&
+                          sequencePreview.resolvedCount < sequencePreview.totalTokens && (
+                            <>
+                              {' '}
+                              — Press <strong>Create Flight Plan</strong> and scroll on the next page to add missing
+                              coordinates, then export.
+                            </>
+                          )}
+                      </>
                     )}
                   </p>
                 )}

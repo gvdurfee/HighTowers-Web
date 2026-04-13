@@ -100,7 +100,11 @@ export function FlightPlanLoadMethodHelpModal({
 
           <p className="text-xs text-gray-500 border-t border-gray-100 pt-3">
             Use <strong>Fetch</strong> before creating the plan to confirm the database has your
-            points. Missing points can be filled in on the flight plan detail page. Put{' '}
+            points. If you see missing points, still press <strong>Create Flight Plan</strong>—then
+            <strong>scroll</strong> on the next page to enter coordinates for each missing waypoint
+            before exporting. You can find coordinates in the <strong>AP/1B</strong>, or in{' '}
+            <strong>ForeFlight</strong> by tapping a waypoint in the flight plan and copying the
+            lat/long from the popup. Put{' '}
             <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> files in the{' '}
             <strong>root</strong> of a FAT32 SD card for G1000 import (see your avionics docs).
           </p>
