@@ -19,8 +19,10 @@ const LANDSCAPE_WIDTH = 792
 const LANDSCAPE_HEIGHT = 612
 const MARGIN = 36
 
-/** Tuned between fitting IR111 / notes in comb fields and readability. */
-const FORM_FIELD_FONT_SIZE = 12
+/** Default AcroForm text — 12pt often clips long emails/phones on the AF template. */
+const FORM_FIELD_FONT_SIZE = 10
+/** Email, phone, fax, POC, CAP Unit, additional notes: narrower boxes in the PDF. */
+const PDF_CONTACT_FIELD_FONT_SIZE = 8
 /** Long Notes lines (bearing + “No Image GPS.”) need a smaller size to avoid clipping in narrow PDF cells. */
 const TOWER_NOTES_FORM_FONT_SIZE = 9
 
@@ -50,6 +52,26 @@ function baseFieldName(fieldName: string): string {
   const parts = fieldName.split('.')
   const last = parts[parts.length - 1] ?? fieldName
   return last.replace(/\[\d+\]$/, '')
+}
+
+/**
+ * Use a smaller font for CAP contact / header text fields so long emails fit the template.
+ * Skips tower-table rows (lat/lon/MSL/AGL/notes) so those keep FORM_FIELD_FONT_SIZE until * {@link forceTowerNotesIntoPdfFields} adjusts notes.
+ */
+function pdfFieldUsesCompactContactFont(fieldName: string): boolean {
+  if (inferTowerTableNoteRow(fieldName) != null) return false
+  const t = `${fieldName} ${baseFieldName(fieldName)}`.toLowerCase()
+  if (/(struct|light|lighting|latitude|longitude)/.test(t)) return false
+  if (/\b(msl|agl)\b/.test(t)) return false
+  if (/\b(lat|lon)\b/.test(t) && !/plat|plon|slon|flon/.test(t)) return false
+  if (/^n_?\d|^w_?\d|r\d+_(lat|lon|msl|agl)/.test(t.replace(/\s+/g, ''))) return false
+  return (
+    /\b(email|e-mail)\b/.test(t) ||
+    /\b(phone|fax|telephone)\b/.test(t) ||
+    t.includes('poc') ||
+    /\bcap\b.*\bunit\b/.test(t) ||
+    /\badditional\b/.test(t)
+  )
 }
 
 function resolveFieldValue(
@@ -463,7 +485,10 @@ export async function generateAirForceReportPdf(
   for (const field of fields) {
     if (!(field instanceof PDFTextField)) continue
     try {
-      field.setFontSize(FORM_FIELD_FONT_SIZE)
+      const fontSize = pdfFieldUsesCompactContactFont(field.getName())
+        ? PDF_CONTACT_FIELD_FONT_SIZE
+        : FORM_FIELD_FONT_SIZE
+      field.setFontSize(fontSize)
       if (field.isCombed()) {
         field.disableCombing()
       }
