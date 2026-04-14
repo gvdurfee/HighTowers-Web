@@ -14,6 +14,8 @@ type GuidedHintProps = {
   body: string
   isSeen: boolean
   onDismiss: (hintId: string) => void
+  /** `light` for white / light UI (e.g. modals); default matches Tower Analysis panels. */
+  surface?: 'dark' | 'light'
 }
 
 function useClickOutside(
@@ -64,6 +66,7 @@ export function GuidedHint({
   body,
   isSeen,
   onDismiss,
+  surface = 'dark',
 }: GuidedHintProps) {
   const [open, setOpen] = useState(false)
   const [alignRight, setAlignRight] = useState(false)
@@ -106,12 +109,17 @@ export function GuidedHint({
 
   const showNumber = !isSeen
 
+  const triggerClass =
+    surface === 'light'
+      ? 'inline-flex items-center gap-1 rounded-full border border-cap-ultramarine/35 bg-cap-ultramarine/[0.08] px-2 py-1 text-xs font-semibold text-cap-ultramarine hover:bg-cap-ultramarine/[0.14] focus:outline-none focus:ring-2 focus:ring-cap-ultramarine/40'
+      : 'inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-1 text-xs font-semibold text-white hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-cap-yellow/70'
+
   return (
     <span className="relative inline-flex">
       <button
         ref={buttonRef}
         type="button"
-        className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-1 text-xs font-semibold text-white hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-cap-yellow/70"
+        className={triggerClass}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? `${hintId}-popover` : undefined}

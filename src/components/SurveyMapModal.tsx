@@ -1,9 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Map, MapRef, Source, Layer } from 'react-map-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { apiConfig, isMapboxConfigured } from '@/config/apiConfig'
 import { fetchRecentImageryOverlay } from '@/services/recentImageryOverlay'
 import type { RecentImageryOverlay } from '@/services/recentImageryOverlay'
+import { GuidedHint } from '@/components/GuidedHint'
+import { useHintsSeen } from '@/hooks/useHintsSeen'
+
+const HINT_SURVEY_G1000 = 'surveyMap.g1000Context'
+const HINT_SURVEY_COORDS = 'surveyMap.coordinates'
+const HINT_SURVEY_OVERLAY = 'surveyMap.overlayPatch'
 
 /** Convert decimal degrees to DMS components (DD, MM.mm, N/S or E/W) */
 function toDms(decimal: number, isLat: boolean): { deg: number; min: number; hem: 'N' | 'S' | 'E' | 'W' } {
@@ -86,6 +92,13 @@ export function SurveyMapModal({
   const [overlayLoading, setOverlayLoading] = useState(false)
   const [overlayError, setOverlayError] = useState<string | null>(null)
   const [mapError, setMapError] = useState<string | null>(null)
+  const [towerNotVisibleOnMap, setTowerNotVisibleOnMap] = useState(false)
+  const [coordVerifyDismissed, setCoordVerifyDismissed] = useState(false)
+  const { isSeen, markSeen } = useHintsSeen()
+
+  const overlayLoadRef = useRef<HTMLButtonElement>(null)
+  const overlayRemoveRef = useRef<HTMLButtonElement>(null)
+  const coordVerifyDismissRef = useRef<HTMLButtonElement>(null)
 
   const revokeOverlayBlob = useCallback(() => {
     if (overlayBlobRef.current) {
@@ -94,20 +107,40 @@ export function SurveyMapModal({
     }
   }, [])
 
+  const coordsComplete = useMemo(() => {
+    const ld = latDeg.trim()
+    const lm = latMin.trim()
+    const gd = lonDeg.trim()
+    const gm = lonMin.trim()
+    if (!ld || !lm || !gd || !gm) return false
+    const latM = Number(lm)
+    const lonM = Number(gm)
+    if (!Number.isFinite(latM) || !Number.isFinite(lonM)) return false
+    if (latM < 0 || latM >= 60 || lonM < 0 || lonM >= 60) return false
+    return true
+  }, [latDeg, latMin, lonDeg, lonMin])
+
+  const showCoordVerifyBanner = coordsComplete && !coordVerifyDismissed
+
   const getOrderedFocusables = useCallback((): HTMLElement[] => {
-    const els = [
-      latDegRef.current,
-      latMinRef.current,
-      latHemRef.current,
-      lonDegRef.current,
-      lonMinRef.current,
-      lonHemRef.current,
-      towerNotVisibleRef.current,
-      recordBtnRef.current,
-      closeBtnRef.current,
-    ].filter((el) => el != null) as HTMLElement[]
-    return els
-  }, [])
+    const list: HTMLElement[] = []
+    const push = (el: HTMLElement | null) => {
+      if (el) list.push(el)
+    }
+    push(latDegRef.current)
+    push(latMinRef.current)
+    push(lonDegRef.current)
+    push(lonMinRef.current)
+    push(towerNotVisibleRef.current)
+    if (towerNotVisibleOnMap) {
+      push(overlayLoadRef.current)
+      if (imageryOverlay) push(overlayRemoveRef.current)
+    }
+    if (showCoordVerifyBanner) push(coordVerifyDismissRef.current)
+    push(recordBtnRef.current)
+    push(closeBtnRef.current)
+    return list
+  }, [towerNotVisibleOnMap, imageryOverlay, showCoordVerifyBanner])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -129,7 +162,6 @@ export function SurveyMapModal({
     [getOrderedFocusables]
   )
 
-  const [towerNotVisibleOnMap, setTowerNotVisibleOnMap] = useState(false)
   const [viewState, setViewState] = useState({
     longitude: defLon,
     latitude: defLat,
@@ -151,6 +183,7 @@ export function SurveyMapModal({
       setOverlayLoading(false)
       setMapError(null)
       setTowerNotVisibleOnMap(false)
+      setCoordVerifyDismissed(false)
       setViewState({
         longitude: initialLon || -106.6504,
         latitude: initialLat || 35.0844,
@@ -168,6 +201,10 @@ export function SurveyMapModal({
       first?.focus()
     }
   }, [isOpen, mapReady])
+
+  useEffect(() => {
+    if (!coordsComplete) setCoordVerifyDismissed(false)
+  }, [coordsComplete])
 
   useEffect(() => {
     if (latDeg === '' && latMin === '' && lonDeg === '' && lonMin === '') return
@@ -297,13 +334,26 @@ export function SurveyMapModal({
         className="bg-white rounded-xl flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden"
         onKeyDown={handleKeyDown}
       >
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 id="fly-over-location-title" className="text-lg font-semibold">Look for Tower on Map</h2>
+        <div className="flex items-center justify-between gap-2 p-4 border-b">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 id="fly-over-location-title" className="text-lg font-semibold">
+              Look for Tower on Map
+            </h2>
+            <GuidedHint
+              hintId={HINT_SURVEY_G1000}
+              stepNumber={1}
+              title="Coordinates from the aircraft"
+              body="Aircrew often get an approximate tower position by flying over the structure and pressing the G1000 MFD Range Knob to capture coordinates—written down or photographed from the display. Enter that position in the Lat and Lon fields at the bottom (degrees and decimal minutes)."
+              isSeen={isSeen(HINT_SURVEY_G1000)}
+              onDismiss={markSeen}
+              surface="light"
+            />
+          </div>
           <button
             ref={closeBtnRef}
             type="button"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded"
+            className="p-2 hover:bg-gray-100 rounded shrink-0"
           >
             ✕
           </button>
@@ -311,40 +361,74 @@ export function SurveyMapModal({
         <p className="text-sm text-gray-600 px-4 pb-2">
           Pan and zoom the map so the center crosshair is over the tower base, or enter coordinates below.
         </p>
-        <div className="flex flex-wrap items-center gap-2 px-4 pb-2">
-          <button
-            type="button"
-            onClick={handleLoadImageryOverlay}
-            disabled={overlayLoading}
-            className="text-sm px-3 py-1.5 border border-cap-ultramarine text-cap-ultramarine rounded-lg hover:bg-cap-ultramarine/10 disabled:opacity-50"
-            aria-label="Load recent imagery overlay for this area"
+        {showCoordVerifyBanner && (
+          <div
+            role="alert"
+            className="mx-4 mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
           >
-            {overlayLoading ? 'Loading overlay…' : 'Load recent imagery overlay'}
-          </button>
-          {imageryOverlay && (
+            <span className="min-w-0 flex-1">
+              Double-check the coordinates against your MFD notes or photo before moving the map. After you
+              dismiss this message, you can pan and zoom as usual.
+            </span>
             <button
+              ref={coordVerifyDismissRef}
               type="button"
-              onClick={handleRemoveImageryOverlay}
-              className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50"
-              aria-label="Remove imagery overlay"
+              className="shrink-0 rounded-lg bg-cap-ultramarine px-3 py-1.5 text-white text-sm font-medium hover:bg-cap-ultramarine/90"
+              onClick={() => setCoordVerifyDismissed(true)}
             >
-              Remove overlay
+              Got it
             </button>
-          )}
-        </div>
+          </div>
+        )}
+        {towerNotVisibleOnMap && (
+          <>
+            <div className="flex flex-wrap items-center gap-2 px-4 pb-2">
+              <GuidedHint
+                hintId={HINT_SURVEY_OVERLAY}
+                stepNumber={3}
+                title="Recent map patch overlay"
+                body="This adds a semi-transparent patch of alternate recent imagery on top of the basemap. Pan and zoom the map as usual; the patch may reveal the tower when the default imagery is unclear."
+                isSeen={isSeen(HINT_SURVEY_OVERLAY)}
+                onDismiss={markSeen}
+                surface="light"
+              />
+              <button
+                ref={overlayLoadRef}
+                type="button"
+                onClick={handleLoadImageryOverlay}
+                disabled={overlayLoading}
+                className="text-sm px-3 py-1.5 border border-cap-ultramarine text-cap-ultramarine rounded-lg hover:bg-cap-ultramarine/10 disabled:opacity-50"
+                aria-label="Overlay recent map patch for this area"
+              >
+                {overlayLoading ? 'Loading patch…' : 'Overlay recent map patch'}
+              </button>
+              {imageryOverlay && (
+                <button
+                  ref={overlayRemoveRef}
+                  type="button"
+                  onClick={handleRemoveImageryOverlay}
+                  className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50"
+                  aria-label="Remove map patch overlay"
+                >
+                  Remove overlay
+                </button>
+              )}
+            </div>
+            {overlayError && (
+              <p className="text-xs text-cap-pimento px-4 pb-1">{overlayError}</p>
+            )}
+            {imageryOverlay && (
+              <p className="text-xs text-gray-500 px-4 pb-1">
+                Sentinel-2 is ~10&nbsp;m resolution (often softer than Mapbox). Overlay is visual only; Record
+                Location still uses the map center (crosshair). Use <strong>Remove overlay</strong> for the
+                sharpest Mapbox view.
+              </p>
+            )}
+          </>
+        )}
         {mapError && (
           <p className="text-xs text-cap-pimento px-4 pb-1">
             Map: {mapError} Check VITE_MAPBOX_ACCESS_TOKEN and restart the dev server.
-          </p>
-        )}
-        {overlayError && (
-          <p className="text-xs text-cap-pimento px-4 pb-1">{overlayError}</p>
-        )}
-        {imageryOverlay && (
-          <p className="text-xs text-gray-500 px-4 pb-1">
-            Sentinel-2 is ~10&nbsp;m resolution (often softer than Mapbox). Overlay is visual only; Record
-            Location still uses the map center (crosshair). Use <strong>Remove overlay</strong> for the
-            sharpest Mapbox view.
           </p>
         )}
         <div
@@ -415,7 +499,23 @@ export function SurveyMapModal({
             if (validateAndWarn()) handleRecord()
           }}
         >
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <p id="hemisphere-fields-note" className="sr-only">
+            North-south and east-west hemisphere controls are skipped when tabbing between coordinate fields;
+            use the pointer to change them when needed (for example overseas training routes).
+          </p>
+          <div
+            className="flex flex-wrap items-end gap-x-4 gap-y-2"
+            aria-describedby="hemisphere-fields-note"
+          >
+            <GuidedHint
+              hintId={HINT_SURVEY_COORDS}
+              stepNumber={2}
+              title="Entering coordinates"
+              body="Enter degrees and decimal minutes from your MFD notes or photo. Tab moves through latitude degrees, latitude minutes, longitude degrees, and longitude minutes—it skips the N and W controls, which default to typical U.S. locations. For overseas routes, click or tap N/S and E/W to match the capture."
+              isSeen={isSeen(HINT_SURVEY_COORDS)}
+              onDismiss={markSeen}
+              surface="light"
+            />
             <fieldset className="flex items-center gap-1.5">
               <legend className="sr-only">Latitude</legend>
               <span className="text-sm text-gray-600">Lat</span>
@@ -478,7 +578,7 @@ export function SurveyMapModal({
                   }
                 }}
                 className="px-2 py-1.5 border border-gray-300 rounded font-mono text-sm bg-white text-gray-900"
-                tabIndex={0}
+                tabIndex={-1}
                 aria-label="Latitude hemisphere"
               >
                 <option value="N">N</option>
@@ -549,7 +649,7 @@ export function SurveyMapModal({
                   }
                 }}
                 className="px-2 py-1.5 border border-gray-300 rounded font-mono text-sm bg-white text-gray-900"
-                tabIndex={0}
+                tabIndex={-1}
                 aria-label="Longitude hemisphere"
               >
                 <option value="E">E</option>
@@ -565,7 +665,13 @@ export function SurveyMapModal({
               ref={towerNotVisibleRef}
               type="checkbox"
               checked={towerNotVisibleOnMap}
-              onChange={(e) => setTowerNotVisibleOnMap(e.target.checked)}
+              onChange={(e) => {
+                const checked = e.target.checked
+                setTowerNotVisibleOnMap(checked)
+                if (!checked) {
+                  handleRemoveImageryOverlay()
+                }
+              }}
               className="mt-1 rounded border-gray-300"
               aria-describedby="tower-not-visible-hint"
             />
