@@ -20,6 +20,12 @@ import { computeSquareBbox, fetchSentinel2TrueColorPng } from './sentinelHubImag
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '..', '.env') })
 
+if (!process.env.CDSE_OAUTH_CLIENT_ID?.trim() || !process.env.CDSE_OAUTH_CLIENT_SECRET?.trim()) {
+  console.warn(
+    '[server] CDSE_OAUTH_CLIENT_ID / CDSE_OAUTH_CLIENT_SECRET not set — "Load recent imagery overlay" will fail until you add them to HighTowers-Web/.env and restart. See server/README.md'
+  )
+}
+
 const app = express()
 
 /** Comma-separated browser origins allowed to call this API (required for GitHub Pages + wing sites). */

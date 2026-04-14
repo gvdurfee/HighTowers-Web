@@ -223,7 +223,11 @@ export function SurveyMapModal({
       }
       setImageryOverlay(result)
     } catch (e) {
-      setOverlayError(e instanceof Error ? e.message : 'Failed to load overlay')
+      let msg = e instanceof Error ? e.message : 'Failed to load overlay'
+      if (msg.includes('CDSE_OAUTH_CLIENT')) {
+        msg += ` Add both variables to HighTowers-Web/.env (project root), then restart npm run dev:all so the server reloads them. See server/README.md.`
+      }
+      setOverlayError(msg)
     } finally {
       setOverlayLoading(false)
     }
@@ -321,7 +325,7 @@ export function SurveyMapModal({
             <button
               type="button"
               onClick={handleRemoveImageryOverlay}
-              className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50"
               aria-label="Remove imagery overlay"
             >
               Remove overlay
