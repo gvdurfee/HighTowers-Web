@@ -19,6 +19,31 @@ import {
   routeSurveyAglField,
   routeSurveyMslField,
 } from '@/utils/routeSurveyTowerRow'
+import { GuidedHint } from '@/components/GuidedHint'
+import { useHintsSeen } from '@/hooks/useHintsSeen'
+import {
+  ADDITIONAL_NOTES_DEFAULT,
+  ADDITIONAL_NOTES_MAX_LENGTH,
+  clampAdditionalNotesInput,
+} from '@/constants/reportCopy'
+
+const HINT_REPORT_MISSION = 'reportForm.mission'
+const HINT_REPORT_SAVE_FP = 'reportForm.saveFlightPlan'
+const HINT_REPORT_POC = 'reportForm.pointOfContact'
+const HINT_REPORT_MISSION_INFO = 'reportForm.missionInfo'
+const HINT_REPORT_TOWERS = 'reportForm.towerObservations'
+const HINT_REPORT_NOTES = 'reportForm.additionalNotes'
+
+function missionNotesForForm(mission: MissionRecord): string {
+  const t = (mission.notes ?? '').trim()
+  return t.length > 0 ? t : ADDITIONAL_NOTES_DEFAULT
+}
+
+function notesToPersist(textareaValue: string): string | undefined {
+  const t = textareaValue.trim()
+  if (!t || t === ADDITIONAL_NOTES_DEFAULT) return undefined
+  return t
+}
 
 function formatCoordinate(value: number, isLatitude: boolean): string {
   const direction = isLatitude ? (value >= 0 ? 'N' : 'S') : value >= 0 ? 'E' : 'W'
@@ -82,6 +107,7 @@ function formatPhoneInput(value: string): string {
 
 export function ReportFormPage() {
   const navigate = useNavigate()
+  const { isSeen, markSeen, resetAll } = useHintsSeen()
   const missions = useLiveQuery(() =>
     db.missions.toArray().then((a) => a.sort((x, y) => y.date.localeCompare(x.date)))
   )
@@ -97,7 +123,7 @@ export function ReportFormPage() {
   const [missionNumber, setMissionNumber] = useState('')
   const [mtrRoute, setMtrRoute] = useState('')
   const [date, setDate] = useState('')
-  const [additionalNotes, setAdditionalNotes] = useState('')
+  const [additionalNotes, setAdditionalNotes] = useState(ADDITIONAL_NOTES_DEFAULT)
   const [towerEntries, setTowerEntries] = useState<TowerEntry[]>(defaultTowerEntries())
   const [selectedFlightPlanToAssociate, setSelectedFlightPlanToAssociate] = useState<string | null>(null)
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false)
@@ -162,7 +188,7 @@ export function ReportFormPage() {
     setMissionNumber(mission.missionNumber ?? '')
     setMtrRoute(normalizeMtrRouteInput(mission.mtrRoute ?? ''))
     setDate(mission.date ? formatDateForDisplay(new Date(mission.date)) : '')
-    setAdditionalNotes(mission.notes ?? '')
+    setAdditionalNotes(clampAdditionalNotesInput(missionNotesForForm(mission)))
   }, [])
 
   useEffect(() => {
@@ -221,7 +247,7 @@ export function ReportFormPage() {
           capUnit: capUnit.trim() || undefined,
           phone: phone.trim() || undefined,
           email: email.trim() || undefined,
-          notes: additionalNotes.trim() || undefined,
+          notes: notesToPersist(additionalNotes),
         })
         const sortedReports = (
           await db.towerReports.where('missionId').equals(selectedMission.id).toArray()
@@ -256,7 +282,7 @@ export function ReportFormPage() {
           capUnit: capUnit.trim() || undefined,
           phone: phone.trim() || undefined,
           email: email.trim() || undefined,
-          notes: additionalNotes.trim() || undefined,
+          notes: notesToPersist(additionalNotes),
           isCompleted: false,
           flightPlanId,
         })
@@ -292,7 +318,7 @@ export function ReportFormPage() {
     setMissionNumber('')
     setMtrRoute('')
     setDate('')
-    setAdditionalNotes('')
+    setAdditionalNotes(ADDITIONAL_NOTES_DEFAULT)
     setTowerEntries(defaultTowerEntries())
   }
 
@@ -307,9 +333,17 @@ export function ReportFormPage() {
   return (
     <div className="app-page-shell overflow-auto">
       <div className="app-panel max-w-4xl mx-auto p-6 md:p-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3">
         <h1 className="text-2xl font-bold text-gray-900">Air Force Report Form</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          <button
+            type="button"
+            onClick={resetAll}
+            className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700"
+            aria-label="Reset guided tour hints"
+          >
+            Reset hints
+          </button>
           <button
             type="button"
             onClick={() => setShowHelp(true)}
@@ -318,6 +352,15 @@ export function ReportFormPage() {
           >
             ❓
           </button>
+          <GuidedHint
+            hintId={HINT_REPORT_MISSION}
+            stepNumber={1}
+            title="Mission selection"
+            body="Pick the mission you are reporting on, or start by filling Mission Information below and creating a new mission. The form loads saved POC details, dates, and any mission notes from storage."
+            isSeen={isSeen(HINT_REPORT_MISSION)}
+            onDismiss={markSeen}
+            surface="light"
+          />
           <select
             value={selectedMissionId ?? ''}
             onChange={(e) => {
@@ -363,6 +406,15 @@ export function ReportFormPage() {
         {/* Save */}
         <section className="p-4 bg-white rounded-xl border border-gray-200">
           <div className="flex flex-wrap items-center gap-4">
+            <GuidedHint
+              hintId={HINT_REPORT_SAVE_FP}
+              stepNumber={2}
+              title="Save and flight plan"
+              body="Create or update the mission once Mission Number, MTR Route, and Date are set. Associate a flight plan when prompted so tower notes can include distance and true bearing from the route."
+              isSeen={isSeen(HINT_REPORT_SAVE_FP)}
+              onDismiss={markSeen}
+              surface="light"
+            />
             <button
               type="button"
               onClick={saveMission}
@@ -425,7 +477,18 @@ export function ReportFormPage() {
 
         {/* POC */}
         <section className="p-4 bg-white rounded-xl border border-gray-200">
-          <h2 className="font-semibold text-gray-900 mb-4">Point of Contact</h2>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h2 className="font-semibold text-gray-900">Point of Contact</h2>
+            <GuidedHint
+              hintId={HINT_REPORT_POC}
+              stepNumber={3}
+              title="Point of contact"
+              body="Enter the customer POC exactly as it should appear on the report: name, CAP unit, phone, and email are required before you can generate the PDF."
+              isSeen={isSeen(HINT_REPORT_POC)}
+              onDismiss={markSeen}
+              surface="light"
+            />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">POC Name</label>
@@ -471,7 +534,18 @@ export function ReportFormPage() {
 
         {/* Mission Info */}
         <section className="p-4 bg-white rounded-xl border border-gray-200">
-          <h2 className="font-semibold text-gray-900 mb-4">Mission Information</h2>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h2 className="font-semibold text-gray-900">Mission Information</h2>
+            <GuidedHint
+              hintId={HINT_REPORT_MISSION_INFO}
+              stepNumber={4}
+              title="Mission identifiers"
+              body="Mission Number, MTR Route (letters and digits only, e.g. IR111), and the survey date identify this job on the form and in exports."
+              isSeen={isSeen(HINT_REPORT_MISSION_INFO)}
+              onDismiss={markSeen}
+              surface="light"
+            />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mission Number</label>
@@ -499,7 +573,18 @@ export function ReportFormPage() {
 
         {/* Tower Observations */}
         <section className="p-4 bg-white rounded-xl border border-gray-200">
-          <h2 className="font-semibold text-gray-900 mb-2">Tower Observations</h2>
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <h2 className="font-semibold text-gray-900">Tower Observations</h2>
+            <GuidedHint
+              hintId={HINT_REPORT_TOWERS}
+              stepNumber={5}
+              title="Tower rows"
+              body="Complete up to six towers. Coordinates and heights come from Tower Data Analysis; set structure type, lighting, and any extra wording here. Leave unused rows blank."
+              isSeen={isSeen(HINT_REPORT_TOWERS)}
+              onDismiss={markSeen}
+              surface="light"
+            />
+          </div>
           <p className="text-sm text-gray-500 mb-4">
             Document up to six towers. Leave any unused rows blank.
           </p>
@@ -522,13 +607,28 @@ export function ReportFormPage() {
 
         {/* Additional Notes */}
         <section className="p-4 bg-white rounded-xl border border-gray-200">
-          <h2 className="font-semibold text-gray-900 mb-2">Additional Notes</h2>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h2 className="font-semibold text-gray-900">Additional Notes</h2>
+            <GuidedHint
+              hintId={HINT_REPORT_NOTES}
+              stepNumber={6}
+              title="Additional notes"
+              body={`Scroll to the bottom of this form to find this section. The default line is fully editable—replace it with real notes when needed. The same text is printed again on the last page of the export PDF (the landscape mission map page), up to ${ADDITIONAL_NOTES_MAX_LENGTH} characters for the main form fields; the map box may show fewer lines if the note is long. The field stops accepting text at that limit. Leave the default or clear the field for the standard nothing-additional boilerplate in the PDF.`}
+              isSeen={isSeen(HINT_REPORT_NOTES)}
+              onDismiss={markSeen}
+              surface="light"
+            />
+          </div>
           <textarea
             value={additionalNotes}
             onChange={(e) => setAdditionalNotes(e.target.value)}
-            rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            rows={5}
+            maxLength={ADDITIONAL_NOTES_MAX_LENGTH}
+            className="w-full min-h-[8rem] px-3 py-3 border-2 border-gray-400 rounded-lg bg-white text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-cap-ultramarine focus:border-cap-ultramarine"
           />
+          <p className="mt-1.5 text-sm text-gray-600 tabular-nums" aria-live="polite">
+            {additionalNotes.length} / {ADDITIONAL_NOTES_MAX_LENGTH} characters
+          </p>
         </section>
 
         {/* Actions */}
@@ -591,6 +691,10 @@ export function ReportFormPage() {
               <p>
                 Generate PDF requires a selected mission and all mandatory fields (POC Name, CAP Unit,
                 Phone, Email, Mission Number, MTR Route, Date).
+              </p>
+              <p>
+                Additional Notes are limited to {ADDITIONAL_NOTES_MAX_LENGTH} characters so they match
+                what the PDF form can store; a counter appears under that field.
               </p>
             </div>
             <button

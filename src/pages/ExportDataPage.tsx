@@ -17,6 +17,7 @@ import {
   generateAirForceReportPdf,
   type ReportFormData,
 } from '@/services/pdfReportService'
+import { additionalNotesForPdf } from '@/constants/reportCopy'
 
 function formatDateForDisplay(dateStr: string): string {
   const d = new Date(dateStr)
@@ -109,7 +110,7 @@ export function ExportDataPage() {
         missionNumber: m.missionNumber ?? '',
         mtrRoute: m.mtrRoute ?? '',
         date: m.date ? formatDateForDisplay(m.date) : '',
-        additionalNotes: m.notes ?? '',
+        additionalNotes: additionalNotesForPdf(m.notes ?? ''),
         towerEntries: entries,
       })
     }

@@ -1,4 +1,11 @@
-import { PDFDocument, PDFTextField, rgb, StandardFonts, type PDFForm } from 'pdf-lib'
+import {
+  PDFDocument,
+  PDFTextField,
+  rgb,
+  StandardFonts,
+  type PDFFont,
+  type PDFForm,
+} from 'pdf-lib'
 import { db } from '@/db/schema'
 import type {
   TowerReportRecord,
@@ -13,6 +20,10 @@ import { towerHeightsUseSeeNotes } from '@/utils/routeSurveyTowerRow'
 import { compressImageForEmail } from '@/utils/imageCompression'
 import { fetchMissionMapStaticPng } from '@/utils/missionMapStaticImage'
 import type { TowerEntry } from '@/types/reportForm'
+import {
+  ADDITIONAL_NOTES_MAX_LENGTH,
+  additionalNotesForPdf,
+} from '@/constants/reportCopy'
 
 /** US Letter landscape for tower photos and mission map appendix */
 const LANDSCAPE_WIDTH = 792
@@ -92,6 +103,16 @@ function resolveFieldValue(
     }
   }
   return undefined
+}
+
+const TOWER_NOTES_PDF_MAX_LENGTH = 240
+
+function pdfTextFieldMaxLength(fieldName: string): number {
+  const n = fieldName.toLowerCase()
+  if (n.includes('additional') && (n.includes('note') || n.includes('notes'))) {
+    return ADDITIONAL_NOTES_MAX_LENGTH
+  }
+  return TOWER_NOTES_PDF_MAX_LENGTH
 }
 
 /** Map Adobe table cell field names (e.g. NotesRow3, …Row3[0]…Notes[0]) to 0-based row index. */
@@ -312,7 +333,10 @@ function buildFieldMappings(
     formData.mtrRoute
   )
   add(['DATE', 'Date', 'date'], formData.date)
-  add(['ADDITIONAL_NOTES', 'AdditionalNotes', 'Additional Notes', 'additional_notes'], formData.additionalNotes)
+  add(
+    ['ADDITIONAL_NOTES', 'AdditionalNotes', 'Additional Notes', 'additional_notes'],
+    additionalNotesForPdf(formData.additionalNotes)
+  )
 
   const totalTowers = reports.length
   const heights = reports.map((r) => r.estimatedHeight ?? 0).filter((h) => h > 0)
@@ -416,6 +440,39 @@ function buildFieldMappings(
   return map
 }
 
+function wrapTextLines(text: string, font: PDFFont, fontSize: number, maxWidth: number): string[] {
+  const out: string[] = []
+  for (const para of text.split(/\n/)) {
+    const words = para.split(/\s+/).filter(Boolean)
+    let line = ''
+    for (const w of words) {
+      const candidate = line ? `${line} ${w}` : w
+      if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+        line = candidate
+        continue
+      }
+      if (line) {
+        out.push(line)
+        line = ''
+      }
+      if (font.widthOfTextAtSize(w, fontSize) <= maxWidth) {
+        line = w
+        continue
+      }
+      let chunk = w
+      while (chunk.length > 0) {
+        let take = chunk.length
+        while (take > 0 && font.widthOfTextAtSize(chunk.slice(0, take), fontSize) > maxWidth) take--
+        if (take === 0) take = 1
+        out.push(chunk.slice(0, take))
+        chunk = chunk.slice(take)
+      }
+    }
+    if (line) out.push(line)
+  }
+  return out.length > 0 ? out : ['']
+}
+
 function dataUrlToUint8Array(dataUrl: string): Uint8Array {
   const i = dataUrl.indexOf(',')
   if (i < 0) return new Uint8Array(0)
@@ -493,7 +550,7 @@ export async function generateAirForceReportPdf(
         field.disableCombing()
       }
       try {
-        field.setMaxLength(240)
+        field.setMaxLength(pdfTextFieldMaxLength(field.getName()))
       } catch {
         /* ignore if unsupported */
       }
@@ -623,6 +680,7 @@ export async function generateAirForceReportPdf(
           mapImage = await pdfDoc.embedJpg(mapPngBytes)
         }
       }
+      const MAP_NOTES_BAND = 118
       const page = pdfDoc.addPage([LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT])
       const title = 'Mission map — route and reported tower locations'
       page.drawText(title, {
@@ -633,7 +691,7 @@ export async function generateAirForceReportPdf(
         color: rgb(0, 0, 0),
       })
       const mapAreaTop = LANDSCAPE_HEIGHT - MARGIN - 32
-      const mapAreaBottom = MARGIN
+      const mapAreaBottom = MARGIN + MAP_NOTES_BAND
       const mapAreaH = mapAreaTop - mapAreaBottom
       const mapAreaW = LANDSCAPE_WIDTH - MARGIN * 2
       const scaled = mapImage.scaleToFit(mapAreaW, mapAreaH)
@@ -645,6 +703,49 @@ export async function generateAirForceReportPdf(
         width: scaled.width,
         height: scaled.height,
       })
+
+      const notesBoxH = MAP_NOTES_BAND - 6
+      const notesBoxY = MARGIN
+      page.drawRectangle({
+        x: MARGIN,
+        y: notesBoxY,
+        width: LANDSCAPE_WIDTH - MARGIN * 2,
+        height: notesBoxH,
+        color: rgb(1, 1, 1),
+        borderColor: rgb(0.78, 0.78, 0.78),
+        borderWidth: 0.75,
+      })
+      const innerPad = 8
+      const notesTitleSize = 10
+      const notesBodySize = 9
+      const notesLineGap = 11
+      const textMaxW = LANDSCAPE_WIDTH - MARGIN * 2 - innerPad * 2
+      let notesY = notesBoxY + notesBoxH - innerPad - notesTitleSize
+      page.drawText('Additional Notes', {
+        x: MARGIN + innerPad,
+        y: notesY,
+        size: notesTitleSize,
+        font: helveticaBold,
+        color: rgb(0, 0, 0),
+      })
+      notesY -= notesLineGap + 2
+      const notesBody = additionalNotesForPdf(formData.additionalNotes)
+      const bodyLines = wrapTextLines(notesBody, helvetica, notesBodySize, textMaxW)
+      const maxBodyLines = Math.max(
+        1,
+        Math.floor((notesY - notesBoxY - innerPad) / notesLineGap)
+      )
+      let lineY = notesY
+      for (let i = 0; i < bodyLines.length && i < maxBodyLines; i++) {
+        page.drawText(bodyLines[i], {
+          x: MARGIN + innerPad,
+          y: lineY,
+          size: notesBodySize,
+          font: helvetica,
+          color: rgb(0.15, 0.15, 0.15),
+        })
+        lineY -= notesLineGap
+      }
     } catch {
       /* omit map page on embed failure */
     }

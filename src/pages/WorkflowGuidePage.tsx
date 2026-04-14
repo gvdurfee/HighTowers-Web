@@ -48,10 +48,10 @@ export function WorkflowGuidePage() {
           <p className="mb-3">
             The four steps below are the full path to complete the customer report. Throughout those
             workflow areas, the app can show optional <strong>numbered lightbulb tips</strong> on key
-            screens—for example <strong>New Flight Plan</strong>, <strong>Tower Data Analysis</strong>, and{' '}
-            <strong>Look for Tower on Map</strong>. They are there to help <strong>first-time users</strong>{' '}
-            get oriented and to act as a <strong>refresher</strong> when you come back to the app season
-            after season.
+            screens—for example <strong>New Flight Plan</strong>, <strong>Air Force Report Form</strong>,{' '}
+            <strong>Tower Data Analysis</strong>, and <strong>Look for Tower on Map</strong>. They are
+            there to help <strong>first-time users</strong> get oriented and to act as a{' '}
+            <strong>refresher</strong> when you come back to the app season after season.
           </p>
           <p className="mb-3">
             Reading or dismissing tips does <strong>not</strong> change how the underlying features work.
@@ -66,9 +66,15 @@ export function WorkflowGuidePage() {
             Dismissed tips are remembered in <strong>browser storage on this device</strong> so they do
             not repeat every visit.
           </p>
+          <p className="mb-3">
+            <strong>Reset hints</strong> on New Flight Plan, Air Force Report Form, or Tower Data
+            Analysis clears every dismissed tip for the whole app (the same storage is shared across
+            those screens).
+          </p>
           <p>
-            <strong>Reset hints</strong> on New Flight Plan or Tower Data Analysis clears every dismissed
-            tip for the whole app (the same storage is shared across those screens).
+            On the <strong>Air Force Report Form</strong>, optional <strong>Additional Notes</strong>{' '}
+            sit at the <strong>bottom</strong> of the page; the export PDF repeats them on the{' '}
+            <strong>last appendix page</strong> under the mission map.
           </p>
         </div>
         <div className="space-y-4">
