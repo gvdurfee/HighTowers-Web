@@ -59,6 +59,7 @@ export function GuidedHint({
   onDismiss,
 }: GuidedHintProps) {
   const [open, setOpen] = useState(false)
+  const [alignRight, setAlignRight] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const headingId = useId()
@@ -73,6 +74,15 @@ export function GuidedHint({
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const btn = buttonRef.current
+    if (!btn) return
+    const r = btn.getBoundingClientRect()
+    // If the button is near the right edge, right-align the popover so it stays on-screen.
+    setAlignRight(window.innerWidth - r.right < 320)
   }, [open])
 
   const showNumber = !isSeen
@@ -108,7 +118,9 @@ export function GuidedHint({
           aria-modal="false"
           aria-labelledby={headingId}
           aria-describedby={descId}
-          className="absolute left-0 top-full z-50 mt-2 w-72 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-xl"
+          className={`absolute top-full z-50 mt-2 w-72 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-xl ${
+            alignRight ? 'right-0' : 'left-0'
+          }`}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
