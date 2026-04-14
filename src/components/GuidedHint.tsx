@@ -1,4 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 type GuidedHintProps = {
   hintId: string
@@ -60,6 +67,7 @@ export function GuidedHint({
 }: GuidedHintProps) {
   const [open, setOpen] = useState(false)
   const [alignRight, setAlignRight] = useState(false)
+  const [openAbove, setOpenAbove] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const headingId = useId()
@@ -76,13 +84,24 @@ export function GuidedHint({
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
+  useLayoutEffect(() => {
+    if (!open) {
+      setOpenAbove(false)
+      return
+    }
     const btn = buttonRef.current
     if (!btn) return
     const r = btn.getBoundingClientRect()
     // If the button is near the right edge, right-align the popover so it stays on-screen.
     setAlignRight(window.innerWidth - r.right < 320)
+    // Prefer opening above when the trigger is low on the viewport (avoids clipping).
+    const estPopoverH = 280
+    const margin = 10
+    const spaceBelow = window.innerHeight - r.bottom - margin
+    const spaceAbove = r.top - margin
+    setOpenAbove(
+      spaceBelow < estPopoverH && spaceAbove > spaceBelow && spaceAbove >= estPopoverH * 0.85
+    )
   }, [open])
 
   const showNumber = !isSeen
@@ -118,9 +137,9 @@ export function GuidedHint({
           aria-modal="false"
           aria-labelledby={headingId}
           aria-describedby={descId}
-          className={`absolute top-full z-50 mt-2 w-72 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-xl ${
-            alignRight ? 'right-0' : 'left-0'
-          }`}
+          className={`absolute z-50 w-72 max-h-[min(22rem,calc(100vh-1.5rem))] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 text-left shadow-xl ${
+            openAbove ? 'bottom-full mb-2' : 'top-full mt-2'
+          } ${alignRight ? 'right-0' : 'left-0'}`}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

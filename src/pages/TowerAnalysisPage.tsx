@@ -60,6 +60,8 @@ export function TowerAnalysisPage() {
   const [showNoGpsAlert, setShowNoGpsAlert] = useState(false)
   /** From Fly-Over modal: tower could not be identified on the map. */
   const [surveyTowerNotVisibleOnMap, setSurveyTowerNotVisibleOnMap] = useState(false)
+  /** True only after user taps Record Location on the map (required before Save Tower). */
+  const [mapLocationRecorded, setMapLocationRecorded] = useState(false)
   const [bannerMessage, setBannerMessage] = useState<string | null>(null)
   const [bannerSuccess, setBannerSuccess] = useState(true)
   const [showHelp, setShowHelp] = useState(false)
@@ -131,6 +133,7 @@ export function TowerAnalysisPage() {
   const handleImageSelect = (meta: ImageMetadata) => {
     setSelectedImage(meta.image)
     setImageMeta(meta)
+    setMapLocationRecorded(false)
     if (meta.latitude != null && meta.longitude != null) {
       setTowerLat(meta.latitude)
       setTowerLon(meta.longitude)
@@ -139,6 +142,7 @@ export function TowerAnalysisPage() {
         setGroundElevation(Math.round(meta.altitudeFt) - 500)
       }
     } else {
+      setHasLocationData(false)
       setShowNoGpsAlert(true)
     }
     setSurveyTowerNotVisibleOnMap(false)
@@ -158,6 +162,7 @@ export function TowerAnalysisPage() {
     setGroundElevation(Math.round(elev))
     setHasLocationData(true)
     setSurveyTowerNotVisibleOnMap(!!options?.towerNotVisibleOnMap)
+    setMapLocationRecorded(true)
     setShowSurveyMap(false)
   }
 
@@ -170,6 +175,7 @@ export function TowerAnalysisPage() {
     setEstimatedHeight(0)
     setHasLocationData(false)
     setSurveyTowerNotVisibleOnMap(false)
+    setMapLocationRecorded(false)
   }
 
   const saveTower = async () => {
@@ -183,6 +189,12 @@ export function TowerAnalysisPage() {
       setBannerMessage('Tower location not surveyed')
       setBannerSuccess(false)
       setTimeout(() => setBannerMessage(null), 3000)
+      return
+    }
+    if (!mapLocationRecorded) {
+      setBannerMessage('Use Look for Tower on Map and tap Record Location before saving.')
+      setBannerSuccess(false)
+      setTimeout(() => setBannerMessage(null), 4000)
       return
     }
     if (estimatedHeight <= 0) {
@@ -400,7 +412,11 @@ export function TowerAnalysisPage() {
                 <button
                   type="button"
                   onClick={saveTower}
-                  disabled={estimatedHeight <= 0 || !hasLocationData}
+                  disabled={
+                    estimatedHeight <= 0 ||
+                    !hasLocationData ||
+                    !mapLocationRecorded
+                  }
                   className="w-full py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
                 >
                   Save Tower
