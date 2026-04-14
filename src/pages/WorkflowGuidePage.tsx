@@ -22,7 +22,7 @@ export function WorkflowGuidePage() {
       number: 3,
       title: 'Tower Data Analysis',
       summary:
-        'Select an image. Use Fly-Over Location to populate fly-over coordinates. Complete Height Measurement and store the results.',
+        'Select an image. Use Look for Tower on Map to set tower coordinates. Complete Height Measurement and store the results.',
       path: '/tower-analysis',
     },
     {

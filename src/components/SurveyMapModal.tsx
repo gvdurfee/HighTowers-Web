@@ -298,7 +298,7 @@ export function SurveyMapModal({
         onKeyDown={handleKeyDown}
       >
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 id="fly-over-location-title" className="text-lg font-semibold">Fly-Over Location</h2>
+          <h2 id="fly-over-location-title" className="text-lg font-semibold">Look for Tower on Map</h2>
           <button
             ref={closeBtnRef}
             type="button"

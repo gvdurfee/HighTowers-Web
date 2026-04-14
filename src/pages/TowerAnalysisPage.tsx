@@ -313,7 +313,7 @@ export function TowerAnalysisPage() {
                   hintId={hints.selectImage}
                   stepNumber={1}
                   title="Select a tower photo"
-                  body="Choose a clear photo. If it has GPS metadata, the app can prefill tower location; otherwise you'll set it using Fly-Over Location."
+                  body="Choose a clear photo. If it has GPS metadata, the app can prefill tower location; otherwise you'll set it using Look for Tower on Map."
                   isSeen={isSeen(hints.selectImage)}
                   onDismiss={markSeen}
                 />
@@ -328,7 +328,7 @@ export function TowerAnalysisPage() {
                   <GuidedHint
                     hintId={hints.flyOverLocation}
                     stepNumber={2}
-                    title="Fly-Over Location"
+                    title="Look for Tower on Map"
                     body="Open the map and place the crosshair on the tower base (or best estimate). Record Location fetches ground elevation and saves the coordinates for the report."
                     isSeen={isSeen(hints.flyOverLocation)}
                     onDismiss={markSeen}
@@ -339,7 +339,7 @@ export function TowerAnalysisPage() {
                   onClick={() => setShowSurveyMap(true)}
                   className="w-full py-2 px-3 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm"
                 >
-                  Fly-Over Location
+                  Look for Tower on Map
                 </button>
                 {hasLocationData && (
                   <div className="mt-3 text-sm space-y-1">
@@ -400,7 +400,7 @@ export function TowerAnalysisPage() {
                 <button
                   type="button"
                   onClick={saveTower}
-                  disabled={estimatedHeight <= 0}
+                  disabled={estimatedHeight <= 0 || !hasLocationData}
                   className="w-full py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
                 >
                   Save Tower
@@ -464,7 +464,7 @@ export function TowerAnalysisPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-md">
             <p className="text-gray-700">
-              This image has no GPS metadata. Use Fly-Over Location to set the tower
+              This image has no GPS metadata. Use Look for Tower on Map to set the tower
               position manually.
             </p>
             <button
@@ -500,10 +500,10 @@ export function TowerAnalysisPage() {
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold">Fly-Over Location</h3>
+                <h3 className="font-semibold">Look for Tower on Map</h3>
                 <p>
                   Pan the map so the crosshair is on the tower base (or best position), then
-                  record to fetch ground elevation. If the photo has no GPS, Fly-Over supplies the
+                  record to fetch ground elevation. If the photo has no GPS, the map supplies the
                   tower coordinates for the survey form. If the tower cannot be seen on the map,
                   use the checkbox before recording — MSL/AGL will read “See Notes” with an
                   explanation and bearing/distance from the route.
