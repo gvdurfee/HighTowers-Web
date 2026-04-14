@@ -45,10 +45,22 @@ export function WorkflowGuidePage() {
         </p>
         <div className="mb-8 rounded-xl border border-gray-200 bg-slate-50 p-4 text-sm text-gray-700">
           <h2 className="font-semibold text-gray-900 mb-2">Guided tips (lightbulb icons)</h2>
+          <p className="mb-3">
+            The four steps below are the full path to complete the customer report. Throughout those
+            workflow areas, the app can show optional <strong>numbered lightbulb tips</strong> on key
+            screens—for example <strong>New Flight Plan</strong>, <strong>Tower Data Analysis</strong>, and{' '}
+            <strong>Look for Tower on Map</strong>. They are there to help <strong>first-time users</strong>{' '}
+            get oriented and to act as a <strong>refresher</strong> when you come back to the app season
+            after season.
+          </p>
+          <p className="mb-3">
+            Reading or dismissing tips does <strong>not</strong> change how the underlying features work.
+            If you do not need to review any of them, you can ignore the lightbulbs and move through all
+            four sections in order to finish the report the same way.
+          </p>
           <p className="mb-2">
-            On <strong>New Flight Plan</strong>, <strong>Tower Data Analysis</strong>, and{' '}
-            <strong>Look for Tower on Map</strong>, optional numbered tips appear next to key controls.
-            Open a tip, then dismiss it with <strong>Got it</strong> when you are ready to move on.
+            Open a tip when you want context, then close it with <strong>Got it</strong> (or{' '}
+            <strong>Not now</strong>) when you are ready to continue.
           </p>
           <p className="mb-2">
             Dismissed tips are remembered in <strong>browser storage on this device</strong> so they do

@@ -18,7 +18,7 @@ function App() {
       <div className="h-full">
       <Routes>
         <Route path="/" element={<MainLayout />}>
-          <Route index element={<Navigate to="/flight-plans" replace />} />
+          <Route index element={<Navigate to="/workflow" replace />} />
           <Route path="workflow" element={<WorkflowGuidePage />} />
           <Route path="flight-plans" element={<FlightPlanListPage />} />
           <Route path="flight-plans/new" element={<NewFlightPlanPage />} />
