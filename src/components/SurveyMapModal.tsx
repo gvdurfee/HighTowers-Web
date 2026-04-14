@@ -493,7 +493,7 @@ export function SurveyMapModal({
           </div>
         </div>
         <form
-          className="p-4 border-t space-y-3"
+          className="p-4 border-t space-y-3 text-gray-900"
           onSubmit={(e) => {
             e.preventDefault()
             if (validateAndWarn()) handleRecord()

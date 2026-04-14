@@ -145,7 +145,7 @@ export function GuidedHint({
           aria-modal="false"
           aria-labelledby={headingId}
           aria-describedby={descId}
-          className={`absolute z-50 w-72 max-h-[min(22rem,calc(100vh-1.5rem))] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 text-left shadow-xl ${
+          className={`absolute z-50 w-72 max-h-[min(22rem,calc(100vh-1.5rem))] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 text-left text-gray-900 shadow-xl ${
             openAbove ? 'bottom-full mb-2' : 'top-full mt-2'
           } ${alignRight ? 'right-0' : 'left-0'}`}
         >
@@ -171,7 +171,7 @@ export function GuidedHint({
           <div className="mt-3 flex items-center justify-end gap-2">
             <button
               type="button"
-              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50"
+              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-900 hover:bg-gray-50"
               onClick={() => setOpen(false)}
             >
               Not now
