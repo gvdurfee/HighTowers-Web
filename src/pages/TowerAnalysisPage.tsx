@@ -11,6 +11,8 @@ import type { ImageMetadata } from '@/components/TowerImagePicker'
 import { TowerImagePicker } from '@/components/TowerImagePicker'
 import { SurveyMapModal, type SurveyMapRecordOptions } from '@/components/SurveyMapModal'
 import { MeasureLinesPanel } from '@/components/MeasureLinesPanel'
+import { GuidedHint } from '@/components/GuidedHint'
+import { useHintsSeen } from '@/hooks/useHintsSeen'
 
 function formatCoord(value: number, isLatitude: boolean): string {
   const dir = isLatitude ? (value >= 0 ? 'N' : 'S') : value >= 0 ? 'E' : 'W'
@@ -61,6 +63,15 @@ export function TowerAnalysisPage() {
   const [bannerMessage, setBannerMessage] = useState<string | null>(null)
   const [bannerSuccess, setBannerSuccess] = useState(true)
   const [showHelp, setShowHelp] = useState(false)
+  const { isSeen, markSeen, resetAll } = useHintsSeen()
+
+  const hints = {
+    selectImage: 'towerAnalysis.selectImage',
+    flyOverLocation: 'towerAnalysis.flyOverLocation',
+    sliders: 'towerAnalysis.sliders',
+    clear: 'towerAnalysis.clear',
+    save: 'towerAnalysis.saveTower',
+  } as const
 
   const cameraLat = imageMeta?.latitude ?? towerLat
   const cameraLon = imageMeta?.longitude ?? towerLon
@@ -275,24 +286,54 @@ export function TowerAnalysisPage() {
               <br />
               Analysis
             </h1>
-            <button
-              type="button"
-              onClick={() => setShowHelp(true)}
-              className="p-1.5 text-cap-pimento hover:bg-red-50 rounded-full flex-shrink-0"
-              aria-label="Help"
-            >
-              ❓
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={resetAll}
+                className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700"
+                aria-label="Reset guided tour hints"
+              >
+                Reset hints
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowHelp(true)}
+                className="p-1.5 text-cap-pimento hover:bg-red-50 rounded-full flex-shrink-0"
+                aria-label="Help"
+              >
+                ❓
+              </button>
+            </div>
           </div>
           {!selectedImage ? (
             <div>
-              <h2 className="font-semibold text-gray-900 mb-2">Tower Image</h2>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h2 className="font-semibold text-gray-900">Tower Image</h2>
+                <GuidedHint
+                  hintId={hints.selectImage}
+                  stepNumber={1}
+                  title="Select a tower photo"
+                  body="Choose a clear photo. If it has GPS metadata, the app can prefill tower location; otherwise you'll set it using Fly-Over Location."
+                  isSeen={isSeen(hints.selectImage)}
+                  onDismiss={markSeen}
+                />
+              </div>
               <TowerImagePicker onSelect={handleImageSelect} />
             </div>
           ) : (
             <>
               <div>
-                <h2 className="font-semibold text-gray-900 mb-2">Tower Location</h2>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h2 className="font-semibold text-gray-900">Tower Location</h2>
+                  <GuidedHint
+                    hintId={hints.flyOverLocation}
+                    stepNumber={2}
+                    title="Fly-Over Location"
+                    body="Open the map and place the crosshair on the tower base (or best estimate). Record Location fetches ground elevation and saves the coordinates for the report."
+                    isSeen={isSeen(hints.flyOverLocation)}
+                    onDismiss={markSeen}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowSurveyMap(true)}
@@ -329,6 +370,16 @@ export function TowerAnalysisPage() {
                 </p>
               </div>
               <div className="mt-auto flex flex-col gap-2">
+                <div className="flex justify-end">
+                  <GuidedHint
+                    hintId={hints.clear}
+                    stepNumber={4}
+                    title="Clear"
+                    body="Clears the current image, location, and measurements so you can start the next tower."
+                    isSeen={isSeen(hints.clear)}
+                    onDismiss={markSeen}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={clearAnalysis}
@@ -336,6 +387,16 @@ export function TowerAnalysisPage() {
                 >
                   Clear
                 </button>
+                <div className="flex justify-end">
+                  <GuidedHint
+                    hintId={hints.save}
+                    stepNumber={5}
+                    title="Save Tower"
+                    body="Saves this tower to the active mission so it appears in the Air Force Report Form and PDF export."
+                    isSeen={isSeen(hints.save)}
+                    onDismiss={markSeen}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={saveTower}
@@ -351,7 +412,17 @@ export function TowerAnalysisPage() {
 
         {/* Right panel - measurement; maximize image + sliders */}
         <div className="flex-1 flex flex-col min-w-0 p-4 min-h-0 bg-white">
-          <h2 className="font-semibold text-gray-900 mb-1 text-sm">Height Measurement</h2>
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <h2 className="font-semibold text-gray-900 text-sm">Height Measurement</h2>
+            <GuidedHint
+              hintId={hints.sliders}
+              stepNumber={3}
+              title="Align the sliders"
+              body="Red line = top of tower. Blue line = base. Drag the sliders to match the photo; height updates automatically."
+              isSeen={isSeen(hints.sliders)}
+              onDismiss={markSeen}
+            />
+          </div>
           <p className="text-xs text-gray-500 mb-2">
             Red = top. Blue = bottom. Drag sliders to align.
           </p>
