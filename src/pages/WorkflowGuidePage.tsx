@@ -43,6 +43,22 @@ export function WorkflowGuidePage() {
         <p className="text-gray-600 mb-8">
           Follow these steps in order to complete an Air Force Route Survey.
         </p>
+        <div className="mb-8 rounded-xl border border-gray-200 bg-slate-50 p-4 text-sm text-gray-700">
+          <h2 className="font-semibold text-gray-900 mb-2">Guided tips (lightbulb icons)</h2>
+          <p className="mb-2">
+            On <strong>New Flight Plan</strong>, <strong>Tower Data Analysis</strong>, and{' '}
+            <strong>Look for Tower on Map</strong>, optional numbered tips appear next to key controls.
+            Open a tip, then dismiss it with <strong>Got it</strong> when you are ready to move on.
+          </p>
+          <p className="mb-2">
+            Dismissed tips are remembered in <strong>browser storage on this device</strong> so they do
+            not repeat every visit.
+          </p>
+          <p>
+            <strong>Reset hints</strong> on New Flight Plan or Tower Data Analysis clears every dismissed
+            tip for the whole app (the same storage is shared across those screens).
+          </p>
+        </div>
         <div className="space-y-4">
           {steps.map((step) => (
             <div

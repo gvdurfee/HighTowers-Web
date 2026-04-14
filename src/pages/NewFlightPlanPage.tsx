@@ -6,6 +6,13 @@ import { generateId } from '@/utils/id'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
 import { apiService, type AirportResult } from '@/services/api'
 import { FlightPlanLoadMethodHelpModal } from '@/components/FlightPlanLoadMethodHelpModal'
+import { GuidedHint } from '@/components/GuidedHint'
+import { useHintsSeen } from '@/hooks/useHintsSeen'
+
+const HINT_FP_NAME = 'flightPlans.new.planName'
+const HINT_FP_AIRPORTS = 'flightPlans.new.airports'
+const HINT_FP_LOAD = 'flightPlans.new.loadMethod'
+const HINT_FP_CREATE = 'flightPlans.new.create'
 
 type FormData = {
   name: string
@@ -38,6 +45,7 @@ export function NewFlightPlanPage() {
   const [sequencePreview, setSequencePreview] = useState<RoutePreview | null>(null)
   const [fetchingSequence, setFetchingSequence] = useState(false)
   const [showFlightPlanHelp, setShowFlightPlanHelp] = useState(false)
+  const { isSeen, markSeen, resetAll } = useHintsSeen()
 
   const {
     register,
@@ -518,23 +526,45 @@ export function NewFlightPlanPage() {
         </button>
         <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
           <h1 className="text-2xl font-bold text-gray-900 truncate">New Flight Plan</h1>
-          <button
-            type="button"
-            onClick={() => setShowFlightPlanHelp(true)}
-            className="p-2 text-cap-pimento hover:bg-red-50 rounded-full shrink-0"
-            aria-label="Help: waypoint loading options"
-          >
-            ❓
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={resetAll}
+              className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700"
+              aria-label="Reset guided tour hints"
+            >
+              Reset hints
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowFlightPlanHelp(true)}
+              className="p-2 text-cap-pimento hover:bg-red-50 rounded-full"
+              aria-label="Help: waypoint loading options"
+            >
+              ❓
+            </button>
+          </div>
         </div>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Name
-          </label>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <label className="text-sm font-medium text-gray-700" htmlFor="flight-plan-name">
+              Name
+            </label>
+            <GuidedHint
+              hintId={HINT_FP_NAME}
+              stepNumber={1}
+              title="Flight plan name"
+              body="Use a name that matches what you use in ForeFlight so the plan and export stay easy to recognize. For MTR-style IDs, IR, VR, and SR are uppercased as you type (before the digits)."
+              isSeen={isSeen(HINT_FP_NAME)}
+              onDismiss={markSeen}
+              surface="light"
+            />
+          </div>
           <input
+            id="flight-plan-name"
             type="text"
             {...nameField}
             onChange={(e) => {
@@ -550,7 +580,20 @@ export function NewFlightPlanPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-sm font-medium text-gray-700">Departure &amp; destination</span>
+            <GuidedHint
+              hintId={HINT_FP_AIRPORTS}
+              stepNumber={2}
+              title="Airport identifiers"
+              body="Enter ICAO or FAA location / NASR identifiers, then tap Fetch for each field. You need both airports resolved (green confirmation) before creating the plan—the app uses them for the G1000 flight plan header and for some load modes."
+              isSeen={isSeen(HINT_FP_AIRPORTS)}
+              onDismiss={markSeen}
+              surface="light"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Departure (ICAO or FAA location ID / NASR identifier)
@@ -604,8 +647,21 @@ export function NewFlightPlanPage() {
             )}
           </div>
         </div>
+        </div>
 
         <div>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-sm font-medium text-gray-700">Waypoint loading</span>
+            <GuidedHint
+              hintId={HINT_FP_LOAD}
+              stepNumber={3}
+              title="How waypoints are loaded"
+              body="Load full route: segment between entry and exit on one published route. Waypoint sequence: type tokens (suffixes or full IDs) for one or blended routes. G1000 user waypoint library: import-focused list with unique G1000 names—requires two different airport identifiers (not round-robin). Use the ? help for full detail."
+              isSeen={isSeen(HINT_FP_LOAD)}
+              onDismiss={markSeen}
+              surface="light"
+            />
+          </div>
           <div className="flex flex-col gap-2 mb-2">
             <label className="flex items-center gap-2">
               <input
@@ -838,7 +894,16 @@ export function NewFlightPlanPage() {
           <p className="text-cap-pimento text-sm">{error}</p>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <GuidedHint
+            hintId={HINT_FP_CREATE}
+            stepNumber={4}
+            title="Create Flight Plan"
+            body="Creates the plan in this device’s database and opens the flight plan detail page. If any waypoints are missing coordinates, you can fill them there, then export a .fpl for the G1000 when ready."
+            isSeen={isSeen(HINT_FP_CREATE)}
+            onDismiss={markSeen}
+            surface="light"
+          />
           <button
             type="submit"
             disabled={
@@ -854,7 +919,7 @@ export function NewFlightPlanPage() {
           <button
             type="button"
             onClick={() => navigate('/flight-plans')}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-900"
           >
             Cancel
           </button>
