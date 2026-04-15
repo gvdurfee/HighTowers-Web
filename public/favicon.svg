@@ -1,4 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" fill="#0E2B8D" rx="4"/>
-  <text x="16" y="22" font-size="18" font-weight="bold" fill="#FFD911" text-anchor="middle">H</text>
+  <defs>
+    <!-- CAP-ish blue tile with slight depth -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1239A8" />
+      <stop offset="1" stop-color="#0E2B8D" />
+    </linearGradient>
+
+    <!-- Subtle drop shadow for the HT mark -->
+    <filter id="markShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow
+        dx="0.6"
+        dy="0.9"
+        stdDeviation="0.6"
+        flood-color="#000000"
+        flood-opacity="0.45"
+      />
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="32" height="32" rx="4" fill="url(#bg)" />
+
+  <!-- Soft highlight band (very subtle) -->
+  <path
+    d="M2 6c5-3 23-3 28 0v3c-5-3-23-3-28 0V6z"
+    fill="#FFFFFF"
+    opacity="0.10"
+  />
+
+  <!-- HT mark (CAP red) -->
+  <g filter="url(#markShadow)" fill="#C8102E">
+    <!-- H (top-left) -->
+    <path d="M6.6 8.2h2.2v5.1h5.2V8.2h2.2v13.6h-2.2v-6.2H8.8v6.2H6.6V8.2z" />
+    <!-- T (bottom-right) -->
+    <path d="M17.3 14.8h9.1v2.1h-3.4v9.0h-2.3v-9.0h-3.4v-2.1z" />
+  </g>
 </svg>
