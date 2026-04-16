@@ -132,15 +132,13 @@ export function SurveyMapModal({
     push(lonDegRef.current)
     push(lonMinRef.current)
     push(towerNotVisibleRef.current)
-    if (towerNotVisibleOnMap) {
-      push(overlayLoadRef.current)
-      if (imageryOverlay) push(overlayRemoveRef.current)
-    }
+    push(overlayLoadRef.current)
+    if (imageryOverlay) push(overlayRemoveRef.current)
     if (showCoordVerifyBanner) push(coordVerifyDismissRef.current)
     push(recordBtnRef.current)
     push(closeBtnRef.current)
     return list
-  }, [towerNotVisibleOnMap, imageryOverlay, showCoordVerifyBanner])
+  }, [imageryOverlay, showCoordVerifyBanner])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -380,51 +378,47 @@ export function SurveyMapModal({
             </button>
           </div>
         )}
-        {towerNotVisibleOnMap && (
-          <>
-            <div className="flex flex-wrap items-center gap-2 px-4 pb-2">
-              <GuidedHint
-                hintId={HINT_SURVEY_OVERLAY}
-                stepNumber={3}
-                title="Recent map patch overlay"
-                body="This adds a semi-transparent patch of alternate recent imagery on top of the basemap. Pan and zoom the map as usual; the patch may reveal the tower when the default imagery is unclear."
-                isSeen={isSeen(HINT_SURVEY_OVERLAY)}
-                onDismiss={markSeen}
-                surface="light"
-              />
-              <button
-                ref={overlayLoadRef}
-                type="button"
-                onClick={handleLoadImageryOverlay}
-                disabled={overlayLoading}
-                className="text-sm px-3 py-1.5 border border-cap-ultramarine text-cap-ultramarine rounded-lg hover:bg-cap-ultramarine/10 disabled:opacity-50"
-                aria-label="Overlay recent map patch for this area"
-              >
-                {overlayLoading ? 'Loading patch…' : 'Overlay recent map patch'}
-              </button>
-              {imageryOverlay && (
-                <button
-                  ref={overlayRemoveRef}
-                  type="button"
-                  onClick={handleRemoveImageryOverlay}
-                  className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50"
-                  aria-label="Remove map patch overlay"
-                >
-                  Remove overlay
-                </button>
-              )}
-            </div>
-            {overlayError && (
-              <p className="text-xs text-cap-pimento px-4 pb-1">{overlayError}</p>
-            )}
-            {imageryOverlay && (
-              <p className="text-xs text-gray-500 px-4 pb-1">
-                Sentinel-2 is ~10&nbsp;m resolution (often softer than Mapbox). Overlay is visual only; Record
-                Location still uses the map center (crosshair). Use <strong>Remove overlay</strong> for the
-                sharpest Mapbox view.
-              </p>
-            )}
-          </>
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-2">
+          <GuidedHint
+            hintId={HINT_SURVEY_OVERLAY}
+            stepNumber={3}
+            title="Recent map patch overlay"
+            body="This adds a semi-transparent patch of alternate recent imagery on top of the basemap. Use it when the tower is missing or hard to identify in the default Mapbox view, then pan and zoom as usual."
+            isSeen={isSeen(HINT_SURVEY_OVERLAY)}
+            onDismiss={markSeen}
+            surface="light"
+          />
+          <button
+            ref={overlayLoadRef}
+            type="button"
+            onClick={handleLoadImageryOverlay}
+            disabled={overlayLoading}
+            className="text-sm px-3 py-1.5 border border-cap-ultramarine text-cap-ultramarine rounded-lg hover:bg-cap-ultramarine/10 disabled:opacity-50"
+            aria-label="Overlay recent map patch for this area"
+          >
+            {overlayLoading ? 'Loading patch…' : 'Overlay recent map patch'}
+          </button>
+          {imageryOverlay && (
+            <button
+              ref={overlayRemoveRef}
+              type="button"
+              onClick={handleRemoveImageryOverlay}
+              className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50"
+              aria-label="Remove map patch overlay"
+            >
+              Remove overlay
+            </button>
+          )}
+        </div>
+        {overlayError && (
+          <p className="text-xs text-cap-pimento px-4 pb-1">{overlayError}</p>
+        )}
+        {imageryOverlay && (
+          <p className="text-xs text-gray-500 px-4 pb-1">
+            Sentinel-2 is ~10&nbsp;m resolution (often softer than Mapbox). Overlay is visual only; Record
+            Location still uses the map center (crosshair). Use <strong>Remove overlay</strong> for the
+            sharpest Mapbox view.
+          </p>
         )}
         {mapError && (
           <p className="text-xs text-cap-pimento px-4 pb-1">
