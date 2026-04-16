@@ -328,6 +328,7 @@ export function TowerAnalysisPage() {
                   body="Choose a clear photo. If it has GPS metadata, the app can prefill tower location; otherwise you'll set it using Look for Tower on Map."
                   isSeen={isSeen(hints.selectImage)}
                   onDismiss={markSeen}
+                  surface="light"
                 />
               </div>
               <TowerImagePicker onSelect={handleImageSelect} />
@@ -344,6 +345,7 @@ export function TowerAnalysisPage() {
                     body="Open the map and place the crosshair on the tower base (or best estimate). Record Location fetches ground elevation and saves the coordinates for the report."
                     isSeen={isSeen(hints.flyOverLocation)}
                     onDismiss={markSeen}
+                    surface="light"
                   />
                 </div>
                 <button
@@ -390,6 +392,7 @@ export function TowerAnalysisPage() {
                     body="Clears the current image, location, and measurements so you can start the next tower."
                     isSeen={isSeen(hints.clear)}
                     onDismiss={markSeen}
+                    surface="light"
                   />
                 </div>
                 <button
@@ -407,6 +410,7 @@ export function TowerAnalysisPage() {
                     body="Saves this tower to the active mission so it appears in the Air Force Report Form and PDF export."
                     isSeen={isSeen(hints.save)}
                     onDismiss={markSeen}
+                    surface="light"
                   />
                 </div>
                 <button
@@ -437,6 +441,7 @@ export function TowerAnalysisPage() {
               body="Red line = top of tower. Blue line = base. Drag the sliders to match the photo; height updates automatically."
               isSeen={isSeen(hints.sliders)}
               onDismiss={markSeen}
+              surface="light"
             />
           </div>
           <p className="text-xs text-gray-500 mb-2">
