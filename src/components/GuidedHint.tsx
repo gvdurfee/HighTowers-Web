@@ -16,6 +16,8 @@ type GuidedHintProps = {
   onDismiss: (hintId: string) => void
   /** `light` for white / light UI (e.g. modals); default matches Tower Analysis panels. */
   surface?: 'dark' | 'light'
+  /** Shown below the body in bold, above the action buttons (e.g. non-numbered navigation help). */
+  footerBoldNote?: string
 }
 
 function useClickOutside(
@@ -67,6 +69,7 @@ export function GuidedHint({
   isSeen,
   onDismiss,
   surface = 'dark',
+  footerBoldNote,
 }: GuidedHintProps) {
   const [open, setOpen] = useState(false)
   const [alignRight, setAlignRight] = useState(false)
@@ -75,6 +78,9 @@ export function GuidedHint({
   const popoverRef = useRef<HTMLDivElement>(null)
   const headingId = useId()
   const descId = useId()
+  const footerNoteId = useId()
+  const footerText = footerBoldNote?.trim() ?? ''
+  const describedBy = footerText ? `${descId} ${footerNoteId}` : descId
 
   useClickOutside([buttonRef, popoverRef], () => setOpen(false), open)
 
@@ -144,7 +150,7 @@ export function GuidedHint({
           role="dialog"
           aria-modal="false"
           aria-labelledby={headingId}
-          aria-describedby={descId}
+          aria-describedby={describedBy}
           className={`absolute z-50 w-72 max-h-[min(22rem,calc(100vh-1.5rem))] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 text-left text-gray-900 shadow-xl ${
             openAbove ? 'bottom-full mb-2' : 'top-full mt-2'
           } ${alignRight ? 'right-0' : 'left-0'}`}
@@ -167,6 +173,12 @@ export function GuidedHint({
               ✕
             </button>
           </div>
+
+          {footerText ? (
+            <p id={footerNoteId} className="mt-3 text-sm font-bold text-gray-900">
+              {footerText}
+            </p>
+          ) : null}
 
           <div className="mt-3 flex items-center justify-end gap-2">
             <button

@@ -335,14 +335,26 @@ export function SurveyMapModal({
         onKeyDown={handleKeyDown}
       >
         <div className="flex items-center justify-between gap-2 p-4 border-b">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 min-w-0 flex-1">
             <button
               ref={backBtnRef}
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-cap-ultramarine/40"
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-cap-ultramarine/40 text-left leading-snug"
             >
-              Back
+              <svg
+                className="h-4 w-4 shrink-0 text-cap-ultramarine"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Return to Image Selection
             </button>
             <h2 id="fly-over-location-title" className="text-lg font-semibold">
               Look for Tower on Map
@@ -352,6 +364,7 @@ export function SurveyMapModal({
               stepNumber={1}
               title="Coordinates from the aircraft"
               body="Aircrew often get an approximate tower position by flying over the structure and pressing the G1000 MFD Range Knob to capture coordinates—written down or photographed from the display. Enter that position in the Lat and Lon fields at the bottom (degrees and decimal minutes)."
+              footerBoldNote="You can return to the previous screen for any reason. This is not a numbered hint."
               isSeen={isSeen(HINT_SURVEY_G1000)}
               onDismiss={markSeen}
               surface="light"
