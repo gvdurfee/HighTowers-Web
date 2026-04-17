@@ -81,6 +81,7 @@ export function SurveyMapModal({
   const modalRef = useRef<HTMLDivElement>(null)
   const latHemRef = useRef<HTMLSelectElement>(null)
   const lonHemRef = useRef<HTMLSelectElement>(null)
+  const backBtnRef = useRef<HTMLButtonElement>(null)
   const closeBtnRef = useRef<HTMLButtonElement>(null)
   const recordBtnRef = useRef<HTMLButtonElement>(null)
   const towerNotVisibleRef = useRef<HTMLInputElement>(null)
@@ -127,6 +128,7 @@ export function SurveyMapModal({
     const push = (el: HTMLElement | null) => {
       if (el) list.push(el)
     }
+    push(backBtnRef.current)
     push(latDegRef.current)
     push(latMinRef.current)
     push(lonDegRef.current)
@@ -334,6 +336,14 @@ export function SurveyMapModal({
       >
         <div className="flex items-center justify-between gap-2 p-4 border-b">
           <div className="flex items-center gap-2 min-w-0">
+            <button
+              ref={backBtnRef}
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-cap-ultramarine/40"
+            >
+              Back
+            </button>
             <h2 id="fly-over-location-title" className="text-lg font-semibold">
               Look for Tower on Map
             </h2>

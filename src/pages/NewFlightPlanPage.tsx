@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { db } from '@/db/schema'
@@ -46,6 +46,7 @@ export function NewFlightPlanPage() {
   const [fetchingSequence, setFetchingSequence] = useState(false)
   const [showFlightPlanHelp, setShowFlightPlanHelp] = useState(false)
   const { isSeen, markSeen, resetAll } = useHintsSeen()
+  const destinationCodeInputRef = useRef<HTMLInputElement | null>(null)
 
   const {
     register,
@@ -77,6 +78,7 @@ export function NewFlightPlanPage() {
   }
 
   const nameField = register('name', { required: 'Name is required' })
+  const destinationCodeField = register('destinationCode')
 
   useEffect(() => {
     setDepartureAirport(null)
@@ -100,6 +102,8 @@ export function NewFlightPlanPage() {
     try {
       const airport = await apiService.fetchAirport(code)
       setDepartureAirport(airport)
+      // Fetch disables the button and drops focus; move keyboard users to destination next.
+      queueMicrotask(() => destinationCodeInputRef.current?.focus())
     } catch {
       setDepartureAirport(null)
       setError(`Could not find airport: ${code}`)
@@ -627,7 +631,11 @@ export function NewFlightPlanPage() {
             <div className="flex gap-2">
               <input
                 type="text"
-                {...register('destinationCode')}
+                {...destinationCodeField}
+                ref={(el) => {
+                  destinationCodeField.ref(el)
+                  destinationCodeInputRef.current = el
+                }}
                 placeholder="e.g. KPRZ or 0E0"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent uppercase"
               />
