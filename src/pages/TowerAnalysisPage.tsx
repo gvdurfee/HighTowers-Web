@@ -75,6 +75,11 @@ export function TowerAnalysisPage() {
     save: 'towerAnalysis.saveTower',
   } as const
 
+  /** Sliders tip only after Record Location on the map (same gate as meaningful height workflow). */
+  const sliderHintUnlocked = Boolean(selectedImage && mapLocationRecorded)
+  const clearHintStep = sliderHintUnlocked ? 4 : 3
+  const saveHintStep = sliderHintUnlocked ? 5 : 4
+
   const cameraLat = imageMeta?.latitude ?? towerLat
   const cameraLon = imageMeta?.longitude ?? towerLon
   const focalLength = imageMeta?.focalLengthMm ?? 50
@@ -387,7 +392,7 @@ export function TowerAnalysisPage() {
                 <div className="flex justify-end">
                   <GuidedHint
                     hintId={hints.clear}
-                    stepNumber={4}
+                    stepNumber={clearHintStep}
                     title="Clear"
                     body="Clears the current image, location, and measurements so you can start the next tower."
                     isSeen={isSeen(hints.clear)}
@@ -405,7 +410,7 @@ export function TowerAnalysisPage() {
                 <div className="flex justify-end">
                   <GuidedHint
                     hintId={hints.save}
-                    stepNumber={5}
+                    stepNumber={saveHintStep}
                     title="Save Tower"
                     body="Saves this tower to the active mission so it appears in the Air Force Report Form and PDF export."
                     isSeen={isSeen(hints.save)}
@@ -434,19 +439,23 @@ export function TowerAnalysisPage() {
         <div className="flex-1 flex flex-col min-w-0 p-4 min-h-0 bg-white">
           <div className="flex items-center justify-between gap-3 mb-1">
             <h2 className="font-semibold text-gray-900 text-sm">Height Measurement</h2>
-            <GuidedHint
-              hintId={hints.sliders}
-              stepNumber={3}
-              title="Align the sliders"
-              body="Red line = top of tower. Blue line = base. Drag the sliders to match the photo; height updates automatically."
-              isSeen={isSeen(hints.sliders)}
-              onDismiss={markSeen}
-              surface="light"
-            />
+            {sliderHintUnlocked ? (
+              <GuidedHint
+                hintId={hints.sliders}
+                stepNumber={3}
+                title="Align the sliders"
+                body="Red line = top of tower. Blue line = base. Drag the sliders to match the photo; height updates automatically."
+                isSeen={isSeen(hints.sliders)}
+                onDismiss={markSeen}
+                surface="light"
+              />
+            ) : null}
           </div>
-          <p className="text-xs text-gray-500 mb-2">
-            Red = top. Blue = bottom. Drag sliders to align.
-          </p>
+          {sliderHintUnlocked ? (
+            <p className="text-xs text-gray-500 mb-2">
+              Red = top. Blue = bottom. Drag sliders to align.
+            </p>
+          ) : null}
           <MeasureLinesPanel
             image={selectedImage}
             topSlider={topSlider}
