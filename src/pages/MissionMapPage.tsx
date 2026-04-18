@@ -31,14 +31,20 @@ function buildRouteCoordinates(
   destination: AirportRecord | null
 ): [number, number][] {
   const coords: [number, number][] = []
-  if (departure) {
-    coords.push([departure.longitude, departure.latitude])
+  const pushIfFinite = (lon: number, lat: number) => {
+    if (Number.isFinite(lon) && Number.isFinite(lat)) {
+      coords.push([lon, lat])
+    }
   }
-  for (const wp of waypoints.sort((a, b) => a.sequence - b.sequence)) {
-    coords.push([wp.longitude, wp.latitude])
+  if (departure) {
+    pushIfFinite(departure.longitude, departure.latitude)
+  }
+  const ordered = [...waypoints].sort((a, b) => a.sequence - b.sequence)
+  for (const wp of ordered) {
+    pushIfFinite(wp.longitude, wp.latitude)
   }
   if (destination) {
-    coords.push([destination.longitude, destination.latitude])
+    pushIfFinite(destination.longitude, destination.latitude)
   }
   return coords
 }
@@ -164,25 +170,54 @@ export function MissionMapPage() {
     }
   }, [towerOverlayData])
 
-  const routeCoords = planData
-    ? buildRouteCoordinates(
-        planData.departure,
-        planData.waypoints,
-        planData.destination
-      )
-    : []
+  const routeCoords = useMemo(
+    () =>
+      planData
+        ? buildRouteCoordinates(
+            planData.departure,
+            planData.waypoints,
+            planData.destination
+          )
+        : [],
+    [planData]
+  )
 
-  const routeGeoJSON =
-    routeCoords.length >= 2
-      ? {
-          type: 'Feature' as const,
-          properties: {},
-          geometry: {
-            type: 'LineString' as const,
-            coordinates: routeCoords,
-          },
-        }
-      : null
+  const routeGeoJSON = useMemo(() => {
+    if (routeCoords.length < 2) return null
+    return {
+      type: 'Feature' as const,
+      properties: {},
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: routeCoords,
+      },
+    }
+  }, [routeCoords])
+
+  /** Ensure route line layers stack at the top of the style (above satellite raster / roads). */
+  useEffect(() => {
+    if (!mapReady || !routeGeoJSON) return
+    const map = mapRef.current?.getMap()
+    if (!map) return
+    const bringRouteToFront = () => {
+      try {
+        if (!map.getLayer('route-line-halo') || !map.getLayer('route-line')) return
+        const layers = map.getStyle()?.layers
+        if (!layers?.length) return
+        const topId = layers[layers.length - 1].id
+        if (topId === 'route-line') return
+        map.moveLayer('route-line-halo')
+        map.moveLayer('route-line')
+      } catch {
+        /* ignore ordering if style not ready */
+      }
+    }
+    map.on('idle', bringRouteToFront)
+    bringRouteToFront()
+    return () => {
+      map.off('idle', bringRouteToFront)
+    }
+  }, [mapReady, routeGeoJSON, selectedPlanId])
 
   const allCoords = useMemo(() => {
     const c = [...routeCoords]
@@ -305,7 +340,25 @@ export function MissionMapPage() {
           onLoad={() => setMapReady(true)}
         >
           {routeGeoJSON && (
-            <Source id="route" type="geojson" data={routeGeoJSON}>
+            <Source
+              id="route"
+              type="geojson"
+              data={routeGeoJSON}
+              key={`route-src-${selectedPlanId}-${routeCoords.length}`}
+            >
+              <Layer
+                id="route-line-halo"
+                type="line"
+                layout={{
+                  'line-join': 'round',
+                  'line-cap': 'round',
+                }}
+                paint={{
+                  'line-color': '#ffffff',
+                  'line-width': 10,
+                  'line-opacity': 0.85,
+                }}
+              />
               <Layer
                 id="route-line"
                 type="line"
@@ -315,7 +368,7 @@ export function MissionMapPage() {
                 }}
                 paint={{
                   'line-color': '#FFD911',
-                  'line-width': 3,
+                  'line-width': 4,
                 }}
               />
             </Source>
