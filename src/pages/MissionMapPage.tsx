@@ -194,19 +194,18 @@ export function MissionMapPage() {
     }
   }, [routeCoords])
 
-  /** Ensure route line layers stack at the top of the style (above satellite raster / roads). */
+  /** Ensure the route line layer sits above satellite / road layers after style updates. */
   useEffect(() => {
     if (!mapReady || !routeGeoJSON) return
     const map = mapRef.current?.getMap()
     if (!map) return
     const bringRouteToFront = () => {
       try {
-        if (!map.getLayer('route-line-halo') || !map.getLayer('route-line')) return
+        if (!map.getLayer('route-line')) return
         const layers = map.getStyle()?.layers
         if (!layers?.length) return
         const topId = layers[layers.length - 1].id
         if (topId === 'route-line') return
-        map.moveLayer('route-line-halo')
         map.moveLayer('route-line')
       } catch {
         /* ignore ordering if style not ready */
@@ -347,19 +346,6 @@ export function MissionMapPage() {
               key={`route-src-${selectedPlanId}-${routeCoords.length}`}
             >
               <Layer
-                id="route-line-halo"
-                type="line"
-                layout={{
-                  'line-join': 'round',
-                  'line-cap': 'round',
-                }}
-                paint={{
-                  'line-color': '#ffffff',
-                  'line-width': 10,
-                  'line-opacity': 0.85,
-                }}
-              />
-              <Layer
                 id="route-line"
                 type="line"
                 layout={{
@@ -368,7 +354,7 @@ export function MissionMapPage() {
                 }}
                 paint={{
                   'line-color': '#FFD911',
-                  'line-width': 4,
+                  'line-width': 3,
                 }}
               />
             </Source>
