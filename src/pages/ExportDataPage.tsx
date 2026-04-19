@@ -130,7 +130,7 @@ export function ExportDataPage() {
       const name = mission?.name ?? 'Report'
       const dateStr = formData.date.replace(/\//g, '-')
       const fileName = `AirForce_Report_${name.replace(/\s+/g, '_')}_${dateStr}.pdf`
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+      const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
