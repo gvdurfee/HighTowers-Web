@@ -167,10 +167,15 @@ export const G1000Service = {
       )
     }
 
+    let lastUserWaypointId: string | null = null
     for (const wp of waypoints) {
+      const id = wp.g1000Name.trim()
+      // Some avionics reject routes with consecutive duplicate user route-points (e.g. XM112 twice in a row).
+      if (lastUserWaypointId && id.toUpperCase() === lastUserWaypointId.toUpperCase()) continue
+      lastUserWaypointId = id
       lines.push(
         '    <route-point>',
-        `      <waypoint-identifier>${escapeXml(wp.g1000Name)}</waypoint-identifier>`,
+        `      <waypoint-identifier>${escapeXml(id)}</waypoint-identifier>`,
         '      <waypoint-type>USER WAYPOINT</waypoint-type>',
         '      <waypoint-country-code/>',
         '    </route-point>'
