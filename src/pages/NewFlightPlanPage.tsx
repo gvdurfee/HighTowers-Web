@@ -907,7 +907,15 @@ export function NewFlightPlanPage() {
             hintId={HINT_FP_CREATE}
             stepNumber={4}
             title="Create Flight Plan"
-            body="Creates the plan in this device’s database and opens the flight plan detail page. If any waypoints are missing coordinates, you can fill them there, then export a .fpl for the G1000 when ready."
+            body={
+              <>
+                Creates the plan in this device’s database and opens the flight plan detail page. If
+                any waypoints are missing coordinates, you can fill them there, then export a .fpl
+                for the G1000 when ready. You <strong><em>must</em></strong> press the Create Flight
+                Button to save the flight plan before moving to another function in the
+                application, otherwise the flight plan will need to be recreated.
+              </>
+            }
             isSeen={isSeen(HINT_FP_CREATE)}
             onDismiss={markSeen}
             surface="light"

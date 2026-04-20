@@ -6,12 +6,13 @@ import {
   useRef,
   useState,
 } from 'react'
+import type { ReactNode } from 'react'
 
 type GuidedHintProps = {
   hintId: string
   stepNumber: number
   title: string
-  body: string
+  body: ReactNode
   isSeen: boolean
   onDismiss: (hintId: string) => void
   /** `light` for white / light UI (e.g. modals); default matches Tower Analysis panels. */
