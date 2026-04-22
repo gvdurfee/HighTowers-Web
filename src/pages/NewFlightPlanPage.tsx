@@ -6,6 +6,7 @@ import { generateId } from '@/utils/id'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
 import { apiService, type AirportResult } from '@/services/api'
 import { FlightPlanLoadMethodHelpModal } from '@/components/FlightPlanLoadMethodHelpModal'
+import { parseWaypointCode } from '@/utils/mtrWaypointCode'
 import { GuidedHint } from '@/components/GuidedHint'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 
@@ -18,13 +19,13 @@ type FormData = {
   name: string
   departureCode: string
   destinationCode: string
-  /** e.g. IR109 — combined with suffix-only sequence tokens as IR109-AM */
+  /** e.g. IR109 — combined with suffix-only sequence waypoints as IR109-AM */
   routeIdentifier: string
   waypointSequence: string
 }
 
 type RoutePreview =
-  | { count: number; routeId: string; resolvedCount?: number; totalTokens?: number }
+  | { count: number; routeId: string; resolvedCount?: number; totalListedWaypoints?: number }
   | { error: string }
 
 type LoadMethod = 'route' | 'sequence' | 'sequenceLibrary'
@@ -185,7 +186,10 @@ export function NewFlightPlanPage() {
     setError(null)
     setSequencePreview(null)
     try {
-      const parts = seq.split(/[\s,]+/).filter(Boolean)
+      const parts = seq
+        .split(/[\s,]+/)
+        .map(normalizeWaypointToken)
+        .filter(Boolean)
 
       if (loadMethod === 'sequenceLibrary') {
         const seenG1000 = new Set<string>()
@@ -206,7 +210,7 @@ export function NewFlightPlanPage() {
           setSequencePreview({
             error:
               duplicateLabels.length > 0
-                ? 'Every token duplicates an earlier G1000 waypoint name. List each unique point only once.'
+                ? 'Every waypoint duplicates an earlier G1000 waypoint name. List each unique point only once.'
                 : 'No waypoints resolved. Set Route identifier and suffixes, or use full waypoint IDs.',
           })
           return
@@ -230,7 +234,7 @@ export function NewFlightPlanPage() {
         } else {
           setSequencePreview({
             count: found,
-            routeId: `${found} unique in DB / ${uniqueResolved.length} unique / ${parts.length} tokens${
+            routeId: `${found} unique in DB / ${uniqueResolved.length} unique / ${parts.length} waypoints${
               duplicateLabels.length ? ` (${duplicateLabels.length} duplicate G1000 names skipped)` : ''
             }`,
           })
@@ -260,7 +264,7 @@ export function NewFlightPlanPage() {
         setSequencePreview({
           count: found,
           resolvedCount: found,
-          totalTokens: parts.length,
+          totalListedWaypoints: parts.length,
           routeId: `${found}/${parts.length} resolved`,
         })
       }
@@ -378,23 +382,38 @@ export function NewFlightPlanPage() {
             return
           }
         }
-        const parts = data.waypointSequence.split(/[\s,]+/).filter(Boolean)
+        const parts = data.waypointSequence
+          .split(/[\s,]+/)
+          .map(normalizeWaypointToken)
+          .filter(Boolean)
         const skipped: string[] = []
         const duplicateSkipped: string[] = []
         const seenG1000Library = new Set<string>()
+        // In sequenceLibrary, saved waypoints are compacted to 0..N, but pending items were using
+        // the raw list index `i`, which can collide and hide pending rows in the detail view.
+        // Use a single monotonic index across all unique (non-duplicate) waypoints.
+        let librarySequenceIndex = 0
         for (let i = 0; i < parts.length; i++) {
           const raw = parts[i]
           const resolved = resolveWaypointToken(routeId || undefined, raw)
           if (!resolved) {
             const label = raw.trim().toUpperCase()
             skipped.push(label)
-            pendingWithPosition.push({ code: label, sequence: i })
+            pendingWithPosition.push({
+              code: label,
+              sequence: loadMethod === 'sequenceLibrary' ? librarySequenceIndex : i,
+            })
+            if (loadMethod === 'sequenceLibrary') librarySequenceIndex++
             continue
           }
           const parsed = parseWaypointCode(resolved)
           if (!parsed) {
             skipped.push(resolved)
-            pendingWithPosition.push({ code: resolved, sequence: i })
+            pendingWithPosition.push({
+              code: resolved,
+              sequence: loadMethod === 'sequenceLibrary' ? librarySequenceIndex : i,
+            })
+            if (loadMethod === 'sequenceLibrary') librarySequenceIndex++
             continue
           }
           const g1000Name = convertWaypointNameToG1000(resolved)
@@ -417,17 +436,22 @@ export function NewFlightPlanPage() {
               lat: coords.latitude,
               lon: coords.longitude,
               routeType: parsed.routeType,
-              sequence: loadMethod === 'sequenceLibrary' ? waypoints.length : i,
+              sequence: loadMethod === 'sequenceLibrary' ? librarySequenceIndex : i,
             })
+            if (loadMethod === 'sequenceLibrary') librarySequenceIndex++
           } else {
             skipped.push(resolved)
-            pendingWithPosition.push({ code: resolved, sequence: i })
+            pendingWithPosition.push({
+              code: resolved,
+              sequence: loadMethod === 'sequenceLibrary' ? librarySequenceIndex : i,
+            })
+            if (loadMethod === 'sequenceLibrary') librarySequenceIndex++
           }
         }
         skippedWaypoints = skipped
         if (duplicateSkipped.length > 0) {
           postCreateDuplicateMessage =
-            `Omitted ${duplicateSkipped.length} duplicate token(s) (same G1000 name as an earlier point): ${duplicateSkipped.join(', ')}. `
+            `Omitted ${duplicateSkipped.length} duplicate waypoint(s) (same G1000 name as an earlier point): ${duplicateSkipped.join(', ')}. `
         }
       }
 
@@ -664,7 +688,7 @@ export function NewFlightPlanPage() {
               hintId={HINT_FP_LOAD}
               stepNumber={3}
               title="How waypoints are loaded"
-              body="Load full route: segment between entry and exit on one published route. Waypoint sequence: type tokens (suffixes or full IDs) for one or blended routes. G1000 user waypoint library: import-focused list with unique G1000 names—requires two different airport identifiers (not round-robin). Use the ? help for full detail."
+              body="Load full route: segment between entry and exit on one published route. Waypoint sequence: type waypoints (suffixes or full IDs) for one or blended routes. G1000 user waypoint library: import-focused list with unique G1000 names—requires two different airport identifiers (not round-robin). Use the ? help for full detail."
               isSeen={isSeen(HINT_FP_LOAD)}
               onDismiss={markSeen}
               surface="light"
@@ -785,7 +809,7 @@ export function NewFlightPlanPage() {
                 <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-950">
                   <p className="font-medium mb-1">Import-focused list</p>
                   <p>
-                    Duplicate tokens that resolve to the same G1000 name are skipped. After import,
+                    Duplicate waypoints that resolve to the same G1000 name are skipped. After import,
                     you can delete this flight plan from the G1000 catalog; user waypoints typically
                     remain until you remove them. Clear survey-specific user waypoints at end of
                     season—fixes can change next year.
@@ -861,8 +885,8 @@ export function NewFlightPlanPage() {
                       <>
                         ✓ {sequencePreview.count} waypoint(s) found ({sequencePreview.routeId})
                         {typeof sequencePreview.resolvedCount === 'number' &&
-                          typeof sequencePreview.totalTokens === 'number' &&
-                          sequencePreview.resolvedCount < sequencePreview.totalTokens && (
+                          typeof sequencePreview.totalListedWaypoints === 'number' &&
+                          sequencePreview.resolvedCount < sequencePreview.totalListedWaypoints && (
                             <>
                               {' '}
                               <strong>
@@ -878,7 +902,7 @@ export function NewFlightPlanPage() {
                   <strong>Blended routes</strong> (waypoints on more than one published route): leave
                   Route identifier blank and enter each waypoint in full (
                   <code className="bg-gray-100 px-0.5 rounded">SR213A</code>,{' '}
-                  <code className="bg-gray-100 px-0.5 rounded">SR214D</code>, …)—suffix-only tokens
+                  <code className="bg-gray-100 px-0.5 rounded">SR214D</code>, …)—suffix-only waypoints
                   are not enough because they assume one route. <strong>Single route:</strong> either
                   set Route identifier and use suffixes, or leave it blank and use full IDs (
                   <code className="bg-gray-100 px-0.5 rounded">IR107A</code>,{' '}
@@ -952,14 +976,20 @@ export function NewFlightPlanPage() {
 }
 
 /**
- * Build full MTR id (e.g. IR109-AM) from optional route identifier + token.
- * If token is already a full waypoint id, it is returned unchanged.
+ * Build full MTR id (e.g. IR109-AM) from optional route identifier + waypoint suffix/id.
+ * If the value is already a full waypoint id, it is returned unchanged.
  */
+function normalizeWaypointToken(token: string): string {
+  // Common paste sources include punctuation (e.g. "Q)", "AK.", "IR112-AQ,").
+  // Keep only alphanumerics and hyphen, then drop leading hyphens.
+  return token.trim().toUpperCase().replace(/[^A-Z0-9-]+/g, '').replace(/^-+/, '')
+}
+
 function resolveWaypointToken(
   routeIdentifier: string | undefined,
   token: string
 ): string | null {
-  const t = token.trim().toUpperCase()
+  const t = normalizeWaypointToken(token)
   if (!t) return null
 
   if (parseWaypointCode(t)) {
@@ -972,7 +1002,7 @@ function resolveWaypointToken(
   const route = parseRouteInput(rid)
   if (!route) return null
 
-  const suffix = t.replace(/^-+/, '')
+  const suffix = t
   if (!suffix || !/^[A-Z0-9]+$/.test(suffix)) return null
 
   return `${route.routeType}${route.routeNumber}-${suffix}`
@@ -990,22 +1020,3 @@ function parseRouteInput(
   }
 }
 
-function parseWaypointCode(
-  code: string
-): { routeType: 'IR' | 'SR' | 'VR'; routeNumber: string; waypointLetter: string } | null {
-  const upper = code.toUpperCase().trim()
-  let routeType: 'IR' | 'SR' | 'VR' | null = null
-  if (upper.startsWith('IR')) routeType = 'IR'
-  else if (upper.startsWith('SR')) routeType = 'SR'
-  else if (upper.startsWith('VR')) routeType = 'VR'
-  if (!routeType) return null
-  const rest = upper.slice(2)
-  // Optional hyphen after route number (IR111-A) or concatenated (IR111A)
-  const match = rest.match(/^(\d+)(?:-)?([A-Z0-9]+)$/)
-  if (!match) return null
-  return {
-    routeType,
-    routeNumber: match[1],
-    waypointLetter: match[2],
-  }
-}

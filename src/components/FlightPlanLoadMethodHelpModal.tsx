@@ -76,7 +76,7 @@ export function FlightPlanLoadMethodHelpModal({
             <h3 className="font-semibold text-gray-900 mb-1">G1000 user waypoint library</h3>
             <p>
               Same entry style as Waypoint sequence, but each <strong>G1000 waypoint name</strong>{' '}
-              may appear <strong>only once</strong>. If you list a token that resolves to the same
+              may appear <strong>only once</strong>. If you list a waypoint that resolves to the same
               name as an earlier one, it is <strong>skipped</strong> and you are told after create.
             </p>
             <p>

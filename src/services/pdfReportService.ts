@@ -1,5 +1,6 @@
 import {
   PDFDocument,
+  PDFPage,
   PDFTextField,
   rgb,
   StandardFonts,
@@ -18,7 +19,13 @@ import {
 } from '@/utils/towerWaypointGeometry'
 import { towerHeightsUseSeeNotes } from '@/utils/routeSurveyTowerRow'
 import { compressImageForEmail } from '@/utils/imageCompression'
-import { fetchMissionMapStaticPng } from '@/utils/missionMapStaticImage'
+import {
+  fetchMissionMapStaticPng,
+  MAPBOX_STATIC_IMAGE_PADDING_PX,
+  staticImageLabelBounds,
+  type MissionMapGeographicBounds,
+  type MissionMapWaypointMarker,
+} from '@/utils/missionMapStaticImage'
 import type { TowerEntry } from '@/types/reportForm'
 import {
   ADDITIONAL_NOTES_MAX_LENGTH,
@@ -41,6 +48,72 @@ const PHOTO_OVERLAY_FONT_SIZE = 11
 
 /** CAP brand — tower photo label uses tailwind cap.yellow #FFD911 */
 const CAP_YELLOW = rgb(255 / 255, 217 / 255, 17 / 255)
+/** CAP ultramarine — map line / mission-map waypoint labels (tailwind cap-ultramarine) */
+const CAP_BLUE = rgb(14 / 255, 43 / 255, 141 / 255)
+
+/** Web Mercator Y (EPSG:3857) from latitude in degrees — matches Mapbox static map projection. */
+function webMercatorYFromLatDeg(latDeg: number): number {
+  const clamped = Math.max(Math.min(latDeg, 85.05112878), -85.05112878)
+  const φ = (clamped * Math.PI) / 180
+  return Math.log(Math.tan(Math.PI / 4 + φ / 2))
+}
+
+function drawWaypointLabelsOnMissionMap(
+  page: PDFPage,
+  font: PDFFont,
+  labelBounds: MissionMapGeographicBounds,
+  markers: MissionMapWaypointMarker[],
+  imgX: number,
+  imgY: number,
+  imgW: number,
+  imgH: number,
+  nativeImgW: number,
+  nativeImgH: number
+): void {
+  const lonSpan = Math.max(labelBounds.east - labelBounds.west, 1e-9)
+  const ySouth = webMercatorYFromLatDeg(labelBounds.south)
+  const yNorth = webMercatorYFromLatDeg(labelBounds.north)
+  const ySpan = Math.max(yNorth - ySouth, 1e-12)
+  const fontSize = 8
+  const textPadX = 3.5
+  const textPadY = 2
+  /** Mapbox fits `bounds` inside the image minus this inset (see MAPBOX_STATIC_IMAGE_PADDING_PX). */
+  const insetX = (MAPBOX_STATIC_IMAGE_PADDING_PX / nativeImgW) * imgW
+  const insetY = (MAPBOX_STATIC_IMAGE_PADDING_PX / nativeImgH) * imgH
+  const innerW = Math.max(imgW - 2 * insetX, 1e-6)
+  const innerH = Math.max(imgH - 2 * insetY, 1e-6)
+
+  for (const m of markers) {
+    if (!m.label) continue
+    const u = (m.lon - labelBounds.west) / lonSpan
+    const yPt = webMercatorYFromLatDeg(m.lat)
+    const v = (yPt - ySouth) / ySpan
+    if (u < -0.02 || u > 1.02 || v < -0.02 || v > 1.02) continue
+    const cx = imgX + insetX + u * innerW
+    const cy = imgY + insetY + v * innerH
+    const textW = font.widthOfTextAtSize(m.label, fontSize)
+    const boxW = textW + textPadX * 2
+    const boxH = fontSize + textPadY * 2
+    const boxX = cx - boxW / 2
+    const boxBottom = cy - boxH / 2
+    page.drawRectangle({
+      x: boxX,
+      y: boxBottom,
+      width: boxW,
+      height: boxH,
+      color: CAP_YELLOW,
+      borderColor: CAP_BLUE,
+      borderWidth: 0.4,
+    })
+    page.drawText(m.label, {
+      x: cx - textW / 2,
+      y: boxBottom + textPadY + 0.75,
+      size: fontSize,
+      font,
+      color: CAP_BLUE,
+    })
+  }
+}
 
 function formatLatitude(value: number): string {
   const dir = value >= 0 ? 'N' : 'S'
@@ -666,7 +739,8 @@ export async function generateAirForceReportPdf(
     }
   }
 
-  const mapPngBytes = await fetchMissionMapStaticPng(missionId)
+  const mapStatic = await fetchMissionMapStaticPng(missionId)
+  const mapPngBytes = mapStatic.imageBytes
   if (mapPngBytes && mapPngBytes.length > 0) {
     try {
       let mapImage
@@ -703,6 +777,26 @@ export async function generateAirForceReportPdf(
         width: scaled.width,
         height: scaled.height,
       })
+      if (mapStatic.bounds && mapStatic.waypointMarkers.length > 0) {
+        const labelBounds = staticImageLabelBounds(
+          mapStatic.bounds,
+          mapStatic.width,
+          mapStatic.height,
+          MAPBOX_STATIC_IMAGE_PADDING_PX
+        )
+        drawWaypointLabelsOnMissionMap(
+          page,
+          helvetica,
+          labelBounds,
+          mapStatic.waypointMarkers,
+          mx,
+          my,
+          scaled.width,
+          scaled.height,
+          mapStatic.width,
+          mapStatic.height
+        )
+      }
 
       const notesBoxH = MAP_NOTES_BAND - 6
       const notesBoxY = MARGIN

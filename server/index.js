@@ -336,6 +336,8 @@ app.post('/api/mapbox-static', async (req, res) => {
       width = 1280,
       height = 720,
       style = 'mapbox/satellite-streets-v12',
+      /** Geographic framing [west,south,east,north] — required for PDF label alignment with map image */
+      bbox,
     } = req.body ?? {}
     if (!overlayPath || typeof overlayPath !== 'string') {
       res.status(400).json({ error: 'overlayPath (string) required' })
@@ -347,7 +349,17 @@ app.post('/api/mapbox-static', async (req, res) => {
     }
     const w = Math.min(1280, Math.max(200, Number(width) || 1280))
     const h = Math.min(1280, Math.max(200, Number(height) || 720))
-    const url = `https://api.mapbox.com/styles/v1/${style}/static/${overlayPath}/auto/${w}x${h}?padding=80&attribution=false&logo=false&access_token=${token}`
+    const r5 = (n) => Number(n).toFixed(5)
+    let position = 'auto'
+    if (
+      bbox &&
+      typeof bbox === 'object' &&
+      ['west', 'south', 'east', 'north'].every((k) => Number.isFinite(Number(bbox[k])))
+    ) {
+      position = `[${r5(bbox.west)},${r5(bbox.south)},${r5(bbox.east)},${r5(bbox.north)}]`
+    }
+    // Keep padding in sync with MAPBOX_STATIC_IMAGE_PADDING_PX in src/utils/missionMapStaticImage.ts
+    const url = `https://api.mapbox.com/styles/v1/${style}/static/${overlayPath}/${position}/${w}x${h}?padding=80&attribution=false&logo=false&access_token=${token}`
     const mapRes = await fetch(url)
     if (!mapRes.ok) {
       const snippet = (await mapRes.text()).slice(0, 300)
