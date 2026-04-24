@@ -135,7 +135,7 @@ export function MainLayout() {
                 className={navButton(isActive('export'))}
               >
                 <span aria-hidden>📤</span>
-                {!sidebarCollapsed && <span>Export Data</span>}
+                {!sidebarCollapsed && <span>Export Reported Data</span>}
               </button>
             </li>
             <li className="px-2 py-1 mt-4 border-t border-white/10 pt-2">
