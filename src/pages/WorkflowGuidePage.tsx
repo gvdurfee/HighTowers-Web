@@ -27,9 +27,9 @@ export function WorkflowGuidePage() {
     },
     {
       number: 4,
-      title: 'Export Data',
+      title: 'Export Reported Data',
       summary:
-        'Generate the Air Force Route Survey Report PDF and email or share it with the customer.',
+        'Generate the Air Force Route Survey Report PDF for the customer and update ForeFlight Content Packs for next season’s aircrews.',
       path: '/export',
     },
   ]

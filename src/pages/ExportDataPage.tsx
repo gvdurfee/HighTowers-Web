@@ -18,6 +18,7 @@ import {
   type ReportFormData,
 } from '@/services/pdfReportService'
 import { additionalNotesForPdf } from '@/constants/reportCopy'
+import { ContentPackUpdater } from '@/components/ContentPackUpdater'
 
 function formatDateForDisplay(dateStr: string): string {
   const d = new Date(dateStr)
@@ -158,7 +159,7 @@ export function ExportDataPage() {
   return (
     <div className="app-page-shell overflow-auto">
       <div className="app-panel max-w-2xl mx-auto p-6 md:p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Export Data</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">Export Reported Data</h1>
       <p className="text-gray-600 mb-6">
         Generate and download the Air Force Route Survey Report PDF. Includes a mission map
         (route and towers) when Mapbox is configured. Tower photos use a CAP-style location
@@ -224,6 +225,10 @@ export function ExportDataPage() {
 
       {selectedMissionId && !formData && (
         <p className="mt-4 text-sm text-gray-500">Loading mission data…</p>
+      )}
+
+      {selectedMission && (
+        <ContentPackUpdater selectedMission={selectedMission} />
       )}
       </div>
     </div>
