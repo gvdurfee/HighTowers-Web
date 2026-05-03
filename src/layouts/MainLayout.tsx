@@ -9,6 +9,7 @@ type DetailView =
   | 'map'
   | 'report-form'
   | 'export'
+  | 'foreflight-content-pack'
   | 'new-flight-plan'
 
 const routeMap: Record<DetailView, string> = {
@@ -18,6 +19,7 @@ const routeMap: Record<DetailView, string> = {
   map: '/map',
   'report-form': '/report-form',
   export: '/export',
+  'foreflight-content-pack': '/foreflight-content-pack',
   'new-flight-plan': '/flight-plans/new',
 }
 
@@ -32,6 +34,9 @@ export function MainLayout() {
 
   const isActive = (view: DetailView) => {
     const path = routeMap[view]
+    if (view === 'export') {
+      return location.pathname === '/export'
+    }
     if (path === '/flight-plans') {
       return location.pathname === '/flight-plans' && !location.pathname.includes('/new')
     }
@@ -136,6 +141,14 @@ export function MainLayout() {
               >
                 <span aria-hidden>📤</span>
                 {!sidebarCollapsed && <span>Export Reported Data</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => nav('foreflight-content-pack')}
+                className={navButton(isActive('foreflight-content-pack'))}
+              >
+                <span aria-hidden>🗂️</span>
+                {!sidebarCollapsed && <span>ForeFlight Content Pack Update</span>}
               </button>
             </li>
             <li className="px-2 py-1 mt-4 border-t border-white/10 pt-2">

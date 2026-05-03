@@ -18,7 +18,6 @@ import {
   type ReportFormData,
 } from '@/services/pdfReportService'
 import { additionalNotesForPdf } from '@/constants/reportCopy'
-import { ContentPackUpdater } from '@/components/ContentPackUpdater'
 
 function formatDateForDisplay(dateStr: string): string {
   const d = new Date(dateStr)
@@ -165,6 +164,17 @@ export function ExportDataPage() {
         (route and towers) when Mapbox is configured. Tower photos use a CAP-style location
         overlay and are compressed to ~500KB each for email sharing.
       </p>
+      <p className="text-sm text-gray-600 mb-6">
+        For next season’s aircrews, update ForeFlight Content Packs from the sidebar:{' '}
+        <button
+          type="button"
+          onClick={() => navigate('/foreflight-content-pack')}
+          className="text-cap-ultramarine font-medium underline hover:no-underline"
+        >
+          ForeFlight Content Pack Update
+        </button>
+        .
+      </p>
 
       {!selectedMissionId && (missions ?? []).length > 0 && (
         <div className="mb-4">
@@ -225,10 +235,6 @@ export function ExportDataPage() {
 
       {selectedMissionId && !formData && (
         <p className="mt-4 text-sm text-gray-500">Loading mission data…</p>
-      )}
-
-      {selectedMission && (
-        <ContentPackUpdater selectedMission={selectedMission} />
       )}
       </div>
     </div>

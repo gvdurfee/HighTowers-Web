@@ -308,12 +308,12 @@ export function ContentPackUpdater({ selectedMission }: Props) {
     preview.plannedAdditions.length > 0
 
   return (
-    <div className="mt-8 p-4 rounded-xl border border-gray-200 bg-white">
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">ForeFlight Content Pack update</h2>
+    <div className="p-4 rounded-xl border border-gray-200 bg-white">
       <p className="text-sm text-gray-600 mb-4">
-        Append this mission’s <strong>new tower findings</strong> to an existing ForeFlight Content Pack (
-        <code className="bg-gray-100 px-1 rounded text-xs">navdata/user_waypoints.csv</code>), so crews can
-        see previously reported towers next season.
+        Append this mission’s <strong>new tower findings</strong> to{' '}
+        <code className="bg-gray-100 px-1 rounded text-xs">navdata/user_waypoints.csv</code> inside the pack.
+        Unzip the downloaded file and replace your pack folder, or import the ZIP in ForeFlight per your
+        usual workflow.
       </p>
 
       {helperText && (
@@ -322,48 +322,63 @@ export function ContentPackUpdater({ selectedMission }: Props) {
         </p>
       )}
 
-      <div className="flex flex-col gap-3">
-        {folderModeAvailable && (
-          <div className="flex flex-col sm:flex-row gap-2">
+      <div className="flex flex-col gap-6">
+        <div>
+          <p className="text-sm font-medium text-gray-900 mb-2">1) Upload Content Pack (.zip)</p>
+          <p className="text-xs text-gray-600 mb-2">
+            Choose your existing pack ZIP, review the preview, then download an updated ZIP with new tower
+            waypoints for next year.
+          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null
+                if (!f) return
+                void handleZipPreview(f)
+              }}
+            />
             <button
               type="button"
-              onClick={() => void handleFolderSelect()}
-              disabled={busy}
+              onClick={() => void handleZipApply()}
+              disabled={busy || !zipReady}
               className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
             >
-              {busy ? 'Working…' : '1) Select Content Pack folder (preview)'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleFolderOverwrite()}
-              disabled={busy || !folderReady}
-              className="px-4 py-2 border border-cap-ultramarine text-cap-ultramarine rounded-lg font-medium hover:bg-cap-ultramarine/5 disabled:opacity-50"
-            >
-              2) Overwrite CSV in that folder
+              {busy ? 'Working…' : 'Download updated Content Pack (.zip)'}
             </button>
           </div>
-        )}
-
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <input
-            type="file"
-            accept=".zip,application/zip"
-            disabled={busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0] ?? null
-              if (!f) return
-              void handleZipPreview(f)
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => void handleZipApply()}
-            disabled={busy || !zipReady}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-          >
-            {busy ? 'Working…' : 'Download updated Content Pack (.zip)'}
-          </button>
         </div>
+
+        {folderModeAvailable && (
+          <div>
+            <p className="text-sm font-medium text-gray-900 mb-2">Optional: update folder in place (Chrome / Edge)</p>
+            <p className="text-xs text-gray-600 mb-2">
+              Select the Content Pack folder on disk, preview changes, then overwrite{' '}
+              <code className="bg-gray-100 px-0.5 rounded text-[11px]">navdata/user_waypoints.csv</code>{' '}
+              after confirming.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => void handleFolderSelect()}
+                disabled={busy}
+                className="px-4 py-2 border border-cap-ultramarine text-cap-ultramarine rounded-lg font-medium hover:bg-cap-ultramarine/5 disabled:opacity-50"
+              >
+                {busy ? 'Working…' : 'Select Content Pack folder (preview)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleFolderOverwrite()}
+                disabled={busy || !folderReady}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Overwrite CSV in that folder
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {preview && (

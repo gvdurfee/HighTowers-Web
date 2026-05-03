@@ -29,7 +29,7 @@ export function WorkflowGuidePage() {
       number: 4,
       title: 'Export Reported Data',
       summary:
-        'Generate the Air Force Route Survey Report PDF for the customer and update ForeFlight Content Packs for next season’s aircrews.',
+        'Generate the Air Force Route Survey Report PDF for the customer. Use ForeFlight Content Pack Update in the sidebar to refresh crew packs for next season.',
       path: '/export',
     },
   ]
