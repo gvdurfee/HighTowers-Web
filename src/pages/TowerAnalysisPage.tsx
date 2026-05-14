@@ -77,6 +77,7 @@ export function TowerAnalysisPage() {
 
   /** Sliders tip only after Record Location on the map (same gate as meaningful height workflow). */
   const sliderHintUnlocked = Boolean(selectedImage && mapLocationRecorded)
+  const slidersHintStep = 3
   const clearHintStep = sliderHintUnlocked ? 4 : 3
   const saveHintStep = sliderHintUnlocked ? 5 : 4
 
@@ -442,7 +443,7 @@ export function TowerAnalysisPage() {
             {sliderHintUnlocked ? (
               <GuidedHint
                 hintId={hints.sliders}
-                stepNumber={3}
+                stepNumber={slidersHintStep}
                 title="Align the sliders"
                 body="Red line = top of tower. Blue line = base. Drag the sliders to match the photo; height updates automatically."
                 isSeen={isSeen(hints.sliders)}
@@ -551,6 +552,15 @@ export function TowerAnalysisPage() {
                 <p>
                   Saves the tower report to your active mission. Create a mission in
                   Air Force Report Form first.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-semibold">ForeFlight Content Pack</h3>
+                <p>
+                  Bulk-apply this mission’s saved tower locations to the route’s shared content pack
+                  on the <strong>ForeFlight Content Pack Update</strong> page during mission
+                  close-out. Next year’s survey crews download the latest pack from the
+                  <strong> Flight Plan</strong> page.
                 </p>
               </div>
             </div>

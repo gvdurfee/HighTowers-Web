@@ -4,6 +4,9 @@ node_modules
 # FAA MTR cache (downloaded NASR CSVs)
 .mtr-cache
 
+# Local Content Pack backend (SQLite + baseline ZIPs)
+/data/
+
 # Build output
 dist
 dist-ssr

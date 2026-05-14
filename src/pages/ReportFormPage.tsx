@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/schema'
 import type { MissionRecord, WaypointRecord } from '@/db/schema'
@@ -205,6 +205,12 @@ export function ReportFormPage() {
       loadTowerEntries(selectedMission)
     }
   }, [selectedMission?.id])
+
+  /** ForeFlight Content Pack (and other flows) update `mission.notes` without changing id — sync Additional Notes only. */
+  useEffect(() => {
+    if (!selectedMission) return
+    setAdditionalNotes(clampAdditionalNotesInput(missionNotesForForm(selectedMission)))
+  }, [selectedMission?.id, selectedMission?.notes])
 
   useEffect(() => {
     if (missions && missions.length > 0 && !selectedMissionId && !missionNumber && !mtrRoute) {
@@ -586,7 +592,12 @@ export function ReportFormPage() {
             />
           </div>
           <p className="text-sm text-gray-500 mb-4">
-            Document up to six towers. Leave any unused rows blank.
+            Document up to six towers. Leave any unused rows blank. To refresh ForeFlight user
+            waypoints while you save towers, use{' '}
+            <Link to="/tower-analysis" className="text-cap-ultramarine font-medium hover:underline">
+              Tower Data Analysis
+            </Link>{' '}
+            with a Content Pack ZIP loaded there.
           </p>
           <div className="space-y-6">
             {towerEntries.map((entry, i) => (
