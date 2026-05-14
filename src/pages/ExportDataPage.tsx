@@ -158,11 +158,22 @@ export function ExportDataPage() {
   return (
     <div className="app-page-shell overflow-auto">
       <div className="app-panel max-w-2xl mx-auto p-6 md:p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Export Data</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">Export Reported Data</h1>
       <p className="text-gray-600 mb-6">
         Generate and download the Air Force Route Survey Report PDF. Includes a mission map
         (route and towers) when Mapbox is configured. Tower photos use a CAP-style location
         overlay and are compressed to ~500KB each for email sharing.
+      </p>
+      <p className="text-sm text-gray-600 mb-6">
+        For next season’s aircrews, update ForeFlight Content Packs from the sidebar:{' '}
+        <button
+          type="button"
+          onClick={() => navigate('/foreflight-content-pack')}
+          className="text-cap-ultramarine font-medium underline hover:no-underline"
+        >
+          ForeFlight Content Pack Update
+        </button>
+        .
       </p>
 
       {!selectedMissionId && (missions ?? []).length > 0 && (

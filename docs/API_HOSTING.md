@@ -40,6 +40,7 @@ Set on the host (or `.env` next to `server/` for local):
 | **`CDSE_OAUTH_CLIENT_ID`** / **`CDSE_OAUTH_CLIENT_SECRET`** | Copernicus Data Space — required for `/api/recent-imagery`. |
 | **`PORT`** | Listen port (default **3001**). Platforms often inject their own; keep defaults compatible. |
 | **`MTR_CYCLE_DATE`** | Optional NASR cycle override if FAA index is blocked. |
+| **`CONTENT_PACK_API_KEY`** / **`CONTENT_PACK_DATA_DIR`** | Optional ForeFlight Content Pack library — see [CONTENT_PACK_API.md](./CONTENT_PACK_API.md). |
 
 If **`CORS_ORIGINS`** is unset, the server defaults to **localhost Vite/preview** only (safe default).
 

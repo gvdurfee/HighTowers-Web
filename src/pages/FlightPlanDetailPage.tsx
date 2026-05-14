@@ -22,6 +22,8 @@ function creationLoadMethodLabel(m: FlightPlanCreationLoadMethod): string {
 }
 import { G1000Service } from '@/services/g1000'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
+import { FlightPlanContentPackCard } from '@/components/FlightPlanContentPackCard'
+import { useHintsSeen } from '@/hooks/useHintsSeen'
 
 type LocationState = { skippedWaypoints?: string[]; message?: string } | null
 
@@ -44,6 +46,7 @@ export function FlightPlanDetailPage() {
     Record<string, { latDeg: string; latMin: string; lonDeg: string; lonMin: string }>
   >({})
   const [supplyingCode, setSupplyingCode] = useState<string | null>(null)
+  const { resetAll: resetAllHints } = useHintsSeen()
 
   useEffect(() => {
     if (!id) return
@@ -236,7 +239,15 @@ export function FlightPlanDetailPage() {
         >
           ← Back
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">{plan.name}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 flex-1 min-w-0">{plan.name}</h1>
+        <button
+          type="button"
+          onClick={resetAllHints}
+          className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 flex-shrink-0"
+          aria-label="Reset guided tour hints"
+        >
+          Reset hints
+        </button>
       </div>
 
       <div className="space-y-6">
@@ -284,8 +295,16 @@ export function FlightPlanDetailPage() {
           {displayList.length === 0 ? (
             <p className="text-gray-500 text-sm">No waypoints</p>
           ) : (
-            <ul className="space-y-2 max-h-96 overflow-y-auto">
-              {displayList.map((item, i) => (
+            <>
+              {/* Column headers illustrate the ForeFlight → G1000 name translation. */}
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500 pb-1.5 mb-1 border-b border-gray-200">
+                <span className="w-6" aria-hidden />
+                <span className="min-w-[5rem]">ForeFlight</span>
+                <span className="w-4" aria-hidden />
+                <span>G1000</span>
+              </div>
+              <ul className="space-y-2 max-h-96 overflow-y-auto">
+                {displayList.map((item, i) => (
                 <li
                   key={
                     item.type === 'waypoint'
@@ -297,16 +316,16 @@ export function FlightPlanDetailPage() {
                   <span className="text-gray-500 w-6">{i + 1}.</span>
                   {item.type === 'waypoint' ? (
                     <>
-                      <span>{item.waypoint.originalName}</span>
-                      <span className="text-gray-400">→</span>
+                      <span className="min-w-[5rem]">{item.waypoint.originalName}</span>
+                      <span className="text-gray-400 w-4 text-center">→</span>
                       <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
                         {item.waypoint.g1000Name}
                       </span>
                     </>
                   ) : (
                     <>
-                      <span>{item.pending.code}</span>
-                      <span className="text-gray-400">→</span>
+                      <span className="min-w-[5rem]">{item.pending.code}</span>
+                      <span className="text-gray-400 w-4 text-center">→</span>
                       <span className="px-2 py-0.5 bg-cap-pimento/30 text-cap-pimento rounded text-xs">
                         {convertWaypointNameToG1000(item.pending.code)}
                       </span>
@@ -381,9 +400,12 @@ export function FlightPlanDetailPage() {
                   )}
                 </li>
               ))}
-            </ul>
+              </ul>
+            </>
           )}
         </section>
+
+        <FlightPlanContentPackCard waypoints={waypoints} />
 
         <div className="flex gap-3">
           <button

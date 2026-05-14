@@ -16,6 +16,8 @@ import fetch from 'node-fetch'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { computeSquareBbox, fetchSentinel2TrueColorPng } from './sentinelHubImagery.js'
+import { createContentPacksRouter } from './routes/contentPacks.js'
+import { createAdminRouter } from './routes/admin.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '..', '.env') })
@@ -60,7 +62,13 @@ app.use(
   })
 )
 
-app.use(express.json({ limit: '2mb' }))
+app.use(express.json({ limit: '5mb' }))
+
+/** Wing Administrator PIN auth (independent of Content Pack API key). */
+app.use('/api/admin', createAdminRouter())
+
+/** ForeFlight Content Pack library (hybrid SQLite + baseline ZIP on disk). */
+app.use('/api/content-packs', createContentPacksRouter())
 const PORT = process.env.PORT ?? 3001
 
 const NASR_INDEX_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
@@ -248,11 +256,29 @@ function formatWaypoint(r, routeType, routeNumber) {
   }
 }
 
+const G1000_USER_WAYPOINT_ID_MAX_LEN = 6
+
+/** Same compact parsing as `parseWaypointCode` in web: IR|SR|VR + digits + optional hyphen + suffix. */
+function parseMtrWaypointCompact(upper) {
+  if (!/^(IR|SR|VR)/i.test(upper)) return null
+  const rest = upper.slice(2)
+  const m = rest.match(/^(\d+)(?:-)?([A-Z0-9]+)$/i)
+  if (!m) return null
+  return { routeNumber: m[1], waypointLetter: m[2].toUpperCase() }
+}
+
 function toG1000Name(original) {
-  const m = original.match(/^(IR|SR|VR)(\d+)-([A-Z0-9]+)$/i)
-  if (!m) return original.slice(0, 8).replace(/[^A-Z0-9]/gi, '')
-  const [, , num, suffix] = m
-  return (suffix + num).slice(0, 8)
+  const upper = String(original).trim().toUpperCase()
+  const mHyphen = upper.match(/^(IR|SR|VR)(\d+)-([A-Z0-9]+)$/i)
+  if (mHyphen) {
+    const [, , num, suffix] = mHyphen
+    return (suffix + num).slice(0, G1000_USER_WAYPOINT_ID_MAX_LEN)
+  }
+  const compact = parseMtrWaypointCompact(upper)
+  if (compact) {
+    return (compact.waypointLetter + compact.routeNumber).slice(0, G1000_USER_WAYPOINT_ID_MAX_LEN)
+  }
+  return upper.replace(/[^A-Z0-9]/gi, '').slice(0, G1000_USER_WAYPOINT_ID_MAX_LEN)
 }
 
 // In-memory cache: { effectiveDate, csvPath } to avoid re-downloading within same cycle

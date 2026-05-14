@@ -19,7 +19,9 @@ Use a **normal browser window** (not private) unless you intentionally want a co
 | A4 | **New Flight Plan** (`/flight-plans/new`) | Form loads; optional: type **`ir111`** in Name — see **IR** prefix behavior if that build includes it. |
 | A5 | **Air Force Report Form** (`/report-form`) | Form loads; mission picker works if missions exist. |
 | A6 | **Tower Analysis** (`/tower-analysis`) | Page loads; **Fly-Over Location** / image picker do **not** hard-crash. Map: needs **`VITE_MAPBOX_ACCESS_TOKEN`** in the Pages build (repo **secret**); if missing, you may see the Mapbox placeholder message — record that for training setup. |
-| A7 | **Export Data** (`/export`) | Page loads; PDF generation **may require** hosted API (**`vars.VITE_API_BASE_URL`**) + CORS for static Mapbox proxy — note failures for `docs/API_HOSTING.md`. |
+| A7 | **Export Reported Data** (`/export`) | Page loads; PDF generation **may require** hosted API (**`vars.VITE_API_BASE_URL`**) + CORS for static Mapbox proxy — note failures for `docs/API_HOSTING.md`. |
+| A7b | **ForeFlight Content Pack Update** (`/foreflight-content-pack`) | Page loads; mission picker; ZIP upload/preview and download; preview shows refine vs append counts (no “skip duplicate” only). |
+| A7c | **Tower Analysis + pack** (`/tower-analysis`) | With an active mission and image: optional ZIP loads without error; “Update user waypoints when I save a tower” appears; after a successful save with that checked, “Download updated Content Pack (.zip)” enables when the CSV changed; optional refine path: saved tower report `notes` includes the refinement sentence when a row within ~30 m was updated. |
 | A8 | **Deep link refresh** — open `/HighTowers-Web/report-form` (or another child route) and refresh. | **404.html** SPA fallback: app still loads (not GitHub 404 page). |
 | A9 | **Workflow guide** (`/workflow`) | Opens and reads correctly. |
 

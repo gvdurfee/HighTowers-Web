@@ -104,6 +104,18 @@ export interface MissionRecord {
   isCompleted: boolean
 }
 
+/** Cached server Content Pack list row for offline reference (optional). */
+export interface CachedServerContentPackRecord {
+  id: string
+  name: string
+  currentRevision: number
+  updatedAt: string
+  csvMemberPath: string
+  cachedAt: string
+  /** `GET /api/content-packs/:id?include=waypoints` JSON stringified, for offline read. */
+  detailJson?: string
+}
+
 export class HighTowersDB extends Dexie {
   airports!: Table<AirportRecord, string>
   waypoints!: Table<WaypointRecord, string>
@@ -112,6 +124,7 @@ export class HighTowersDB extends Dexie {
   cameraData!: Table<CameraDataRecord, string>
   towerReports!: Table<TowerReportRecord, string>
   missions!: Table<MissionRecord, string>
+  cachedServerContentPacks!: Table<CachedServerContentPackRecord, string>
 
   constructor() {
     super('HighTowersDB')
@@ -123,6 +136,16 @@ export class HighTowersDB extends Dexie {
       cameraData: 'id',
       towerReports: 'id, missionId',
       missions: 'id',
+    })
+    this.version(2).stores({
+      airports: 'id',
+      waypoints: 'id, flightPlanId',
+      flightPlans: 'id',
+      towerLocations: 'id',
+      cameraData: 'id',
+      towerReports: 'id, missionId',
+      missions: 'id',
+      cachedServerContentPacks: 'id, cachedAt',
     })
   }
 }
