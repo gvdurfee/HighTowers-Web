@@ -12,7 +12,11 @@ type DetailView =
   | 'foreflight-content-pack'
   | 'new-flight-plan'
 
-const NM_WING_LOGO_SRC = '/nm-wing-logo.png'
+const baseUrl = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`
+/** Public folder asset; must include Vite base (e.g. /HighTowers-Web/ on GitHub Pages). */
+const NM_WING_LOGO_SRC = `${baseUrl}nm-wing-logo.png`
 
 const routeMap: Record<DetailView, string> = {
   workflow: '/workflow',
