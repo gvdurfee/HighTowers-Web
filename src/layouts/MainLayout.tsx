@@ -12,6 +12,8 @@ type DetailView =
   | 'foreflight-content-pack'
   | 'new-flight-plan'
 
+const NM_WING_LOGO_SRC = '/nm-wing-logo.png'
+
 const routeMap: Record<DetailView, string> = {
   workflow: '/workflow',
   'flight-plans': '/flight-plans',
@@ -58,16 +60,27 @@ export function MainLayout() {
           sidebarCollapsed ? 'w-14' : 'w-64'
         }`}
       >
-        <div className="flex items-center justify-between h-14 px-3 border-b border-white/10 shrink-0">
-          {!sidebarCollapsed && (
-            <h1 className="text-lg font-bold text-white tracking-tight">
-              High<span className="text-cap-yellow">Towers</span>
-            </h1>
+        <div className="flex items-center justify-between h-14 px-3 border-b border-white/10 shrink-0 gap-2">
+          {!sidebarCollapsed ? (
+            <>
+              <h1 className="text-lg font-bold text-white tracking-tight shrink-0">
+                High<span className="text-cap-yellow">Towers</span>
+              </h1>
+              <div className="flex flex-1 items-center justify-center min-w-0 px-1">
+                <img
+                  src={NM_WING_LOGO_SRC}
+                  alt="New Mexico Wing, Civil Air Patrol"
+                  className="h-9 w-auto max-w-[4.5rem] object-contain"
+                />
+              </div>
+            </>
+          ) : (
+            <span className="flex-1" aria-hidden />
           )}
           <button
             type="button"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-2 rounded-md text-white/90 hover:bg-white/10"
+            className="p-2 rounded-md text-white/90 hover:bg-white/10 shrink-0"
             aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             <span aria-hidden>{sidebarCollapsed ? '→' : '←'}</span>
@@ -177,6 +190,15 @@ export function MainLayout() {
             </li>
           </ul>
         </nav>
+        {sidebarCollapsed && (
+          <div className="shrink-0 border-t border-white/10 px-1 py-2 flex justify-center">
+            <img
+              src={NM_WING_LOGO_SRC}
+              alt="New Mexico Wing, Civil Air Patrol"
+              className="w-11 h-auto object-contain"
+            />
+          </div>
+        )}
       </aside>
       {/* Main content */}
       <main className="flex-1 flex flex-col min-h-0 overflow-auto bg-cap-ultramarine">
