@@ -11,6 +11,20 @@ const HINT_SURVEY_G1000 = 'surveyMap.g1000Context'
 const HINT_SURVEY_COORDS = 'surveyMap.coordinates'
 const HINT_SURVEY_OVERLAY = 'surveyMap.overlayPatch'
 
+const FLOATING_PANEL_WIDTH_PX = 480
+const FLOATING_MAP_HEIGHT_PX = 300
+const PANEL_MARGIN_PX = 12
+const DEFAULT_PANEL_POS = { x: PANEL_MARGIN_PX, y: 72 }
+
+function clampPanelPosition(x: number, y: number, panelWidth: number, panelHeight: number) {
+  const maxX = Math.max(PANEL_MARGIN_PX, window.innerWidth - panelWidth - PANEL_MARGIN_PX)
+  const maxY = Math.max(PANEL_MARGIN_PX, window.innerHeight - panelHeight - PANEL_MARGIN_PX)
+  return {
+    x: Math.min(Math.max(PANEL_MARGIN_PX, x), maxX),
+    y: Math.min(Math.max(PANEL_MARGIN_PX, y), maxY),
+  }
+}
+
 /** Convert decimal degrees to DMS components (DD, MM.mm, N/S or E/W) */
 function toDms(decimal: number, isLat: boolean): { deg: number; min: number; hem: 'N' | 'S' | 'E' | 'W' } {
   const abs = Math.abs(decimal)
@@ -79,6 +93,16 @@ export function SurveyMapModal({
   const lonDegRef = useRef<HTMLInputElement>(null)
   const lonMinRef = useRef<HTMLInputElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
+  const dragHandleRef = useRef<HTMLDivElement>(null)
+  const [panelPos, setPanelPos] = useState(DEFAULT_PANEL_POS)
+  const dragStateRef = useRef<{
+    active: boolean
+    pointerId: number
+    startX: number
+    startY: number
+    originX: number
+    originY: number
+  } | null>(null)
   const latHemRef = useRef<HTMLSelectElement>(null)
   const lonHemRef = useRef<HTMLSelectElement>(null)
   const backBtnRef = useRef<HTMLButtonElement>(null)
@@ -168,6 +192,21 @@ export function SurveyMapModal({
     zoom: 16,
   })
 
+  const clampPanelToViewport = useCallback(() => {
+    const el = modalRef.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    setPanelPos((prev) => clampPanelPosition(prev.x, prev.y, width, height))
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen) return
+    setPanelPos(DEFAULT_PANEL_POS)
+    const onResize = () => clampPanelToViewport()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [isOpen, clampPanelToViewport])
+
   useEffect(() => {
     if (isOpen) {
       setCoordWarning(null)
@@ -194,6 +233,52 @@ export function SurveyMapModal({
       return () => clearTimeout(t)
     }
   }, [initialLat, initialLon, isOpen, revokeOverlayBlob])
+
+  useEffect(() => {
+    if (isOpen) {
+      const t = requestAnimationFrame(() => clampPanelToViewport())
+      return () => cancelAnimationFrame(t)
+    }
+  }, [isOpen, mapReady, clampPanelToViewport])
+
+  const handleDragPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return
+      dragStateRef.current = {
+        active: true,
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        originX: panelPos.x,
+        originY: panelPos.y,
+      }
+      e.currentTarget.setPointerCapture(e.pointerId)
+    },
+    [panelPos.x, panelPos.y]
+  )
+
+  const handleDragPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragStateRef.current
+      if (!drag?.active || drag.pointerId !== e.pointerId) return
+      const el = modalRef.current
+      const w = el?.offsetWidth ?? FLOATING_PANEL_WIDTH_PX
+      const h = el?.offsetHeight ?? 600
+      const dx = e.clientX - drag.startX
+      const dy = e.clientY - drag.startY
+      setPanelPos(clampPanelPosition(drag.originX + dx, drag.originY + dy, w, h))
+    },
+    []
+  )
+
+  const handleDragPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragStateRef.current
+    if (!drag?.active || drag.pointerId !== e.pointerId) return
+    dragStateRef.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }, [])
 
   useEffect(() => {
     if (isOpen && modalRef.current) {
@@ -260,10 +345,7 @@ export function SurveyMapModal({
       }
       setImageryOverlay(result)
     } catch (e) {
-      let msg = e instanceof Error ? e.message : 'Failed to load overlay'
-      if (msg.includes('CDSE_OAUTH_CLIENT')) {
-        msg += ` Add both variables to HighTowers-Web/.env (project root), then restart npm run dev:all so the server reloads them. See server/README.md.`
-      }
+      const msg = e instanceof Error ? e.message : 'Failed to load overlay'
       setOverlayError(msg)
     } finally {
       setOverlayLoading(false)
@@ -300,8 +382,11 @@ export function SurveyMapModal({
   const token = apiConfig.mapboxAccessToken
   if (!isMapboxConfigured()) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl p-6 max-w-md space-y-3">
+      <div className="fixed inset-0 z-[60] pointer-events-none">
+        <div
+          className="pointer-events-auto fixed bg-white rounded-xl p-6 max-w-md space-y-3 shadow-2xl border border-gray-200"
+          style={{ left: panelPos.x, top: panelPos.y, width: 'min(420px, calc(100vw - 24px))' }}
+        >
           <p className="text-cap-pimento font-medium">Mapbox access token missing or still set to the placeholder.</p>
           <p className="text-sm text-gray-700">
             Add a real token from{' '}
@@ -325,16 +410,38 @@ export function SurveyMapModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 z-[60] pointer-events-none">
       <div
         ref={modalRef}
         role="dialog"
-        aria-modal="true"
+        aria-modal="false"
         aria-labelledby="fly-over-location-title"
-        className="bg-white rounded-xl flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden"
+        className="pointer-events-auto fixed flex flex-col bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden max-h-[calc(100vh-24px)]"
+        style={{
+          left: panelPos.x,
+          top: panelPos.y,
+          width: `min(${FLOATING_PANEL_WIDTH_PX}px, calc(100vw - ${PANEL_MARGIN_PX * 2}px))`,
+        }}
         onKeyDown={handleKeyDown}
       >
-        <div className="flex items-center justify-between gap-2 p-4 border-b">
+        <div
+          ref={dragHandleRef}
+          role="toolbar"
+          aria-label="Drag to reposition map panel"
+          className="flex items-center gap-2 px-3 py-2 border-b bg-gray-50 cursor-grab active:cursor-grabbing select-none touch-none shrink-0"
+          onPointerDown={handleDragPointerDown}
+          onPointerMove={handleDragPointerMove}
+          onPointerUp={handleDragPointerEnd}
+          onPointerCancel={handleDragPointerEnd}
+        >
+          <svg className="h-4 w-4 shrink-0 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+            <path d="M7 4a1 1 0 110-2 1 1 0 010 2zm6 0a1 1 0 110-2 1 1 0 010 2zM7 11a1 1 0 110-2 1 1 0 010 2zm6 0a1 1 0 110-2 1 1 0 010 2zM7 18a1 1 0 110-2 1 1 0 010 2zm6 0a1 1 0 110-2 1 1 0 010 2z" />
+          </svg>
+          <span className="text-xs text-gray-600">
+            Drag here to move — tower photo stays visible underneath
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2 p-3 border-b shrink-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-2 min-w-0 flex-1">
             <button
               ref={backBtnRef}
@@ -379,8 +486,9 @@ export function SurveyMapModal({
             ✕
           </button>
         </div>
-        <p className="text-sm text-gray-600 px-4 pb-2">
+        <p className="text-sm text-gray-600 px-3 pb-2 shrink-0">
           Pan and zoom the map so the center crosshair is over the tower base, or enter coordinates below.
+          Move this panel aside to compare with the tower photo.
         </p>
         {showCoordVerifyBanner && (
           <div
@@ -405,8 +513,8 @@ export function SurveyMapModal({
           <GuidedHint
             hintId={HINT_SURVEY_OVERLAY}
             stepNumber={3}
-            title="Recent map patch overlay"
-            body="This adds a semi-transparent patch of alternate recent imagery on top of the basemap. Use it when the tower is missing or hard to identify in the default Mapbox view, then pan and zoom as usual."
+            title="NAIP map patch overlay"
+            body="This adds a semi-transparent patch of USDA NAIP aerial imagery (~60 cm) on top of the basemap. Use it when the tower is missing or hard to identify in the default Mapbox view, then pan and zoom as usual."
             isSeen={isSeen(HINT_SURVEY_OVERLAY)}
             onDismiss={markSeen}
             surface="light"
@@ -417,9 +525,9 @@ export function SurveyMapModal({
             onClick={handleLoadImageryOverlay}
             disabled={overlayLoading}
             className="text-sm px-3 py-1.5 border border-cap-ultramarine text-cap-ultramarine rounded-lg hover:bg-cap-ultramarine/10 disabled:opacity-50"
-            aria-label="Overlay recent map patch for this area"
+            aria-label="Overlay NAIP aerial patch for this area"
           >
-            {overlayLoading ? 'Loading patch…' : 'Overlay recent map patch'}
+            {overlayLoading ? 'Loading patch…' : 'Overlay NAIP map patch'}
           </button>
           {imageryOverlay && (
             <button
@@ -438,9 +546,10 @@ export function SurveyMapModal({
         )}
         {imageryOverlay && (
           <p className="text-xs text-gray-500 px-4 pb-1">
-            Sentinel-2 is ~10&nbsp;m resolution (often softer than Mapbox). Overlay is visual only; Record
-            Location still uses the map center (crosshair). Use <strong>Remove overlay</strong> for the
-            sharpest Mapbox view.
+            {imageryOverlay.attribution}
+            {imageryOverlay.vintage ? ` (approx. ${imageryOverlay.vintage} acquisition).` : '.'} NAIP is
+            ~60&nbsp;cm aerial imagery (CONUS, ~3-year refresh by area). Overlay is visual only; Record
+            Location still uses the map center (crosshair).
           </p>
         )}
         {mapError && (
@@ -449,8 +558,8 @@ export function SurveyMapModal({
           </p>
         )}
         <div
-          className="relative w-full overflow-hidden"
-          style={{ height: 400 }}
+          className="relative z-0 w-full overflow-hidden shrink-0 isolate"
+          style={{ height: FLOATING_MAP_HEIGHT_PX }}
           tabIndex={-1}
         >
           {mapReady && (
@@ -510,7 +619,7 @@ export function SurveyMapModal({
           </div>
         </div>
         <form
-          className="p-4 border-t space-y-3 text-gray-900"
+          className="relative z-10 p-3 border-t space-y-3 text-gray-900 overflow-y-auto min-h-0"
           onSubmit={(e) => {
             e.preventDefault()
             if (validateAndWarn()) handleRecord()

@@ -15,18 +15,17 @@ import { parse } from 'csv-parse'
 import fetch from 'node-fetch'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { computeSquareBbox, fetchSentinel2TrueColorPng } from './sentinelHubImagery.js'
+import {
+  computeSquareBbox,
+  fetchNaipOrthoPng,
+  fetchNaipVintageLabel,
+  NAIP_ATTRIBUTION,
+} from './naipImagery.js'
 import { createContentPacksRouter } from './routes/contentPacks.js'
 import { createAdminRouter } from './routes/admin.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '..', '.env') })
-
-if (!process.env.CDSE_OAUTH_CLIENT_ID?.trim() || !process.env.CDSE_OAUTH_CLIENT_SECRET?.trim()) {
-  console.warn(
-    '[server] CDSE_OAUTH_CLIENT_ID / CDSE_OAUTH_CLIENT_SECRET not set — "Load recent imagery overlay" will fail until you add them to HighTowers-Web/.env and restart. See server/README.md'
-  )
-}
 
 const app = express()
 
@@ -59,6 +58,7 @@ app.use(
       if (allowed.includes(origin)) return callback(null, true)
       callback(null, false)
     },
+    exposedHeaders: ['X-Imagery-Source', 'X-Imagery-Attribution', 'X-Imagery-Vintage'],
   })
 )
 
@@ -403,7 +403,7 @@ app.post('/api/mapbox-static', async (req, res) => {
   }
 })
 
-// Recent Sentinel-2 imagery (Copernicus Data Space / Sentinel Hub Process API)
+// USDA NAIP ortho patch for Survey Location map overlay
 // @see ../docs/IMAGERY_OVERLAY_IMPLEMENTATION.md
 app.get('/api/recent-imagery', async (req, res) => {
   const lat = Number(req.query.lat)
@@ -421,24 +421,25 @@ app.get('/api/recent-imagery', async (req, res) => {
     return
   }
 
+  const outW = Number.isFinite(width) ? Math.min(1024, Math.max(256, width)) : 1024
+  const outH = Number.isFinite(height) ? Math.min(1024, Math.max(256, height)) : 1024
+
   try {
     const bbox = computeSquareBbox(lat, lon, halfMiles)
-    const png = await fetchSentinel2TrueColorPng(bbox, {
-      width: Number.isFinite(width) ? Math.min(1024, Math.max(256, width)) : 1024,
-      height: Number.isFinite(height) ? Math.min(1024, Math.max(256, height)) : 1024,
-    })
+    const [png, vintage] = await Promise.all([
+      fetchNaipOrthoPng(bbox, { width: outW, height: outH }),
+      fetchNaipVintageLabel(lat, lon),
+    ])
     res.setHeader('Content-Type', 'image/png')
     res.setHeader('Cache-Control', 'private, max-age=3600')
+    res.setHeader('X-Imagery-Source', 'NAIP')
+    res.setHeader('X-Imagery-Attribution', NAIP_ATTRIBUTION)
+    if (vintage) {
+      res.setHeader('X-Imagery-Vintage', vintage)
+    }
     res.send(png)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    if (msg.includes('CDSE_OAUTH_CLIENT_ID')) {
-      res.status(503).json({
-        error: msg,
-        doc: 'server/README.md (Copernicus OAuth)',
-      })
-      return
-    }
     console.error('recent-imagery error:', msg)
     res.status(502).json({
       error: msg,

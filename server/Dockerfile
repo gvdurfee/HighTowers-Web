@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY index.js sentinelHubImagery.js ./
+COPY index.js imageryBbox.js naipImagery.js ./
 
 ENV NODE_ENV=production
 EXPOSE 3001

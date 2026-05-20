@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
@@ -6,7 +7,11 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import type { CSSProperties, ReactNode } from 'react'
+
+const POPOVER_WIDTH_PX = 288
+const POPOVER_Z_INDEX = 200
 
 type GuidedHintProps = {
   hintId: string
@@ -73,8 +78,7 @@ export function GuidedHint({
   footerBoldNote,
 }: GuidedHintProps) {
   const [open, setOpen] = useState(false)
-  const [alignRight, setAlignRight] = useState(false)
-  const [openAbove, setOpenAbove] = useState(false)
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({})
   const buttonRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const headingId = useId()
@@ -94,25 +98,55 @@ export function GuidedHint({
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [open])
 
-  useLayoutEffect(() => {
-    if (!open) {
-      setOpenAbove(false)
-      return
-    }
+  const updatePopoverPosition = useCallback(() => {
     const btn = buttonRef.current
     if (!btn) return
     const r = btn.getBoundingClientRect()
-    // If the button is near the right edge, right-align the popover so it stays on-screen.
-    setAlignRight(window.innerWidth - r.right < 320)
-    // Prefer opening above when the trigger is low on the viewport (avoids clipping).
-    const estPopoverH = 280
     const margin = 10
+    const alignRight = window.innerWidth - r.right < POPOVER_WIDTH_PX + margin
+    let left = alignRight ? r.right - POPOVER_WIDTH_PX : r.left
+    left = Math.max(margin, Math.min(left, window.innerWidth - POPOVER_WIDTH_PX - margin))
+
+    const popoverH = popoverRef.current?.offsetHeight ?? 280
     const spaceBelow = window.innerHeight - r.bottom - margin
     const spaceAbove = r.top - margin
-    setOpenAbove(
-      spaceBelow < estPopoverH && spaceAbove > spaceBelow && spaceAbove >= estPopoverH * 0.85
-    )
-  }, [open])
+    const openAbove =
+      spaceBelow < popoverH && spaceAbove > spaceBelow && spaceAbove >= popoverH * 0.85
+
+    const base: CSSProperties = {
+      position: 'fixed',
+      zIndex: POPOVER_Z_INDEX,
+      left,
+      width: POPOVER_WIDTH_PX,
+      maxHeight: 'min(22rem, calc(100vh - 1.5rem))',
+    }
+
+    if (openAbove) {
+      setPopoverStyle({
+        ...base,
+        bottom: window.innerHeight - r.top + margin,
+      })
+    } else {
+      setPopoverStyle({
+        ...base,
+        top: r.bottom + margin,
+      })
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    updatePopoverPosition()
+    const raf = requestAnimationFrame(() => updatePopoverPosition())
+    const onReflow = () => updatePopoverPosition()
+    window.addEventListener('resize', onReflow)
+    window.addEventListener('scroll', onReflow, true)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', onReflow)
+      window.removeEventListener('scroll', onReflow, true)
+    }
+  }, [open, updatePopoverPosition, title, body, footerText])
 
   const showNumber = !isSeen
 
@@ -144,64 +178,65 @@ export function GuidedHint({
         <span className="sr-only">Open tip: {title}</span>
       </button>
 
-      {open && (
-        <div
-          ref={popoverRef}
-          id={`${hintId}-popover`}
-          role="dialog"
-          aria-modal="false"
-          aria-labelledby={headingId}
-          aria-describedby={describedBy}
-          className={`absolute z-50 w-72 max-h-[min(22rem,calc(100vh-1.5rem))] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 text-left text-gray-900 shadow-xl ${
-            openAbove ? 'bottom-full mb-2' : 'top-full mt-2'
-          } ${alignRight ? 'right-0' : 'left-0'}`}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div id={headingId} className="font-semibold text-gray-900">
-                {title}
+      {open &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            id={`${hintId}-popover`}
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby={headingId}
+            aria-describedby={describedBy}
+            style={popoverStyle}
+            className="overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 text-left text-gray-900 shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div id={headingId} className="font-semibold text-gray-900">
+                  {title}
+                </div>
+                <div id={descId} className="mt-1 text-sm text-gray-700">
+                  {body}
+                </div>
               </div>
-              <div id={descId} className="mt-1 text-sm text-gray-700">
-                {body}
-              </div>
+              <button
+                type="button"
+                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                aria-label="Close tip"
+                onClick={() => setOpen(false)}
+              >
+                ✕
+              </button>
             </div>
-            <button
-              type="button"
-              className="rounded p-1 text-gray-500 hover:bg-gray-100"
-              aria-label="Close tip"
-              onClick={() => setOpen(false)}
-            >
-              ✕
-            </button>
-          </div>
 
-          {footerText ? (
-            <p id={footerNoteId} className="mt-3 text-sm font-bold text-gray-900">
-              {footerText}
-            </p>
-          ) : null}
+            {footerText ? (
+              <p id={footerNoteId} className="mt-3 text-sm font-bold text-gray-900">
+                {footerText}
+              </p>
+            ) : null}
 
-          <div className="mt-3 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-900 hover:bg-gray-50"
-              onClick={() => setOpen(false)}
-            >
-              Not now
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1.5 text-sm rounded-lg bg-cap-ultramarine text-white font-medium hover:bg-cap-ultramarine/90"
-              onClick={() => {
-                onDismiss(hintId)
-                setOpen(false)
-              }}
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-900 hover:bg-gray-50"
+                onClick={() => setOpen(false)}
+              >
+                Not now
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1.5 text-sm rounded-lg bg-cap-ultramarine text-white font-medium hover:bg-cap-ultramarine/90"
+                onClick={() => {
+                  onDismiss(hintId)
+                  setOpen(false)
+                }}
+              >
+                Got it
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
     </span>
   )
 }

@@ -29,25 +29,16 @@ npm run dev:all       # Backend + Vite (proxy /api -> 3001)
 
 The server loads **`../.env`** from the HighTowers-Web root (via `dotenv`), so you can keep Mapbox and Copernicus variables in one file.
 
-### Copernicus Data Space (recent Sentinel-2 overlay)
+### NAIP overlay (Survey Location map patch)
 
-Used by **`GET /api/recent-imagery`** (Survey Location map in the app). Requires an OAuth **client** from your Copernicus account:
+Used by **`GET /api/recent-imagery`** (Survey Location → **Overlay NAIP map patch**). Fetches **USDA NAIP** orthoimagery from public ArcGIS ImageServer endpoints. **No API keys** or `.env` variables are required.
 
-1. Open [Copernicus Data Space Dashboard](https://shapps.dataspace.copernicus.eu/dashboard/#/account/settings) → **User Settings** → **OAuth clients** → **Create**.
-2. Copy **Client ID** and **Client secret** (secret is shown once).
-3. Add to **`HighTowers-Web/.env`** (same folder as `VITE_*` vars):
+Imagery is **~60 cm** resolution in CONUS (program refresh is roughly **every 3 years** per area). The server returns attribution headers; the UI shows **Imagery © USDA Farm Service Agency (NAIP); distributed by USGS**.
 
-```env
-CDSE_OAUTH_CLIENT_ID=your_client_id
-CDSE_OAUTH_CLIENT_SECRET=your_client_secret
-```
-
-Restart `npm run server` or `npm run dev:all`. Without these variables, the endpoint returns **503** with a short explanation.
-
-Imagery is **Sentinel-2 L2A** true-color (RGB), **~10 m** resolution; mosaicking prefers **least cloudy** scenes in the last ~150 days.
+Requires outbound HTTPS from the Node server to `naip.imagery1.arcgis.com` and/or `gis.apfo.usda.gov`.
 
 ## Endpoints
 
 - `GET /api/mtr/cycle` — Current NASR effective date
 - `GET /api/mtr/waypoints?routeType=IR&routeNumber=111&entry=A&exit=Q` — Waypoints for a route segment
-- `GET /api/recent-imagery?lat=&lon=&halfMiles=0.5` — PNG patch (~1 mi square by default) for overlay; requires `CDSE_OAUTH_*` (see above). Optional: `w`, `h` (256–1024) output dimensions (default **1024** for sharper on-screen sampling; Sentinel-2 remains ~10&nbsp;m on the ground).
+- `GET /api/recent-imagery?lat=&lon=&halfMiles=0.5` — NAIP ortho patch (~1 mi square by default). Optional: `w`, `h` (256–1024, default **1024**). Response headers: `X-Imagery-Attribution`, optional `X-Imagery-Vintage`.

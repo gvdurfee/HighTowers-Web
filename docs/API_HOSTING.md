@@ -37,7 +37,7 @@ Set on the host (or `.env` next to `server/` for local):
 |----------|---------|
 | **`CORS_ORIGINS`** | Comma-separated list of **exact** browser origins allowed to call the API. Include your Pages site, e.g. `https://youruser.github.io`. For a project Page the origin is still `https://youruser.github.io` (path does not appear in `Origin`). Add localhost for local dev if you ever call the deployed API from a local Vite dev server. |
 | **`VITE_MAPBOX_ACCESS_TOKEN`** or **`MAPBOX_ACCESS_TOKEN`** | Mapbox token for `/api/mapbox-static`. |
-| **`CDSE_OAUTH_CLIENT_ID`** / **`CDSE_OAUTH_CLIENT_SECRET`** | Copernicus Data Space — required for `/api/recent-imagery`. |
+| *(none for NAIP)* | `/api/recent-imagery` uses public USDA NAIP ImageServer (outbound HTTPS only). |
 | **`PORT`** | Listen port (default **3001**). Platforms often inject their own; keep defaults compatible. |
 | **`MTR_CYCLE_DATE`** | Optional NASR cycle override if FAA index is blocked. |
 | **`CONTENT_PACK_API_KEY`** / **`CONTENT_PACK_DATA_DIR`** | Optional ForeFlight Content Pack library — see [CONTENT_PACK_API.md](./CONTENT_PACK_API.md). |
@@ -48,7 +48,7 @@ If **`CORS_ORIGINS`** is unset, the server defaults to **localhost Vite/preview*
 
 1. Install the [Fly CLI](https://fly.io/docs/hands-on/install-flyctl/) and run `fly launch` from **`HighTowers-Web/server/`** (or set Dockerfile path to this `Dockerfile`).
 2. Map **internal port 3001** to public HTTPS.
-3. Set secrets: `fly secrets set CORS_ORIGINS=https://youruser.github.io VITE_MAPBOX_ACCESS_TOKEN=...` (and CDSE vars if needed).
+3. Set secrets: `fly secrets set CORS_ORIGINS=https://youruser.github.io VITE_MAPBOX_ACCESS_TOKEN=...`
 4. Put the public app URL (e.g. `https://hightowers-api.fly.dev`) in **`VITE_API_BASE_URL`** for the Pages build.
 
 ## Render (example)

@@ -106,7 +106,8 @@ export function FlightPlanLoadMethodHelpModal({
             <strong>ForeFlight</strong> by tapping a waypoint in the flight plan and copying the
             lat/long from the popup. Put{' '}
             <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> files in the{' '}
-            <strong>root</strong> of a FAT32 SD card for G1000 import (see your avionics docs).
+            <strong>root</strong> of a FAT32 SD card for G1000 import (see your avionics docs)
+            EJECT the card before removing from card reader to avoid file corruption.
           </p>
         </div>
         <button

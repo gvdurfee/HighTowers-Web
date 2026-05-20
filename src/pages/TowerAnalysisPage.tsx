@@ -534,10 +534,11 @@ export function TowerAnalysisPage() {
                 <h3 className="font-semibold">Look for Tower on Map</h3>
                 <p>
                   Pan the map so the crosshair is on the tower base (or best position), then
-                  record to fetch ground elevation. If the photo has no GPS, the map supplies the
-                  tower coordinates for the survey form. If the tower cannot be seen on the map,
-                  use the checkbox before recording — MSL/AGL will read “See Notes” with an
-                  explanation and bearing/distance from the route.
+                  record to fetch ground elevation. Drag the map panel by its top grip bar to move
+                  it aside and keep the tower photo visible for reference. If the photo has no GPS,
+                  the map supplies the tower coordinates for the survey form. If the tower cannot
+                  be seen on the map, use the checkbox before recording — MSL/AGL will read “See
+                  Notes” with an explanation and bearing/distance from the route.
                 </p>
               </div>
               <div>
