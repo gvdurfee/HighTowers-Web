@@ -132,7 +132,11 @@ export function AdminContentPacksPage() {
       if (err instanceof AdminAuthHttpError) {
         let msg = err.message
         if (err.status === 503) {
-          msg = 'Wing administrator is not configured on this server.'
+          msg =
+            'Wing administrator is not configured on this server. Set CONTENT_PACK_ADMIN_PIN in HighTowers-Web/.env, then restart npm run dev:all (or the API process).'
+        } else if (err.status === 401) {
+          msg =
+            `${err.message} The PIN must match CONTENT_PACK_ADMIN_PIN in HighTowers-Web/.env exactly (check length and typos). After changing .env, restart the server. See the server terminal for “[admin] Wing administrator configured” and PIN length(s).`
         } else if (err.status === 429 && err.retryAfterSec != null) {
           msg = `${err.message} Retry after ${err.retryAfterSec}s.`
         }

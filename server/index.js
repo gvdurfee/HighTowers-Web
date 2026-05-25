@@ -23,6 +23,7 @@ import {
 } from './naipImagery.js'
 import { createContentPacksRouter } from './routes/contentPacks.js'
 import { createAdminRouter } from './routes/admin.js'
+import { logAdminConfigStatus } from './lib/adminAuth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '..', '.env') })
@@ -450,4 +451,5 @@ app.get('/api/recent-imagery', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`FAA MTR backend listening on port ${PORT}`)
+  logAdminConfigStatus()
 })

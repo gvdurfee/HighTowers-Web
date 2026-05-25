@@ -73,8 +73,13 @@ function loadAdmins() {
             wing: typeof r.wing === 'string' ? r.wing : null,
           })
         }
-        _admins = rows
-        return _admins
+        if (rows.length > 0) {
+          _admins = rows
+          return _admins
+        }
+        console.warn(
+          '[admin] CONTENT_PACK_ADMIN_PINS is an empty array; falling back to CONTENT_PACK_ADMIN_PIN if set.'
+        )
       }
     } catch (e) {
       console.error('[admin] CONTENT_PACK_ADMIN_PINS is not valid JSON; ignoring.', e?.message)
@@ -83,6 +88,31 @@ function loadAdmins() {
   const single = process.env.CONTENT_PACK_ADMIN_PIN?.trim()
   _admins = single ? [{ pin: single, name: null, wing: null }] : []
   return _admins
+}
+
+/** Log PIN lengths (not values) so operators can confirm .env loaded after restart. */
+export function logAdminConfigStatus() {
+  const admins = loadAdmins()
+  if (admins.length === 0) {
+    console.warn(
+      '[admin] Wing administrator not configured. Set CONTENT_PACK_ADMIN_PIN in HighTowers-Web/.env and restart the server. Admin sign-in will return 503.'
+    )
+    return
+  }
+  const lengths = admins.map((a) => a.pin.length).join(', ')
+  const names = admins
+    .map((a) => (a.name ? a.name : 'admin'))
+    .join(', ')
+  console.log(
+    `[admin] Wing administrator configured: ${admins.length} PIN(s), length(s) ${lengths} character(s) [${names}].`
+  )
+}
+
+function pinsMatch(candidate, stored) {
+  const c = String(candidate).trim()
+  const s = String(stored).trim()
+  if (!c || !s) return false
+  return timingSafeEqualStrings(c, s)
 }
 
 export function isAdminConfigured() {
@@ -284,7 +314,7 @@ export function adminLoginHandler(req, res) {
     return
   }
   const admins = loadAdmins()
-  const match = admins.find((a) => timingSafeEqualStrings(a.pin, pin))
+  const match = admins.find((a) => pinsMatch(pin, a.pin))
   if (!match) {
     recordFailure(ip)
     const state = getRateRecord(ip)
