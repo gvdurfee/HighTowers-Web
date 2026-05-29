@@ -62,9 +62,22 @@ function resStatusFallback(status: number): string {
   return `HTTP ${status}`
 }
 
+const HOSTED_API_HELP =
+  'GitHub Pages serves only the static web app. Deploy the Node server (see docs/API_HOSTING.md), set the GitHub repository variable VITE_API_BASE_URL to that API origin (no path), redeploy Pages, and set CONTENT_PACK_ADMIN_PIN on the server.'
+
 /** Proxy/backend down in local dev often surfaces as 5xx with an empty or generic body. */
 function failMessage(status: number, body: string): string {
   const m = body.trim() || resStatusFallback(status)
+  if (
+    m.includes('Cannot POST /api') ||
+    m.includes('Cannot GET /api') ||
+    (m.includes('<!DOCTYPE') && m.includes('/api/'))
+  ) {
+    return HOSTED_API_HELP
+  }
+  if (status === 404 && m.includes('<!DOCTYPE')) {
+    return HOSTED_API_HELP
+  }
   if (status >= 500 && status <= 504) {
     const generic =
       m === 'Internal Server Error' || /^HTTP \d{3}$/.test(m) || m === resStatusFallback(status)

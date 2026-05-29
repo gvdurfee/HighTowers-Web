@@ -23,6 +23,28 @@ import {
 import { GuidedHint } from '@/components/GuidedHint'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 
+const LOCAL_ZIP_SESSION_KEY_PREFIX = 'contentPack.localZipName.'
+
+function localZipSessionKey(missionId: string): string {
+  return `${LOCAL_ZIP_SESSION_KEY_PREFIX}${missionId}`
+}
+
+function rememberLocalZipFileName(missionId: string, name: string): void {
+  try {
+    sessionStorage.setItem(localZipSessionKey(missionId), name)
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function recalledLocalZipFileName(missionId: string): string | null {
+  try {
+    return sessionStorage.getItem(localZipSessionKey(missionId))
+  } catch {
+    return null
+  }
+}
+
 function looksLikeListAuthFailure(message: string): boolean {
   const m = message.toLowerCase()
   return (
@@ -292,6 +314,7 @@ export function ContentPackUpdater({ selectedMission }: Props) {
       await mergeRefinementNotesIntoMission(p)
       setPreview(p)
       setZipFile(file)
+      rememberLocalZipFileName(selectedMission.id, file.name)
     } catch (e) {
       let msg = e instanceof Error ? e.message : 'Failed to read Content Pack zip'
       if (/allocation|Array buffer|out of memory/i.test(msg)) {
@@ -478,6 +501,7 @@ export function ContentPackUpdater({ selectedMission }: Props) {
 
   const canUseServer = serverPacks.length > 0
   const noMatchingPack = isServerMode === false && !zipFile && missionRouteNumber != null && matchingPacks.length === 0
+  const recalledZipName = recalledLocalZipFileName(selectedMission.id)
 
   const showApiKeyOnboardingBanner =
     !getContentPackApiKey() && !!serverListErr && looksLikeListAuthFailure(serverListErr)
@@ -547,6 +571,41 @@ export function ContentPackUpdater({ selectedMission }: Props) {
           </dd>
         </dl>
 
+        {noMatchingPack && (
+          <div
+            role="status"
+            className="rounded-lg border border-cap-ultramarine/25 bg-cap-ultramarine/5 px-3 py-3 text-sm text-gray-800 space-y-2"
+          >
+            <p className="font-medium text-gray-900">Continue with your local ForeFlight pack ZIP</p>
+            <p className="text-xs text-gray-700 leading-relaxed">
+              Mission and tower data live in <strong>this browser</strong> (IndexedDB). Content packs on the Wing server
+              are separate — GitHub Pages cannot host that API, so route {missionRouteNumber} will not show a server pack
+              here unless your build points at a deployed API. Picking a ZIP below runs preview in this tab only; nothing
+              is uploaded.
+            </p>
+            {recalledZipName && (
+              <p className="text-xs text-gray-600">
+                Earlier in this browser session you used{' '}
+                <span className="font-mono font-medium text-gray-800">{recalledZipName}</span> — choose that file again
+                (the app cannot keep the ZIP in memory after you leave this page).
+              </p>
+            )}
+            <label className="block text-xs font-medium text-gray-700">ForeFlight Content Pack (.zip)</label>
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null
+                e.target.value = ''
+                if (!f) return
+                void handleZipPreview(f)
+              }}
+              className="text-xs"
+            />
+          </div>
+        )}
+
         {matchingPacks.length > 1 && (
           <div className="text-xs text-gray-700">
             <label className="block font-medium text-gray-700 mb-1">
@@ -587,15 +646,27 @@ export function ContentPackUpdater({ selectedMission }: Props) {
                 Apply this mission’s towers
               </button>
             </>
-          ) : zipFile && preview ? (
-            <button
-              type="button"
-              onClick={() => void handleZipApply()}
-              disabled={busy || !zipReady}
-              className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
-            >
-              {busy ? 'Working…' : 'Download updated Content Pack (.zip)'}
-            </button>
+          ) : zipFile ? (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleZipPreview(zipFile)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {busy ? 'Working…' : 'Preview changes'}
+              </button>
+              {preview ? (
+                <button
+                  type="button"
+                  onClick={() => void handleZipApply()}
+                  disabled={busy || !zipReady}
+                  className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
+                >
+                  {busy ? 'Working…' : 'Download updated Content Pack (.zip)'}
+                </button>
+              ) : null}
+            </>
           ) : null}
         </div>
       </section>

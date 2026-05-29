@@ -12,6 +12,7 @@ import {
   uploadPack,
   verifyAdminSession,
 } from '@/services/contentPackAdminApi'
+import { apiBaseUrl } from '@/config/apiConfig'
 import { contentPackApi, getContentPackApiKey, type ServerContentPackSummary } from '@/services/contentPackApi'
 
 function formatDateTime(iso: string): string {
@@ -257,6 +258,22 @@ export function AdminContentPacksPage() {
         <div className="app-panel max-w-md mx-auto p-6 md:p-8 mt-8 md:mt-16">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Wing Administrator Console</h1>
           <p className="text-sm text-gray-600 mb-6">Content Pack lifecycle management</p>
+
+          {!apiBaseUrl && (
+            <div
+              className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+              role="alert"
+            >
+              <p className="font-medium mb-1">Hosted API not configured for this build</p>
+              <p>
+                Sign-in and content packs need the Node server, not GitHub Pages alone. On GitHub: Settings → Secrets and
+                variables → Actions → Variables → set <strong>VITE_API_BASE_URL</strong> to your API origin (e.g.{' '}
+                <code className="text-xs bg-white/80 px-1 rounded">https://your-api.fly.dev</code>), then run the Pages
+                workflow again. Put <strong>CONTENT_PACK_ADMIN_PIN</strong> and <strong>CORS_ORIGINS</strong> on that
+                server. See <code className="text-xs">docs/API_HOSTING.md</code>.
+              </p>
+            </div>
+          )}
 
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-1">Sign in</h2>
