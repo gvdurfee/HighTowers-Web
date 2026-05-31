@@ -331,7 +331,7 @@ export function TowerAnalysisPage() {
                   hintId={hints.selectImage}
                   stepNumber={1}
                   title="Select a tower photo"
-                  body="Choose a clear photo. If it has GPS metadata, the app can prefill tower location; otherwise you'll set it using Look for Tower on Map."
+                  body="Choose a clear photo. If it has GPS metadata, the app can prefill camera location; you'll set tower base location using Look for Tower on Map."
                   isSeen={isSeen(hints.selectImage)}
                   onDismiss={markSeen}
                   surface="light"
