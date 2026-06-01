@@ -18,6 +18,7 @@ import {
   type ReportFormData,
 } from '@/services/pdfReportService'
 import { additionalNotesForPdf } from '@/constants/reportCopy'
+import { ContentPackMissionCloseout } from '@/components/ContentPackMissionCloseout'
 
 function formatDateForDisplay(dateStr: string): string {
   const d = new Date(dateStr)
@@ -54,6 +55,8 @@ export function ExportDataPage() {
   const [formData, setFormData] = useState<ReportFormData | null>(state?.reportData ?? null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  /** When true, hide ForeFlight pack upload (PDF-only close-out). */
+  const [noContentPackUpdate, setNoContentPackUpdate] = useState(false)
 
   const selectedMission = selectedMissionId
     ? (missions ?? []).find((m) => m.id === selectedMissionId)
@@ -157,85 +160,114 @@ export function ExportDataPage() {
 
   return (
     <div className="app-page-shell overflow-auto">
-      <div className="app-panel max-w-2xl mx-auto p-6 md:p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Export Reported Data</h1>
-      <p className="text-gray-600 mb-6">
-        Generate and download the Air Force Route Survey Report PDF. Includes a mission map
-        (route and towers) when Mapbox is configured. Tower photos use a CAP-style location
-        overlay and are compressed to ~500KB each for email sharing.
-      </p>
-      <p className="text-sm text-gray-600 mb-6">
-        For next season’s aircrews, update ForeFlight Content Packs from the sidebar:{' '}
-        <button
-          type="button"
-          onClick={() => navigate('/foreflight-content-pack')}
-          className="text-cap-ultramarine font-medium underline hover:no-underline"
-        >
-          ForeFlight Content Pack Update
-        </button>
-        .
-      </p>
+      <div className="app-panel max-w-2xl mx-auto p-6 md:p-8 space-y-8">
+        <header>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Export Reported Data</h1>
+          <p className="text-gray-600">
+            Mission close-out: deliver the Air Force Route Survey Report PDF to the customer, and
+            optionally update the ForeFlight content pack when this mission added towers or improved
+            coordinates.
+          </p>
+        </header>
 
-      {!selectedMissionId && (missions ?? []).length > 0 && (
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Mission
-          </label>
-          <select
-            value={selectedMissionId ?? ''}
-            onChange={(e) => {
-              setSelectedMissionId(e.target.value || null)
-              setFormData(null)
-            }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-          >
-            <option value="">Choose a mission…</option>
-            {(missions ?? []).map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+        {!selectedMissionId && (missions ?? []).length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select mission</label>
+            <select
+              value={selectedMissionId ?? ''}
+              onChange={(e) => {
+                setSelectedMissionId(e.target.value || null)
+                setFormData(null)
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="">Choose a mission…</option>
+              {(missions ?? []).map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-      {selectedMission && formData && (
-        <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 mb-6">
-          <h2 className="font-semibold text-gray-900 mb-2">{selectedMission.name}</h2>
+        {selectedMission && formData && (
+          <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+            <h2 className="font-semibold text-gray-900 mb-2">{selectedMission.name}</h2>
+            <p className="text-sm text-gray-600">
+              {formData.missionNumber} · {formData.mtrRoute} · {formData.date}
+            </p>
+            <p className="text-sm text-gray-600 mt-1">
+              POC: {formData.pocName} · {formData.capUnit}
+            </p>
+          </div>
+        )}
+
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">Air Force report (PDF)</h2>
           <p className="text-sm text-gray-600">
-            {formData.missionNumber} · {formData.mtrRoute} · {formData.date}
+            Includes a mission map (route and towers) when Mapbox is configured. Tower photos use a
+            CAP-style location overlay and are compressed to ~500KB each for email sharing.
           </p>
-          <p className="text-sm text-gray-600 mt-1">
-            POC: {formData.pocName} · {formData.capUnit}
-          </p>
-        </div>
-      )}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={handleGeneratePdf}
+              disabled={!isReady || !isComplete || isGenerating}
+              className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? 'Generating…' : 'Generate & Download PDF'}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/report-form')}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Back to Report Form
+            </button>
+          </div>
+          {errorMessage && (
+            <div className="p-4 bg-red-50 text-cap-pimento rounded-lg">{errorMessage}</div>
+          )}
+          {selectedMissionId && !formData && (
+            <p className="text-sm text-gray-500">Loading mission data…</p>
+          )}
+        </section>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <button
-          type="button"
-          onClick={handleGeneratePdf}
-          disabled={!isReady || !isComplete || isGenerating}
-          className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isGenerating ? 'Generating…' : 'Generate & Download PDF'}
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/report-form')}
-          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-        >
-          Back to Report Form
-        </button>
-      </div>
+        {selectedMission && (
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">ForeFlight content pack (optional)</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                If this mission added towers or improved coordinates versus the pack you imported in
+                ForeFlight, upload that pack below, preview changes, and download an updated{' '}
+                <strong>.zip</strong> for your Wing maintainer. Processing stays in this browser — nothing
+                is uploaded to a server.
+              </p>
+            </div>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={noContentPackUpdate}
+                onChange={(e) => setNoContentPackUpdate(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-cap-ultramarine focus:ring-cap-ultramarine"
+              />
+              <span className="text-sm text-gray-800">
+                <span className="font-medium text-gray-900">
+                  No content pack update for this mission
+                </span>
+                <span className="block text-gray-600 mt-0.5">
+                  Check this when you did not add new towers or change coordinates versus the pack
+                  you flew with — only the PDF is needed.
+                </span>
+              </span>
+            </label>
 
-      {errorMessage && (
-        <div className="mt-4 p-4 bg-red-50 text-cap-pimento rounded-lg">{errorMessage}</div>
-      )}
-
-      {selectedMissionId && !formData && (
-        <p className="mt-4 text-sm text-gray-500">Loading mission data…</p>
-      )}
+            {!noContentPackUpdate && (
+              <ContentPackMissionCloseout selectedMission={selectedMission} />
+            )}
+          </section>
+        )}
       </div>
     </div>
   )

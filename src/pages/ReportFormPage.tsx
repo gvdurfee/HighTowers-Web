@@ -592,11 +592,12 @@ export function ReportFormPage() {
             />
           </div>
           <p className="text-sm text-gray-500 mb-4">
-            Document up to six towers. Leave any unused rows blank.             To refresh ForeFlight user waypoints from your tower coordinates, use{' '}
-            <Link to="/foreflight-content-pack" className="text-cap-ultramarine font-medium hover:underline">
-              ForeFlight Content Pack Update
+            Document up to six towers. Leave any unused rows blank. To update the ForeFlight content
+            pack after the survey, use{' '}
+            <Link to="/export" className="text-cap-ultramarine font-medium hover:underline">
+              Export Reported Data
             </Link>{' '}
-            (server pack or local ZIP in Settings).
+            when you deliver the customer PDF.
           </p>
           <div className="space-y-6">
             {towerEntries.map((entry, i) => (

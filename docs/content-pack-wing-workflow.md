@@ -63,14 +63,15 @@ Use **stable folder names** in training and UI copy so they match the coordinato
 1. Complete **Tower Data Analysis** and the **Air Force Report Form** in the app.
 2. Tower coordinates live in IndexedDB; no content pack must stay loaded in the browser for every step.
 
-### C. Mission close-out (update pack)
+### C. Mission close-out (PDF + optional pack)
 
-1. Open **ForeFlight Content Pack Update** (sidebar).
-2. Load the **same baseline** pack ZIP from disk (file picker — usually copied from *Content Packs for Flight Planning*).
-3. **Preview** — refinements (≤30 m) vs new appends vs unchanged after four-decimal rounding.
-4. **Download updated Content Pack (.zip)** when there are changes to apply.
-5. **Manually copy** that file from the browser’s download location into **Updated Content Packs** on the Wing server (the app cannot write directly to Wing shares).
-6. Generate and store the **Air Force PDF** in the same Wing storage area used for customer deliverables/email.
+1. Open **Export Reported Data** (sidebar).
+2. **Generate & Download PDF** for the Air Force customer.
+3. If this mission did **not** add towers or change coordinates versus the pack you flew with, check **No content pack update for this mission** and stop.
+4. Otherwise, uncheck that box, upload the **same baseline** pack ZIP you used in ForeFlight (from *Content Packs for Flight Planning*).
+5. **Preview** — refinements (≤30 m) vs new appends vs unchanged after four-decimal rounding (towers with saved survey photos only).
+6. **Download updated Content Pack (.zip)** when there are changes to apply.
+7. **Manually copy** that file from the browser’s download location into **Updated Content Packs** on the Wing server and email it to your Wing content-pack maintainer when directed.
 
 **Why:** Next year’s crew (and the coordinator) need one obvious place for “latest pack for route X” plus the signed report.
 
@@ -94,19 +95,19 @@ Suggested bullets for seasonal aircrew assignments:
 
 ## 6. App behavior crews should know
 
-### Local-only ZIP fallback
+### Content pack on Export Reported Data
 
 - Picking a ZIP runs **preview in the browser**; nothing is uploaded to a server.
-- Mission **Additional Notes** may gain auto-generated ForeFlight paragraphs after preview (those flow into the PDF export).
-- The ZIP file is **not** saved in IndexedDB. After refresh or revisiting the page, **pick the ZIP again** (Settings or the on-page local-ZIP prompt when no server pack matches).
+- Mission **Additional Notes** may gain auto-generated ForeFlight paragraphs after preview (regenerate the PDF if you already downloaded it).
+- The ZIP file is **not** saved in IndexedDB. After refresh, **pick the ZIP again** on Export.
 
 ### Preview shows 0 refinements / 0 appends
 
 Often means tower coordinates **already match** the pack after four-decimal rounding—not a broken preview. **Download** stays disabled when there is nothing to change.
 
-### Server mode (optional)
+### Wing Administrator API (optional)
 
-When the Wing deploys the API and publishes packs (admin console at `/admin/content-packs`), crews can **Preview / Apply** on the server and download from the **Flight Plan** page. This path is optional; the folder workflow remains valid.
+The admin console at `/admin/content-packs` remains for Wings that host the optional Node API. **Crew close-out** does not require it; use Export + local ZIP download instead.
 
 ---
 
@@ -115,7 +116,7 @@ When the Wing deploys the API and publishes packs (admin console at `/admin/cont
 For regression testing without relying on the server:
 
 1. Place baseline packs in **Content Packs for Flight Planning** (older survey years).
-2. Run tower analysis and produce an **Updated** ZIP via ForeFlight Content Pack Update.
+2. Run tower analysis and produce an **Updated** ZIP via **Export Reported Data**.
 3. Compare baseline vs updated (ZIP or `user_waypoints.csv`).
 4. **Selectively trim** the CSV after an update cycle, copy a trimmed pack back into **Content Packs for Flight Planning**, and re-run preview.
 5. Confirm expected towers fall into **≤30 m refinement** or **unchanged after rounding** in preview and mission notes.
@@ -148,10 +149,10 @@ When updating ForeFlight / Flight Plan / Export screens:
 
 | Surface | Role |
 |---------|------|
-| **Flight Plan** detail — content pack card | Download latest **server** pack when API is configured (next-year prep shortcut) |
-| **ForeFlight Content Pack Update** | Preview/apply towers; local ZIP download for close-out |
-| **Export Data** | Air Force PDF; should be paired with updated ZIP on Wing storage |
-| **Administrator → Content packs** | Wing Administrator publish/delete (optional) |
+| **Flight Plan** detail — content pack card | Reminder: baseline pack from Wing *Content Packs for Flight Planning* |
+| **Export Reported Data** | Air Force PDF + optional local ZIP preview/download for close-out |
+| **Administrator → Content packs** | Wing Administrator publish/delete (optional API) |
+| **`/foreflight-content-pack`** | Legacy URL; redirects to Export |
 
 ---
 

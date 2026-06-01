@@ -556,12 +556,11 @@ export function TowerAnalysisPage() {
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold">ForeFlight Content Pack</h3>
+                <h3 className="font-semibold">ForeFlight content pack</h3>
                 <p>
-                  Bulk-apply this mission’s saved tower locations to the route’s shared content pack
-                  on the <strong>ForeFlight Content Pack Update</strong> page during mission
-                  close-out. Next year’s survey crews download the latest pack from the
-                  <strong> Flight Plan</strong> page.
+                  After you save towers with photos, update the pack you used on the mission from{' '}
+                  <strong>Export Reported Data</strong> when coordinates need to reach next
+                  season&apos;s crews. Baseline packs come from Wing storage during flight planning.
                 </p>
               </div>
             </div>
