@@ -17,6 +17,16 @@ const DETAIL_LINE_MAX_PX = 480
  */
 export const TOWER_DETAIL_MODE_MIN_PX = ARROW_LENGTH_PX + CIRCLE_RADIUS_PX * 2 + 8
 
+/**
+ * Detail-mode label X in tower-anchored SVG coords (0 = arrow tip at tower, +x toward waypoint).
+ * Picks the waypoint end of the leader when it fits; otherwise the nearest valid position to the tower.
+ */
+export function detailLabelCenterPx(widthPx: number): number {
+  const nearTowerPx = ARROW_LENGTH_PX + CIRCLE_RADIUS_PX + 2
+  const nearWaypointPx = widthPx - CIRCLE_RADIUS_PX - 2
+  return Math.max(nearTowerPx, nearWaypointPx)
+}
+
 export type TowerLeaderItem = {
   id: string
   towerLat: number
@@ -51,10 +61,7 @@ function computeLayout(map: MapboxMap, item: TowerLeaderItem): Layout | null {
   }
 
   const widthPx = Math.min(DETAIL_LINE_MAX_PX, distancePx)
-  const minLabelCx = ARROW_LENGTH_PX + CIRCLE_RADIUS_PX + 2
-  const maxLabelCx = widthPx - CIRCLE_RADIUS_PX - 2
-  /** Slide label toward the route waypoint as far as room allows. */
-  const labelCx = Math.max(minLabelCx, maxLabelCx)
+  const labelCx = detailLabelCenterPx(widthPx)
   const heightPx = Math.max(CIRCLE_RADIUS_PX * 2 + 4, ARROW_HALF_HEIGHT_PX * 2 + 4)
   return { mode: 'detail', widthPx, heightPx, bearingDeg, labelCx }
 }
