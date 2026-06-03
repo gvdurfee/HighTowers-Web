@@ -6,8 +6,9 @@ import { db } from '@/db/schema'
 import type { FlightPlanRecord, WaypointRecord, AirportRecord } from '@/db/schema'
 import { apiConfig } from '@/config/apiConfig'
 import { nearestWaypointInfo } from '@/utils/towerWaypointGeometry'
-
-const CAP_PIMENTO = '#DB0029'
+import { TowerLeaderMarker, TOWER_MAP_COLOR } from '@/components/TowerLeaderMarker'
+import { GuidedHint } from '@/components/GuidedHint'
+import { useHintsSeen } from '@/hooks/useHintsSeen'
 
 type TowerOverlayItem = {
   id: string
@@ -65,6 +66,7 @@ export function MissionMapPage() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null)
   const [mapReady, setMapReady] = useState(false)
+  const { isSeen, markSeen } = useHintsSeen()
 
   const plans = useLiveQuery(
     () =>
@@ -162,8 +164,8 @@ export function MissionMapPage() {
         geometry: {
           type: 'LineString' as const,
           coordinates: [
-            [item.towerLon, item.towerLat],
             [item.waypointLon, item.waypointLat],
+            [item.towerLon, item.towerLat],
           ],
         },
       })),
@@ -282,6 +284,26 @@ export function MissionMapPage() {
     <div className="flex flex-col flex-1 min-h-0 h-full min-h-[320px]">
       <div className="shrink-0 p-4 border-b border-white/15 bg-black/25 backdrop-blur-sm flex items-center gap-4 flex-wrap text-white">
         <h1 className="text-xl font-bold text-white tracking-tight">Map View</h1>
+        {(towerOverlayData ?? []).length > 0 && (
+          <GuidedHint
+            hintId="mapView.towerMarkers"
+            stepNumber={1}
+            title="Tower markers and zoom"
+            body={
+              <>
+                With the map fit to the route, each surveyed tower appears as a{' '}
+                <strong>red circle</strong> on the line from the nearest route waypoint.{' '}
+                <strong>Zoom in</strong> on a tower: the line stays tied to that waypoint, an{' '}
+                <strong>arrowhead</strong> locks onto the tower base, and the label slides back so
+                you can confirm the tip points at the structure. That check is worth doing before you{' '}
+                <strong>export reported data</strong> for the customer.
+              </>
+            }
+            isSeen={isSeen('mapView.towerMarkers')}
+            onDismiss={markSeen}
+            surface="dark"
+          />
+        )}
         <select
           value={selectedPlanId ?? ''}
           onChange={(e) => setSelectedPlanId(e.target.value || null)}
@@ -370,7 +392,7 @@ export function MissionMapPage() {
                   'line-cap': 'round',
                 }}
                 paint={{
-                  'line-color': CAP_PIMENTO,
+                  'line-color': TOWER_MAP_COLOR,
                   'line-width': 2,
                 }}
               />
@@ -378,20 +400,7 @@ export function MissionMapPage() {
           )}
 
           {(towerOverlayData ?? []).map((item) => (
-            <Marker
-              key={item.id}
-              longitude={item.towerLon}
-              latitude={item.towerLat}
-              anchor="bottom"
-            >
-              <div
-                className="px-2 py-1 rounded text-xs font-bold text-white shadow"
-                style={{ backgroundColor: CAP_PIMENTO }}
-                title={`Tower ${item.label}`}
-              >
-                {item.label}
-              </div>
-            </Marker>
+            <TowerLeaderMarker key={item.id} item={item} />
           ))}
 
           <NavigationControl position="top-right" />

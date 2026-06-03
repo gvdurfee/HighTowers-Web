@@ -27,6 +27,13 @@ export function WorkflowGuidePage() {
     },
     {
       number: 4,
+      title: 'Map View',
+      summary:
+        'Select your flight plan and mission, fit the map to the route, then zoom in on each tower. Confirm the red arrow tip sits on the tower base (the label moves back as you zoom so the base stays visible).',
+      path: '/map',
+    },
+    {
+      number: 5,
       title: 'Export Reported Data',
       summary:
         'Download the Air Force Route Survey Report PDF for the customer. When this mission added towers or refined coordinates, upload the ForeFlight pack you flew with and download an updated ZIP for your Wing maintainer.',
@@ -46,17 +53,17 @@ export function WorkflowGuidePage() {
         <div className="mb-8 rounded-xl border border-gray-200 bg-slate-50 p-4 text-sm text-gray-700">
           <h2 className="font-semibold text-gray-900 mb-2">Guided tips (lightbulb icons)</h2>
           <p className="mb-3">
-            The four steps below are the full path to complete the customer report. Throughout those
+            The five steps below are the full path to complete the customer report. Throughout those
             workflow areas, the app can show optional <strong>numbered lightbulb tips</strong> on key
             screens—for example <strong>New Flight Plan</strong>, <strong>Air Force Report Form</strong>,{' '}
-            <strong>Tower Data Analysis</strong>, and <strong>Look for Tower on Map</strong>. They are
+            <strong>Tower Data Analysis</strong>, <strong>Map View</strong>, and <strong>Look for Tower on Map</strong>. They are
             there to help <strong>first-time users</strong> get oriented and to act as a{' '}
             <strong>refresher</strong> when you come back to the app season after season.
           </p>
           <p className="mb-3">
             Reading or dismissing tips does <strong>not</strong> change how the underlying features work.
             If you do not need to review any of them, you can ignore the lightbulbs and move through all
-            four sections in order to finish the report the same way.
+            all sections in order to finish the report the same way.
           </p>
           <p className="mb-2">
             Open a tip when you want context, then close it with <strong>Got it</strong> (or{' '}
