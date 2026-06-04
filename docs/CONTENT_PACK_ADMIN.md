@@ -2,6 +2,8 @@
 
 This guide is for the **Wing Administrator**: the aviator who owns the ForeFlight content-pack **lifecycle** for the Wing’s tower data on HighTowers (creating a pack when a new MTR appears, publishing revisions, future rename/delete, and similar housekeeping). It is not a programming manual.
 
+**First-time setup with GitHub Pages:** printable runbook — [`FIRST_TIME_WING_ADMIN_RUNBOOK.md`](./FIRST_TIME_WING_ADMIN_RUNBOOK.md).
+
 **What stays with the crew:** per-mission tower updates (apply / refine flows in the app) stay in crew control. The Wing Administrator does not need to intervene for day-to-day mission edits.
 
 ---

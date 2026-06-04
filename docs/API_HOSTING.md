@@ -2,6 +2,8 @@
 
 GitHub Pages serves **only** the static Vite build. The Express app under `server/` provides MTR NASR data, Mapbox static-image proxying (PDF export), and Copernicus recent imagery. For training parity with `npm run dev:all`, deploy that server separately and point the web app at it with **`VITE_API_BASE_URL`**.
 
+**First-time setup (Pages + Wing Administrator Console):** step-by-step checklist — [`FIRST_TIME_WING_ADMIN_RUNBOOK.md`](./FIRST_TIME_WING_ADMIN_RUNBOOK.md).
+
 ## Render vs Fly.io vs Railway (short comparison)
 
 | | **Fly.io** | **Render** | **Railway** |
