@@ -1,6 +1,6 @@
 /**
- * Coordinator survey sortie planner (scaffold).
- * Full packing and multi-team optimization: see docs/COORDINATOR_SURVEY_CONSOLE.md phases.
+ * Coordinator survey sortie planner.
+ * See docs/COORDINATOR_SURVEY_CONSOLE.md.
  */
 
 import { parseWidthTexts, halfWidthNmForLeg } from './mtrWidthParser.js'
@@ -9,9 +9,9 @@ import {
   chainLengthNm,
   closestWaypointIndex,
   nauticalMilesBetween,
-  estimateSortieNm,
   DEFAULT_PARALLEL_TRACK_POLICY,
 } from './surveyGeometry.js'
+import { packSortiesForTeam } from './surveySortiePacker.js'
 
 export { DEFAULT_PARALLEL_TRACK_POLICY }
 
@@ -60,7 +60,7 @@ export { DEFAULT_PARALLEL_TRACK_POLICY }
  */
 
 /**
- * Build per-leg width and offset lists (no sortie packing yet).
+ * Build per-leg width and offset lists.
  * @param {SurveyPlannerInput} input
  */
 export function buildLegWidthSummaries(input) {
@@ -92,7 +92,6 @@ export function buildLegWidthSummaries(input) {
 }
 
 /**
- * Scaffold planner: leg analysis + entry index per team; sortie packing returns in Phase 1.
  * @param {SurveyPlannerInput} input
  */
 export function planSurveyScenario(input) {
@@ -115,23 +114,34 @@ export function planSurveyScenario(input) {
           )
         : 0
 
+    const sorties = wps.length >= 2 && legs.length > 0 ? packSortiesForTeam(wps, legs, team, budget) : []
+    const totalTeamNm = sorties.reduce((sum, s) => sum + s.totalNm, 0)
+    const overBudgetCount = sorties.filter((s) => s.overBudget).length
+
+    let note = null
+    if (overBudgetCount > 0) {
+      note = `${overBudgetCount} sortie(s) exceed the ${budget} NM budget — consider a lower budget split or more teams.`
+    }
+
     return {
       label: team.label,
       side: team.side,
       entryWaypoint: entryPt,
       entryIndex: entryIdx,
       ferryInNm: Math.round(ferryInNm * 10) / 10,
-      sorties: [],
-      sortieCount: null,
-      note: 'Sortie packing not implemented (PR 1 scaffold).',
+      sorties,
+      sortieCount: sorties.length,
+      totalNm: Math.round(totalTeamNm * 10) / 10,
+      note,
     }
   })
 
-  const totalChainNm =
-    wps.length >= 2 ? chainLengthNm(wps, 0, wps.length - 1) : 0
+  const totalChainNm = wps.length >= 2 ? chainLengthNm(wps, 0, wps.length - 1) : 0
+  const totalSorties = teams.reduce((sum, t) => sum + (t.sortieCount ?? 0), 0)
+  const totalWingNm = Math.round(teams.reduce((sum, t) => sum + (t.totalNm ?? 0), 0) * 10) / 10
 
   return {
-    status: 'scaffold',
+    status: teams.some((t) => t.sorties.length > 0) ? 'planned' : 'scaffold',
     route: `${input.routeType ?? ''}${input.routeNumber ?? ''}`.trim(),
     assignmentModel: input.assignmentModel ?? 'opposite-side',
     sortieBudgetNm: budget,
@@ -139,7 +149,8 @@ export function planSurveyScenario(input) {
     totalCenterlineNm: Math.round(totalChainNm * 10) / 10,
     legs,
     teams,
-    totalSorties: null,
+    totalSorties,
+    totalWingNm,
     disclaimer:
       'Wing planning aid only. Verify corridors and procedures in ForeFlight Military Flight Bag before flying.',
   }

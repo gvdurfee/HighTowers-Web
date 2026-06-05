@@ -9,6 +9,11 @@ import {
   estimateSortieNm,
 } from '../shared/survey-planning/surveyGeometry.js'
 import { planSurveyScenario, buildLegWidthSummaries } from '../shared/survey-planning/surveySortiePlanner.js'
+import {
+  buildUniformOffsetSegments,
+  packSortiesForTeam,
+  bestSortiePlan,
+} from '../shared/survey-planning/surveySortiePacker.js'
 
 const VR114_WIDTH = [
   '20 NM EITHER SIDE OF CENTERLINE FROM A TO B;',
@@ -60,7 +65,81 @@ describe('estimateSortieNm maneuver model', () => {
   })
 })
 
-describe('planSurveyScenario scaffold', () => {
+const KABQ = { lat: 35.040194, lon: -106.609139 }
+
+/** NASR MTR_PT coordinates for VR114 A→M1 (28-day cycle fixture). */
+const VR114_FULL_WPS = [
+  { ptIdent: 'A', lat: 34.64166666, lon: -102.9 },
+  { ptIdent: 'B', lat: 35.7, lon: -102.96666666 },
+  { ptIdent: 'C', lat: 35.58333333, lon: -103.63333333 },
+  { ptIdent: 'D', lat: 35.53333333, lon: -103.94166666 },
+  { ptIdent: 'E', lat: 35.05833333, lon: -104.04166666 },
+  { ptIdent: 'F', lat: 34.825, lon: -103.74166666 },
+  { ptIdent: 'M1', lat: 34.65, lon: -103.78333333 },
+]
+
+describe('surveySortiePacker', () => {
+  it('splits at width boundaries (A→B vs B→M1)', () => {
+    const legs = buildLegWidthSummaries({
+      routeType: 'VR',
+      routeNumber: '114',
+      waypoints: VR114_FULL_WPS,
+      widthTexts: VR114_WIDTH,
+      teams: [],
+      sortieBudgetNm: 500,
+    })
+    const segments = buildUniformOffsetSegments(VR114_FULL_WPS, legs, 'left')
+    expect(segments).toHaveLength(2)
+    expect(segments[0]).toMatchObject({ fromPt: 'A', toPt: 'B', offsets: [3, 9, 15, 21] })
+    expect(segments[1]).toMatchObject({ fromPt: 'B', toPt: 'M1', offsets: [3, 9] })
+  })
+
+  it('packs both offsets on a 10 NM corridor in one sortie', () => {
+    const wps = [
+      { ptIdent: 'A', lat: 35.0, lon: -103.0 },
+      { ptIdent: 'B', lat: 35.05, lon: -103.05 },
+      { ptIdent: 'C', lat: 35.1, lon: -103.1 },
+    ]
+    const legs = buildLegWidthSummaries({
+      routeType: 'VR',
+      routeNumber: '99',
+      waypoints: wps,
+      widthTexts: ['10 NM EITHER SIDE OF CENTERLINE FOR THE ENTIRE ROUTE'],
+      teams: [],
+      sortieBudgetNm: 500,
+    })
+    const team = { label: 'Team 1', depLat: KABQ.lat, depLon: KABQ.lon, side: 'left' }
+    const sorties = packSortiesForTeam(wps, legs, team, 500)
+    expect(sorties).toHaveLength(1)
+    expect(sorties[0].offsets).toEqual([3, 9])
+    expect(sorties[0].totalNm).toBeLessThanOrEqual(500)
+  })
+
+  it('splits offset passes when four offsets on A→B exceed budget', () => {
+    const wps = VR114_FULL_WPS.slice(0, 2)
+    const legs = buildLegWidthSummaries({
+      routeType: 'VR',
+      routeNumber: '114',
+      waypoints: wps,
+      widthTexts: VR114_WIDTH,
+      teams: [],
+      sortieBudgetNm: 500,
+    })
+    const team = { label: 'Team 1', depLat: KABQ.lat, depLon: KABQ.lon, side: 'left' }
+    const plan = bestSortiePlan(wps, team, 0, 1, [3, 9, 15, 21])
+    expect(plan.totalNm).toBeGreaterThan(500)
+
+    const sorties = packSortiesForTeam(wps, legs, team, 500)
+    expect(sorties.length).toBe(2)
+    expect(sorties[0].offsets).toEqual([3, 9])
+    expect(sorties[1].offsets).toEqual([15, 21])
+    for (const s of sorties) {
+      expect(s.totalNm).toBeLessThanOrEqual(500)
+    }
+  })
+})
+
+describe('planSurveyScenario', () => {
   const wps = [
     { ptIdent: 'A', lat: 35.375, lon: -103.28333333 },
     { ptIdent: 'B', lat: 35.6, lon: -103.33333333 },
@@ -102,7 +181,7 @@ describe('planSurveyScenario scaffold', () => {
     expect(legs.find((l) => l.fromPt === 'F' && l.toPt === 'M1')?.rightOffsets).toEqual([3, 9, 15, 21])
   })
 
-  it('reports scaffold status and entry closest to departure', () => {
+  it('reports entry closest to departure', () => {
     const result = planSurveyScenario({
       routeType: 'VR',
       routeNumber: '114',
@@ -118,9 +197,72 @@ describe('planSurveyScenario scaffold', () => {
       ],
       sortieBudgetNm: 500,
     })
-    expect(result.status).toBe('scaffold')
-    expect(result.totalSorties).toBeNull()
+    expect(result.status).toBe('planned')
     expect(result.teams[0].entryWaypoint).toBe('A')
-    expect(result.teams[0].sortieCount).toBeNull()
+    expect(result.teams[0].sortieCount).toBeGreaterThan(0)
+  })
+
+  it('packs VR114 left side from KABQ into three sorties under 500 NM', () => {
+    const result = planSurveyScenario({
+      routeType: 'VR',
+      routeNumber: '114',
+      waypoints: VR114_FULL_WPS,
+      widthTexts: VR114_WIDTH,
+      teams: [
+        {
+          label: 'Team 1',
+          depLat: KABQ.lat,
+          depLon: KABQ.lon,
+          side: 'left',
+        },
+      ],
+      sortieBudgetNm: 500,
+    })
+    expect(result.status).toBe('planned')
+    expect(result.totalCenterlineNm).toBe(172.3)
+    expect(result.teams[0].entryWaypoint).toBe('E')
+    expect(result.teams[0].ferryInNm).toBe(126.2)
+    expect(result.totalSorties).toBe(3)
+
+    const sorties = result.teams[0].sorties
+    expect(sorties.filter((s) => s.waypointFrom === 'A' && s.waypointTo === 'B')).toHaveLength(2)
+    expect(sorties.filter((s) => s.waypointFrom === 'B' && s.waypointTo === 'M1')).toHaveLength(1)
+    expect(sorties[2].offsets).toEqual([3, 9])
+
+    for (const s of sorties) {
+      expect(s.totalNm).toBeLessThanOrEqual(500)
+      expect(s.ferryInNm + s.alongRouteNm + s.ferryOutNm).toBeCloseTo(s.totalNm, 1)
+    }
+  })
+
+  it('packs VR114 opposite-side two-team scenario with wing totals', () => {
+    const KROW = { lat: 33.2998, lon: -104.542 }
+    const result = planSurveyScenario({
+      routeType: 'VR',
+      routeNumber: '114',
+      waypoints: VR114_FULL_WPS,
+      widthTexts: VR114_WIDTH,
+      teams: [
+        { label: 'Team 1', depLat: KABQ.lat, depLon: KABQ.lon, side: 'left' },
+        { label: 'Team 2', depLat: KROW.lat, depLon: KROW.lon, side: 'right' },
+      ],
+      sortieBudgetNm: 500,
+      assignmentModel: 'opposite-side',
+    })
+    expect(result.assignmentModel).toBe('opposite-side')
+    expect(result.teams).toHaveLength(2)
+    expect(result.teams[0].side).toBe('left')
+    expect(result.teams[1].side).toBe('right')
+    expect(result.teams[0].sortieCount).toBe(3)
+    expect(result.teams[1].sortieCount).toBe(4)
+    expect(result.totalSorties).toBe(7)
+    expect(result.totalWingNm).toBeGreaterThan(2500)
+
+    const rightSorties = result.teams[1].sorties
+    expect(rightSorties.every((s) => s.waypointFrom === 'A' && s.waypointTo === 'M1')).toBe(true)
+    expect(rightSorties.map((s) => s.offsets[0])).toEqual([3, 9, 15, 21])
+    for (const s of rightSorties) {
+      expect(s.totalNm).toBeLessThanOrEqual(500)
+    }
   })
 })

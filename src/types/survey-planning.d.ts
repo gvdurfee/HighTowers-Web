@@ -19,6 +19,7 @@ declare module '@survey-planning/surveySortiePlanner.js' {
     sortieBudgetNm: number
     totalCenterlineNm: number
     totalSorties: number | null
+    totalWingNm: number | null
     disclaimer: string
     legs: {
       fromPt: string
@@ -35,7 +36,20 @@ declare module '@survey-planning/surveySortiePlanner.js' {
       entryWaypoint: string | null
       ferryInNm: number
       sortieCount: number | null
-      note: string
+      totalNm?: number
+      note: string | null
+      sorties: {
+        sortieNumber: number
+        waypointFrom: string
+        waypointTo: string
+        startAt: string
+        offsets: number[]
+        ferryInNm: number
+        alongRouteNm: number
+        ferryOutNm: number
+        totalNm: number
+        overBudget?: boolean
+      }[]
     }[]
   }
 }
