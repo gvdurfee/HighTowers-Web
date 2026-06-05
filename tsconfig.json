@@ -18,7 +18,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@content-pack/core/*": ["shared/content-pack-core/*"]
+      "@content-pack/core/*": ["shared/content-pack-core/*"],
+      "@survey-planning/*": ["shared/survey-planning/*"]
     }
   },
   "include": ["src"]

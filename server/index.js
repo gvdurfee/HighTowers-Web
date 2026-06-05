@@ -123,7 +123,17 @@ async function getCurrentCycleDate() {
   }
 }
 
-// Download MTR CSV ZIP and return path to extracted MTR_PT.csv
+function routeIdsMatch(csvRouteId, requested) {
+  const a = String(csvRouteId ?? '').replace(/"/g, '').trim()
+  const b = String(requested ?? '').trim()
+  if (!a || !b) return false
+  if (a === b) return true
+  const na = a.replace(/^0+/, '') || '0'
+  const nb = b.replace(/^0+/, '') || '0'
+  return na === nb
+}
+
+// Download MTR CSV ZIP and return paths to extracted MTR_PT.csv and MTR_WDTH.csv
 async function downloadMtrCsv(effectiveDate) {
   const zipDate = toMtrZipDate(effectiveDate)
   const zipUrl = `https://nfdc.faa.gov/webContent/28DaySub/extra/${zipDate}_MTR_CSV.zip`
@@ -133,12 +143,16 @@ async function downloadMtrCsv(effectiveDate) {
 
   let actualDate = effectiveDate
   let csvPath = path.join(cacheDir, `${actualDate}_MTR_PT.csv`)
+  let widthCsvPath = path.join(cacheDir, `${actualDate}_MTR_WDTH.csv`)
 
-  // If we have a cached file for this cycle, use it
+  // If we have cached files for this cycle, use them
   try {
     const { stat } = await import('fs/promises')
-    const st = await stat(csvPath)
-    if (st.size > 1000) return { csvPath, effectiveDate: actualDate }
+    const stPt = await stat(csvPath)
+    const stWd = await stat(widthCsvPath)
+    if (stPt.size > 1000 && stWd.size > 100) {
+      return { csvPath, widthCsvPath, effectiveDate: actualDate }
+    }
   } catch {
     // No cache
   }
@@ -149,9 +163,14 @@ async function downloadMtrCsv(effectiveDate) {
     const prev = new Date(y, m - 1, d - 28)
     actualDate = prev.toISOString().slice(0, 10)
     csvPath = path.join(cacheDir, `${actualDate}_MTR_PT.csv`)
+    widthCsvPath = path.join(cacheDir, `${actualDate}_MTR_WDTH.csv`)
     try {
-      const st = await import('fs/promises').then(({ stat }) => stat(csvPath))
-      if (st.size > 1000) return { csvPath, effectiveDate: actualDate }
+      const { stat } = await import('fs/promises')
+      const stPt = await stat(csvPath)
+      const stWd = await stat(widthCsvPath)
+      if (stPt.size > 1000 && stWd.size > 100) {
+        return { csvPath, widthCsvPath, effectiveDate: actualDate }
+      }
     } catch {}
     const prevZipDate = toMtrZipDate(actualDate)
     const prevZipUrl = `https://nfdc.faa.gov/webContent/28DaySub/extra/${prevZipDate}_MTR_CSV.zip`
@@ -169,14 +188,34 @@ async function downloadMtrCsv(effectiveDate) {
   const zip = new AdmZip(zipPath)
   const mtrPt = zip.getEntry('MTR_PT.csv')
   if (!mtrPt) throw new Error('MTR_PT.csv not found in ZIP')
+  const mtrWdth = zip.getEntry('MTR_WDTH.csv')
+  if (!mtrWdth) throw new Error('MTR_WDTH.csv not found in ZIP')
 
   zip.extractEntryTo(mtrPt, cacheDir, false, true)
-  const extractedPath = path.join(cacheDir, 'MTR_PT.csv')
+  zip.extractEntryTo(mtrWdth, cacheDir, false, true)
   const { rename } = await import('fs/promises')
-  await rename(extractedPath, csvPath)
+  await rename(path.join(cacheDir, 'MTR_PT.csv'), csvPath)
+  await rename(path.join(cacheDir, 'MTR_WDTH.csv'), widthCsvPath)
 
   await unlink(zipPath).catch(() => {})
-  return { csvPath, effectiveDate: actualDate }
+  return { csvPath, widthCsvPath, effectiveDate: actualDate }
+}
+
+/** WIDTH_TEXT lines for a route from MTR_WDTH.csv */
+async function getWidthTextsFromCsv(widthCsvPath, routeType, routeNumber) {
+  const rt = routeType.toUpperCase()
+  const texts = []
+  const parser = createReadStream(widthCsvPath).pipe(
+    parse({ columns: true, skip_empty_lines: true, relax_column_count: true })
+  )
+  for await (const row of parser) {
+    const rtc = (row.ROUTE_TYPE_CODE ?? '').replace(/"/g, '').trim()
+    const rid = (row.ROUTE_ID ?? '').replace(/"/g, '').trim()
+    if (rtc !== rt || !routeIdsMatch(rid, routeNumber)) continue
+    const text = (row.WIDTH_TEXT ?? '').replace(/"/g, '').trim()
+    if (text) texts.push(text)
+  }
+  return texts
 }
 
 // Parse MTR_PT.csv and return waypoints for a route
@@ -282,7 +321,8 @@ function toG1000Name(original) {
   return upper.replace(/[^A-Z0-9]/gi, '').slice(0, G1000_USER_WAYPOINT_ID_MAX_LEN)
 }
 
-// In-memory cache: { effectiveDate, csvPath } to avoid re-downloading within same cycle
+// In-memory cache: { effectiveDate, csvPath, widthCsvPath } to avoid re-downloading within same cycle
+/** @type {{ effectiveDate: string, csvPath: string, widthCsvPath: string } | null} */
 let cycleCache = null
 
 app.get('/api/mtr/waypoints', async (req, res) => {
@@ -304,13 +344,15 @@ app.get('/api/mtr/waypoints', async (req, res) => {
   try {
     let effectiveDate = cycleCache?.effectiveDate
     let csvPath = cycleCache?.csvPath
+    let widthCsvPath = cycleCache?.widthCsvPath
 
-    if (!csvPath) {
+    if (!csvPath || !widthCsvPath) {
       effectiveDate = await getCurrentCycleDate()
       const result = await downloadMtrCsv(effectiveDate)
       csvPath = result.csvPath
+      widthCsvPath = result.widthCsvPath
       effectiveDate = result.effectiveDate
-      cycleCache = { effectiveDate, csvPath }
+      cycleCache = { effectiveDate, csvPath, widthCsvPath }
     }
 
     const waypoints = await getWaypointsFromCsv(
@@ -330,6 +372,44 @@ app.get('/api/mtr/waypoints', async (req, res) => {
     res.status(500).json({
       error: err.message ?? 'Failed to fetch MTR waypoints',
     })
+  }
+})
+
+/** NASR MTR_WDTH.csv corridor width text for coordinator survey planning */
+app.get('/api/mtr/width', async (req, res) => {
+  const routeType = (req.query.routeType ?? 'IR').toUpperCase()
+  const routeNumber = req.query.routeNumber ?? ''
+
+  if (!['IR', 'VR'].includes(routeType)) {
+    res.status(400).json({ error: 'FAA MTR CSV only has IR and VR routes.' })
+    return
+  }
+  if (!routeNumber.trim()) {
+    res.status(400).json({ error: 'routeNumber is required' })
+    return
+  }
+
+  try {
+    let effectiveDate = cycleCache?.effectiveDate
+    let widthCsvPath = cycleCache?.widthCsvPath
+
+    if (!widthCsvPath) {
+      effectiveDate = await getCurrentCycleDate()
+      const result = await downloadMtrCsv(effectiveDate)
+      effectiveDate = result.effectiveDate
+      cycleCache = {
+        effectiveDate,
+        csvPath: result.csvPath,
+        widthCsvPath: result.widthCsvPath,
+      }
+      widthCsvPath = result.widthCsvPath
+    }
+
+    const widthTexts = await getWidthTextsFromCsv(widthCsvPath, routeType, routeNumber)
+    res.json({ effectiveDate, widthTexts })
+  } catch (err) {
+    console.error('MTR width error:', err)
+    res.status(500).json({ error: err.message ?? 'Failed to fetch MTR width' })
   }
 })
 
