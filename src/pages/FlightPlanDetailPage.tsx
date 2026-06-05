@@ -240,6 +240,12 @@ export function FlightPlanDetailPage() {
           ← Back
         </Link>
         <h1 className="text-2xl font-bold text-gray-900 flex-1 min-w-0">{plan.name}</h1>
+        <Link
+          to={`/coordinator/survey?plan=${plan.id}`}
+          className="px-3 py-1.5 text-sm font-medium text-cap-ultramarine border border-cap-ultramarine/40 rounded-lg hover:bg-cap-ultramarine/5 flex-shrink-0"
+        >
+          Survey planner
+        </Link>
         <button
           type="button"
           onClick={resetAllHints}

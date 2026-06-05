@@ -4,7 +4,6 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/schema'
 import { parseWaypointCode } from '@/utils/mtrWaypointCode'
 import { fetchMtrWidthTexts } from '@/services/surveyPlanningApi'
-import { apiBaseUrl } from '@/config/apiConfig'
 import { planSurveyScenario } from '@survey-planning/surveySortiePlanner.js'
 
 function waypointPtIdent(originalName: string): string {
@@ -46,10 +45,6 @@ export function CoordinatorSurveyConsolePage() {
     if (!routeMeta || (routeMeta.routeType !== 'IR' && routeMeta.routeType !== 'VR')) {
       setWidthTexts([])
       setWidthErr('Width data requires an IR or VR route in the loaded flight plan.')
-      return
-    }
-    if (!apiBaseUrl) {
-      setWidthErr('Hosted API required for NASR MTR_WDTH (set VITE_API_BASE_URL or use npm run dev:all).')
       return
     }
     setWidthBusy(true)
@@ -211,13 +206,27 @@ export function CoordinatorSurveyConsolePage() {
                   ))}
                 </ul>
               )}
+              {planBundle.waypoints.length < 2 && (
+                <p className="text-sm text-gray-600 mt-3">
+                  Need at least two resolved waypoints in the flight plan before running the planner.
+                </p>
+              )}
+              {planBundle.waypoints.length >= 2 && !widthBusy && widthTexts.length === 0 && !widthErr && (
+                <p className="text-sm text-gray-600 mt-3">No NASR width lines returned for this route.</p>
+              )}
+              {planBundle.waypoints.length >= 2 && widthErr && (
+                <p className="text-sm text-gray-600 mt-3">
+                  Fix the width error above, or confirm <code className="text-xs bg-gray-100 px-1 rounded">npm run dev:all</code>{' '}
+                  is running (Node API on port 3001 proxies via Vite).
+                </p>
+              )}
               <button
                 type="button"
                 onClick={runPlanner}
-                disabled={planBundle.waypoints.length < 2 || widthTexts.length === 0}
+                disabled={planBundle.waypoints.length < 2 || widthTexts.length === 0 || widthBusy}
                 className="mt-4 px-4 py-2.5 bg-cap-ultramarine text-white rounded-lg text-sm font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
               >
-                Run planner (scaffold)
+                {widthBusy ? 'Loading width data…' : 'Run planner (scaffold)'}
               </button>
             </section>
 
