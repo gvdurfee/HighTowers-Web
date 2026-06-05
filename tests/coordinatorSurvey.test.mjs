@@ -28,9 +28,13 @@ describe('mtrWidthParser VR114', () => {
 
   it('resolves half-width per leg and side', () => {
     const spans = parseWidthTexts(VR114_WIDTH)
-    expect(halfWidthNmForLeg(spans, 'A', 'B', 'left')).toBe(20)
-    expect(halfWidthNmForLeg(spans, 'B', 'M1', 'left')).toBe(10)
-    expect(halfWidthNmForLeg(spans, 'B', 'M1', 'right')).toBe(20)
+    const route = ['A', 'B', 'C', 'D', 'E', 'F', 'M1']
+    expect(halfWidthNmForLeg(spans, 'A', 'B', 'left', route)).toBe(20)
+    expect(halfWidthNmForLeg(spans, 'B', 'M1', 'left', route)).toBe(10)
+    expect(halfWidthNmForLeg(spans, 'B', 'M1', 'right', route)).toBe(20)
+    expect(halfWidthNmForLeg(spans, 'B', 'C', 'left', route)).toBe(10)
+    expect(halfWidthNmForLeg(spans, 'F', 'M1', 'right', route)).toBe(20)
+    expect(halfWidthNmForLeg(spans, 'B', 'C', 'left')).toBeNull()
   })
 })
 
@@ -76,6 +80,26 @@ describe('planSurveyScenario scaffold', () => {
     expect(bM1).toBeDefined()
     expect(bM1.leftOffsets).toEqual([3, 9])
     expect(bM1.rightOffsets).toEqual([3, 9, 15, 21])
+  })
+
+  it('applies B→M1 width to intermediate legs in a full VR114 sequence', () => {
+    const fullWps = ['A', 'B', 'C', 'D', 'E', 'F', 'M1'].map((ptIdent, i) => ({
+      ptIdent,
+      lat: 35 + i * 0.1,
+      lon: -103 - i * 0.1,
+    }))
+    const legs = buildLegWidthSummaries({
+      routeType: 'VR',
+      routeNumber: '114',
+      waypoints: fullWps,
+      widthTexts: VR114_WIDTH,
+      teams: [],
+      sortieBudgetNm: 500,
+    })
+    expect(legs.find((l) => l.fromPt === 'A' && l.toPt === 'B')?.leftNm).toBe(20)
+    expect(legs.find((l) => l.fromPt === 'B' && l.toPt === 'C')?.leftNm).toBe(10)
+    expect(legs.find((l) => l.fromPt === 'B' && l.toPt === 'C')?.rightNm).toBe(20)
+    expect(legs.find((l) => l.fromPt === 'F' && l.toPt === 'M1')?.rightOffsets).toEqual([3, 9, 15, 21])
   })
 
   it('reports scaffold status and entry closest to departure', () => {

@@ -96,29 +96,89 @@ export function parseWidthTexts(widthTexts) {
   return spans
 }
 
+function indexOfRoutePt(orderedUpper, pt) {
+  const u = pt.trim().toUpperCase()
+  return orderedUpper.findIndex((p) => p === u)
+}
+
+/**
+ * True when a one-step leg lies on the route between span endpoints (inclusive).
+ * @param {string} spanFrom
+ * @param {string} spanTo
+ * @param {string} legFrom
+ * @param {string} legTo
+ * @param {string[]} orderedUpper - route point ids in survey order (uppercase)
+ */
+export function legContainedInSpan(spanFrom, spanTo, legFrom, legTo, orderedUpper) {
+  const sf = indexOfRoutePt(orderedUpper, spanFrom)
+  const st = indexOfRoutePt(orderedUpper, spanTo)
+  const lf = indexOfRoutePt(orderedUpper, legFrom)
+  const lt = indexOfRoutePt(orderedUpper, legTo)
+  if (sf < 0 || st < 0 || lf < 0 || lt < 0) return false
+  if (Math.abs(lf - lt) !== 1) return false
+  const spanLo = Math.min(sf, st)
+  const spanHi = Math.max(sf, st)
+  const legLo = Math.min(lf, lt)
+  const legHi = Math.max(lf, lt)
+  return legLo >= spanLo && legHi <= spanHi
+}
+
+function spanRouteSize(span, orderedUpper) {
+  if (span.fromPt === '*' && span.toPt === '*') return orderedUpper.length
+  const sf = indexOfRoutePt(orderedUpper, span.fromPt)
+  const st = indexOfRoutePt(orderedUpper, span.toPt)
+  if (sf < 0 || st < 0) return Infinity
+  return Math.abs(st - sf)
+}
+
 /**
  * Resolve half-width NM for one side on a directed leg between two point ids.
+ * When `orderedRoutePtIdents` is provided, NASR spans such as B→M1 apply to every
+ * consecutive leg along that segment (B→C, C→D, …, F→M1).
  * @param {MtrWidthSpan[]} spans
  * @param {string} fromPt
  * @param {string} toPt
  * @param {'left' | 'right'} side
+ * @param {string[]} [orderedRoutePtIdents] - survey waypoint order
  * @returns {number | null}
  */
-export function halfWidthNmForLeg(spans, fromPt, toPt, side) {
+export function halfWidthNmForLeg(spans, fromPt, toPt, side, orderedRoutePtIdents) {
   const from = fromPt.trim().toUpperCase()
   const to = toPt.trim().toUpperCase()
+  const pick = (span) => (side === 'left' ? span.leftNm : span.rightNm)
+
   for (const span of spans) {
     if (span.fromPt === '*' && span.toPt === '*') {
-      return side === 'left' ? span.leftNm : span.rightNm
+      return pick(span)
     }
     const sf = span.fromPt.toUpperCase()
     const st = span.toPt.toUpperCase()
-    if (sf === from && st === to) {
-      return side === 'left' ? span.leftNm : span.rightNm
-    }
-    if (sf === to && st === from) {
-      return side === 'left' ? span.leftNm : span.rightNm
+    if ((sf === from && st === to) || (sf === to && st === from)) {
+      return pick(span)
     }
   }
-  return null
+
+  const orderedUpper = orderedRoutePtIdents?.map((p) => p.trim().toUpperCase())
+  if (!orderedUpper?.length) return null
+
+  let best = null
+  let bestSize = Infinity
+  for (const span of spans) {
+    if (span.fromPt === '*' && span.toPt === '*') {
+      const size = spanRouteSize(span, orderedUpper)
+      if (size < bestSize) {
+        best = span
+        bestSize = size
+      }
+      continue
+    }
+    if (legContainedInSpan(span.fromPt, span.toPt, from, to, orderedUpper)) {
+      const size = spanRouteSize(span, orderedUpper)
+      if (size < bestSize) {
+        best = span
+        bestSize = size
+      }
+    }
+  }
+  return best ? pick(best) : null
 }

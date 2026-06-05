@@ -67,6 +67,7 @@ export function buildLegWidthSummaries(input) {
   const spans = parseWidthTexts(input.widthTexts ?? [])
   const policy = input.trackPolicy ?? {}
   const wps = input.waypoints ?? []
+  const routePtIdents = wps.map((w, i) => w.ptIdent ?? String(i))
   const legs = []
 
   for (let i = 0; i < wps.length - 1; i++) {
@@ -74,8 +75,8 @@ export function buildLegWidthSummaries(input) {
     const to = wps[i + 1]
     const fromPt = from.ptIdent ?? String(i)
     const toPt = to.ptIdent ?? String(i + 1)
-    const leftNm = halfWidthNmForLeg(spans, fromPt, toPt, 'left')
-    const rightNm = halfWidthNmForLeg(spans, fromPt, toPt, 'right')
+    const leftNm = halfWidthNmForLeg(spans, fromPt, toPt, 'left', routePtIdents)
+    const rightNm = halfWidthNmForLeg(spans, fromPt, toPt, 'right', routePtIdents)
     legs.push({
       fromPt,
       toPt,
