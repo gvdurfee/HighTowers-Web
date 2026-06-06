@@ -37,7 +37,16 @@ function formatSurveySide(side: string) {
 
 type RunMode = 'single' | 'compare-1-2' | 'compare-2-3'
 
-type PlannerResult = ReturnType<typeof planSurveyScenario>
+type PlannerResult =
+  | ReturnType<typeof planSurveyScenario>
+  | ReturnType<typeof planThreeTeamGeographicScenario>
+
+type SurveyTeamInput = {
+  label: string
+  depLat: number
+  depLon: number
+  side: 'left' | 'right'
+}
 type Compare12Result = ReturnType<typeof compareOneVsTwoTeamStaffing>
 type Compare23Result = ReturnType<typeof compareTwoVsThreeTeamStaffing>
 type CompareBundle =
@@ -411,10 +420,10 @@ export function CoordinatorSurveyConsolePage() {
     }
   }
 
-  const buildTeamsForSingle = () => {
+  const buildTeamsForSingle = (): SurveyTeamInput[] => {
     const t1 = team1Input()
     if (!t1) return []
-    const teams = [t1]
+    const teams: SurveyTeamInput[] = [t1]
     const t2 = team2Input()
     if (teamCount === 2 && t2) teams.push(t2)
     return teams
@@ -895,9 +904,10 @@ export function CoordinatorSurveyConsolePage() {
                   Centerline {legsResult.totalCenterlineNm} NM · Budget {legsResult.sortieBudgetNm} NM
                 </p>
 
-                {plannerResult?.assignmentModel === 'geographic' &&
+                {plannerResult &&
                   'segmentAssignments' in plannerResult &&
-                  plannerResult.segmentAssignments && (
+                  plannerResult.segmentAssignments &&
+                  plannerResult.segmentAssignments.length > 0 && (
                     <div className="mb-8 rounded-lg border-2 border-cap-ultramarine/40 bg-slate-50 p-4">
                       <h3 className="text-base font-semibold text-gray-900 mb-2">Geographic assignment</h3>
                       <p className="text-sm text-gray-700 mb-3">
@@ -919,14 +929,7 @@ export function CoordinatorSurveyConsolePage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {plannerResult.segmentAssignments.map(
-                            (a: {
-                              teamLabel: string
-                              waypointFrom: string
-                              waypointTo: string
-                              sortieCount: number
-                              totalNm: number
-                            }) => (
+                          {plannerResult.segmentAssignments.map((a) => (
                               <tr key={`${a.teamLabel}-${a.waypointFrom}-${a.waypointTo}`} className="border-b border-gray-200">
                                 <td className="py-2 pr-4 font-medium">{a.teamLabel}</td>
                                 <td className="py-2 pr-4 font-mono">

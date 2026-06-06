@@ -101,6 +101,7 @@ declare module '@survey-planning/surveySortiePlanner.js' {
   }): {
     status: string
     route: string
+    assignmentModel?: string
     sortieBudgetNm: number
     totalCenterlineNm: number
     totalSorties: number | null
