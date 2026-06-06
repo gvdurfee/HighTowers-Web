@@ -47,14 +47,30 @@ function useClickOutside(
   }, [enabled, onOutside, refs])
 }
 
-function BulbIcon({ on }: { on: boolean }) {
-  // Material Symbols uses font-variation settings for filled/unfilled.
+export type GuidedHintSurface = 'dark' | 'light'
+
+/** Shared pill styling for hint triggers (popover button or inline expand control). */
+export function guidedHintTriggerClassName(
+  surface: GuidedHintSurface = 'dark',
+  interactive = true
+): string {
+  const base =
+    surface === 'light'
+      ? 'inline-flex items-center gap-1 rounded-full border border-cap-ultramarine/35 bg-cap-ultramarine/[0.08] px-2 py-1 text-xs font-semibold text-cap-ultramarine'
+      : 'inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-1 text-xs font-semibold text-white'
+  if (!interactive) return base
+  return surface === 'light'
+    ? `${base} hover:bg-cap-ultramarine/[0.14] focus:outline-none focus:ring-2 focus:ring-cap-ultramarine/40`
+    : `${base} hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-cap-yellow/70`
+}
+
+export function GuidedHintBulbIcon({ active }: { active: boolean }) {
   const style = useMemo(
     () =>
       ({
-        fontVariationSettings: `"FILL" ${on ? 1 : 0}, "wght" 400, "GRAD" 0, "opsz" 20`,
+        fontVariationSettings: `"FILL" ${active ? 1 : 0}, "wght" 400, "GRAD" 0, "opsz" 20`,
       }) as React.CSSProperties,
-    [on]
+    [active]
   )
   return (
     <span
@@ -64,6 +80,60 @@ function BulbIcon({ on }: { on: boolean }) {
     >
       lightbulb
     </span>
+  )
+}
+
+export function GuidedHintTriggerFace({
+  stepNumber,
+  isSeen,
+  title,
+}: {
+  stepNumber: number
+  isSeen: boolean
+  title: string
+}) {
+  return (
+    <>
+      {!isSeen && (
+        <span
+          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-cap-yellow text-gray-900"
+          aria-label={`Tip ${stepNumber}`}
+        >
+          {stepNumber}
+        </span>
+      )}
+      <GuidedHintBulbIcon active={!isSeen} />
+      <span className="sr-only">Open tip: {title}</span>
+    </>
+  )
+}
+
+export function GuidedHintDismissActions({
+  onNotNow,
+  onGotIt,
+  className = 'mt-3',
+}: {
+  onNotNow: () => void
+  onGotIt: () => void
+  className?: string
+}) {
+  return (
+    <div className={`flex items-center justify-end gap-2 ${className}`}>
+      <button
+        type="button"
+        className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-900 hover:bg-gray-50"
+        onClick={onNotNow}
+      >
+        Not now
+      </button>
+      <button
+        type="button"
+        className="px-3 py-1.5 text-sm rounded-lg bg-cap-ultramarine text-white font-medium hover:bg-cap-ultramarine/90"
+        onClick={onGotIt}
+      >
+        Got it
+      </button>
+    </div>
   )
 }
 
@@ -148,34 +218,18 @@ export function GuidedHint({
     }
   }, [open, updatePopoverPosition, title, body, footerText])
 
-  const showNumber = !isSeen
-
-  const triggerClass =
-    surface === 'light'
-      ? 'inline-flex items-center gap-1 rounded-full border border-cap-ultramarine/35 bg-cap-ultramarine/[0.08] px-2 py-1 text-xs font-semibold text-cap-ultramarine hover:bg-cap-ultramarine/[0.14] focus:outline-none focus:ring-2 focus:ring-cap-ultramarine/40'
-      : 'inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-1 text-xs font-semibold text-white hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-cap-yellow/70'
-
   return (
     <span className="relative inline-flex">
       <button
         ref={buttonRef}
         type="button"
-        className={triggerClass}
+        className={guidedHintTriggerClassName(surface, true)}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? `${hintId}-popover` : undefined}
         onClick={() => setOpen((v) => !v)}
       >
-        {showNumber && (
-          <span
-            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-cap-yellow text-gray-900"
-            aria-label={`Tip ${stepNumber}`}
-          >
-            {stepNumber}
-          </span>
-        )}
-        <BulbIcon on={!isSeen} />
-        <span className="sr-only">Open tip: {title}</span>
+        <GuidedHintTriggerFace stepNumber={stepNumber} isSeen={isSeen} title={title} />
       </button>
 
       {open &&
@@ -215,25 +269,13 @@ export function GuidedHint({
               </p>
             ) : null}
 
-            <div className="mt-3 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-900 hover:bg-gray-50"
-                onClick={() => setOpen(false)}
-              >
-                Not now
-              </button>
-              <button
-                type="button"
-                className="px-3 py-1.5 text-sm rounded-lg bg-cap-ultramarine text-white font-medium hover:bg-cap-ultramarine/90"
-                onClick={() => {
-                  onDismiss(hintId)
-                  setOpen(false)
-                }}
-              >
-                Got it
-              </button>
-            </div>
+            <GuidedHintDismissActions
+              onNotNow={() => setOpen(false)}
+              onGotIt={() => {
+                onDismiss(hintId)
+                setOpen(false)
+              }}
+            />
           </div>,
           document.body
         )}

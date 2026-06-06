@@ -5,6 +5,91 @@ declare module '@survey-planning/surveySortiePlanner.js' {
     outerMarginNm: number
   }
 
+  export function planThreeTeamGeographicScenario(
+    input: {
+      routeType?: string
+      routeNumber?: string
+      waypoints: { ptIdent: string; lat: number; lon: number }[]
+      widthTexts: string[]
+      teams: { label: string; depLat: number; depLon: number; side: 'left' | 'right' }[]
+      sortieBudgetNm?: number
+      fullRoutePtIdents?: string[]
+    },
+    teams: { label: string; depLat: number; depLon: number; side: 'left' | 'right' }[]
+  ): Awaited<ReturnType<typeof planSurveyScenario>> & {
+    geographicSplits: { boundaryIdx: number; boundaryPt: string }[]
+    segmentAssignments: {
+      teamLabel: string
+      waypointFrom: string
+      waypointTo: string
+      startIdx: number
+      endIdx: number
+      sortieCount: number
+      totalNm: number
+    }[]
+  }
+
+  export function planSingleTeamBothSides(
+    input: {
+      routeType?: string
+      routeNumber?: string
+      waypoints: { ptIdent: string; lat: number; lon: number }[]
+      widthTexts: string[]
+      teams: { label: string; depLat: number; depLon: number; side: 'left' | 'right' }[]
+      sortieBudgetNm?: number
+      assignmentModel?: string
+    }
+  ): Awaited<ReturnType<typeof planSurveyScenario>>
+
+  export function compareTwoVsThreeTeamStaffing(
+    input: {
+      routeType?: string
+      routeNumber?: string
+      waypoints: { ptIdent: string; lat: number; lon: number }[]
+      widthTexts: string[]
+      teams: { label: string; depLat: number; depLon: number; side: 'left' | 'right' }[]
+      sortieBudgetNm?: number
+    },
+    team2: { label: string; depLat: number; depLon: number; side: 'left' | 'right' },
+    team3: { label: string; depLat: number; depLon: number; side: 'left' | 'right' },
+    labels?: { team1DepLabel?: string; team2DepLabel?: string; team3DepLabel?: string }
+  ): {
+    sortieBudgetNm: number
+    team1DepLabel: string
+    team2DepLabel: string
+    team3DepLabel: string
+    twoTeams: Awaited<ReturnType<typeof planSurveyScenario>>
+    threeTeams: Awaited<ReturnType<typeof planThreeTeamGeographicScenario>>
+    deltaSorties: number
+    deltaWingNm: number
+    twoTeamsOverBudgetSorties: number
+    threeTeamsOverBudgetSorties: number
+  }
+
+  export function compareOneVsTwoTeamStaffing(
+    input: {
+      routeType?: string
+      routeNumber?: string
+      waypoints: { ptIdent: string; lat: number; lon: number }[]
+      widthTexts: string[]
+      teams: { label: string; depLat: number; depLon: number; side: 'left' | 'right' }[]
+      sortieBudgetNm?: number
+      assignmentModel?: string
+    },
+    team2: { label: string; depLat: number; depLon: number; side: 'left' | 'right' },
+    labels?: { team1DepLabel?: string; team2DepLabel?: string }
+  ): {
+    sortieBudgetNm: number
+    team1DepLabel: string
+    team2DepLabel: string
+    oneTeam: Awaited<ReturnType<typeof planSurveyScenario>>
+    twoTeams: Awaited<ReturnType<typeof planSurveyScenario>>
+    deltaSorties: number
+    deltaWingNm: number
+    oneTeamOverBudgetSorties: number
+    twoTeamsOverBudgetSorties: number
+  }
+
   export function planSurveyScenario(input: {
     routeType?: string
     routeNumber?: string

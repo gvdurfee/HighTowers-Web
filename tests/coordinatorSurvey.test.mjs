@@ -8,7 +8,13 @@ import {
   parallelOffsetsForHalfWidth,
   estimateSortieNm,
 } from '../shared/survey-planning/surveyGeometry.js'
-import { planSurveyScenario, buildLegWidthSummaries } from '../shared/survey-planning/surveySortiePlanner.js'
+import {
+  planSurveyScenario,
+  buildLegWidthSummaries,
+  compareOneVsTwoTeamStaffing,
+  compareTwoVsThreeTeamStaffing,
+  planThreeTeamGeographicScenario,
+} from '../shared/survey-planning/surveySortiePlanner.js'
 import {
   buildUniformOffsetSegments,
   packSortiesForTeam,
@@ -264,5 +270,107 @@ describe('planSurveyScenario', () => {
     for (const s of rightSorties) {
       expect(s.totalNm).toBeLessThanOrEqual(500)
     }
+  })
+
+  it('compareOneVsTwoTeamStaffing contrasts VR114 KABQ both sides sequential vs KABQ+KROW opposite-side', () => {
+    const KROW = { lat: 33.2998, lon: -104.542 }
+    const team1 = { label: 'Team 1', depLat: KABQ.lat, depLon: KABQ.lon, side: 'left' }
+    const team2 = { label: 'Team 2', depLat: KROW.lat, depLon: KROW.lon, side: 'right' }
+    const compare = compareOneVsTwoTeamStaffing(
+      {
+        routeType: 'VR',
+        routeNumber: '114',
+        waypoints: VR114_FULL_WPS,
+        widthTexts: VR114_WIDTH,
+        teams: [team1],
+        sortieBudgetNm: 500,
+      },
+      team2,
+      { team1DepLabel: 'KABQ', team2DepLabel: 'KROW' }
+    )
+    expect(compare.oneTeam.teams).toHaveLength(2)
+    expect(compare.oneTeam.assignmentModel).toBe('single-sequential')
+    expect(compare.twoTeams.teams).toHaveLength(2)
+    expect(compare.oneTeam.totalSorties).toBe(7)
+    expect(compare.twoTeams.totalSorties).toBe(7)
+    expect(compare.deltaSorties).toBe(0)
+    expect(compare.oneTeam.teams[0].sortieCount).toBe(3)
+    expect(compare.oneTeam.teams[1].sortieCount).toBe(4)
+    expect(compare.oneTeamOverBudgetSorties).toBe(0)
+    expect(compare.twoTeamsOverBudgetSorties).toBe(0)
+    expect(compare.team1DepLabel).toBe('KABQ')
+    expect(compare.team2DepLabel).toBe('KROW')
+  })
+
+  it('planThreeTeamGeographicScenario optimizes VR114 splits for three departures', () => {
+    const KROW = { lat: 33.2998, lon: -104.542 }
+    const KCVN = { lat: 34.425194, lon: -103.079278 }
+    const teams = [
+      { label: 'KABQ', depLat: KABQ.lat, depLon: KABQ.lon, side: 'left' },
+      { label: 'KCVN', depLat: KCVN.lat, depLon: KCVN.lon, side: 'left' },
+      { label: 'KROW', depLat: KROW.lat, depLon: KROW.lon, side: 'left' },
+    ]
+    const result = planThreeTeamGeographicScenario(
+      {
+        routeType: 'VR',
+        routeNumber: '114',
+        waypoints: VR114_FULL_WPS,
+        widthTexts: VR114_WIDTH,
+        teams,
+        sortieBudgetNm: 500,
+      },
+      teams
+    )
+    expect(result.status).toBe('planned')
+    expect(result.assignmentModel).toBe('geographic')
+    expect(result.teams).toHaveLength(3)
+    expect(result.geographicSplits).toHaveLength(2)
+    expect(result.segmentAssignments).toHaveLength(3)
+
+    const covered = result.segmentAssignments
+      .map((a) => `${a.waypointFrom}→${a.waypointTo}`)
+      .join('|')
+    expect(covered).toMatch(/A→/)
+    expect(covered).toMatch(/M1/)
+
+    const totalAssignedSorties = result.segmentAssignments.reduce(
+      (sum, a) => sum + a.sortieCount,
+      0
+    )
+    expect(result.totalSorties).toBe(totalAssignedSorties)
+    expect(result.totalSorties).toBeGreaterThan(0)
+    expect(result.totalWingNm).toBeGreaterThan(0)
+
+    for (const team of result.teams) {
+      expect(team.side).toBe('both')
+      expect(team.sortieCount).toBeGreaterThan(0)
+      for (const s of team.sorties) {
+        expect(s.totalNm).toBeLessThanOrEqual(500 + 1e-6)
+      }
+    }
+  })
+
+  it('compareTwoVsThreeTeamStaffing contrasts VR114 opposite-side vs geographic split', () => {
+    const KROW = { lat: 33.2998, lon: -104.542 }
+    const KCVN = { lat: 34.425194, lon: -103.079278 }
+    const team1 = { label: 'KABQ', depLat: KABQ.lat, depLon: KABQ.lon, side: 'left' }
+    const team2 = { label: 'KROW', depLat: KROW.lat, depLon: KROW.lon, side: 'right' }
+    const team3 = { label: 'KCVN', depLat: KCVN.lat, depLon: KCVN.lon, side: 'left' }
+    const compare = compareTwoVsThreeTeamStaffing(
+      {
+        routeType: 'VR',
+        routeNumber: '114',
+        waypoints: VR114_FULL_WPS,
+        widthTexts: VR114_WIDTH,
+        teams: [team1],
+        sortieBudgetNm: 500,
+      },
+      team2,
+      team3
+    )
+    expect(compare.twoTeams.totalSorties).toBe(7)
+    expect(compare.threeTeams.totalSorties).toBe(6)
+    expect(compare.deltaSorties).toBe(-1)
+    expect(compare.threeTeams.assignmentModel).toBe('geographic')
   })
 })

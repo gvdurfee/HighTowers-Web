@@ -17,7 +17,7 @@ export { DEFAULT_PARALLEL_TRACK_POLICY }
 
 /**
  * @typedef {'left' | 'right'} SurveySide
- * @typedef {'opposite-side' | 'geographic' | 'single'} TeamAssignmentModel
+ * @typedef {'opposite-side' | 'geographic' | 'single' | 'single-sequential'} TeamAssignmentModel
  */
 
 /**
@@ -46,6 +46,7 @@ export { DEFAULT_PARALLEL_TRACK_POLICY }
  * @property {number} sortieBudgetNm - e.g. 400 or 500
  * @property {Partial<import('./surveyGeometry.js').ParallelTrackPolicy>} [trackPolicy]
  * @property {TeamAssignmentModel} [assignmentModel]
+ * @property {string[]} [fullRoutePtIdents] - full-route point order when `waypoints` is a slice
  */
 
 /**
@@ -62,12 +63,16 @@ export { DEFAULT_PARALLEL_TRACK_POLICY }
 /**
  * Build per-leg width and offset lists.
  * @param {SurveyPlannerInput} input
+ * @param {{ fullRoutePtIdents?: string[] }} [options] - full-route point order for NASR span matching on slices
  */
-export function buildLegWidthSummaries(input) {
+export function buildLegWidthSummaries(input, options = {}) {
   const spans = parseWidthTexts(input.widthTexts ?? [])
   const policy = input.trackPolicy ?? {}
   const wps = input.waypoints ?? []
-  const routePtIdents = wps.map((w, i) => w.ptIdent ?? String(i))
+  const routePtIdents =
+    options.fullRoutePtIdents ??
+    input.fullRoutePtIdents ??
+    wps.map((w, i) => w.ptIdent ?? String(i))
   const legs = []
 
   for (let i = 0; i < wps.length - 1; i++) {
@@ -155,3 +160,164 @@ export function planSurveyScenario(input) {
       'Wing planning aid only. Verify corridors and procedures in ForeFlight Military Flight Bag before flying.',
   }
 }
+
+/**
+ * @typedef {ReturnType<typeof planSurveyScenario>} SurveyScenarioResult
+ */
+
+/**
+ * @typedef {object} StaffingCompareResult
+ * @property {number} sortieBudgetNm
+ * @property {string} team1DepLabel
+ * @property {string} team2DepLabel
+ * @property {SurveyScenarioResult} oneTeam
+ * @property {SurveyScenarioResult} twoTeams
+ * @property {number} deltaSorties
+ * @property {number} deltaWingNm
+ * @property {number} oneTeamOverBudgetSorties
+ * @property {number} twoTeamsOverBudgetSorties
+ */
+
+function countOverBudgetSorties(result) {
+  return result.teams.reduce(
+    (sum, t) => sum + t.sorties.filter((s) => s.overBudget).length,
+    0
+  )
+}
+
+/**
+ * One aircraft covering the full corridor: left then right passes from the same departure.
+ * @param {SurveyPlannerInput} input - must include Team 1 in `teams`
+ * @returns {SurveyScenarioResult}
+ */
+export function planSingleTeamBothSides(input) {
+  const team1 = input.teams?.[0]
+  if (!team1) {
+    throw new Error('planSingleTeamBothSides requires Team 1 in input.teams')
+  }
+
+  const leftResult = planSurveyScenario({
+    ...input,
+    teams: [{ ...team1, side: 'left' }],
+    assignmentModel: 'single',
+  })
+  const rightResult = planSurveyScenario({
+    ...input,
+    teams: [{ ...team1, side: 'right' }],
+    assignmentModel: 'single',
+  })
+
+  const leftTeam = leftResult.teams[0]
+  const rightTeam = rightResult.teams[0]
+  const teams = [
+    { ...leftTeam, label: `${leftTeam.label} (left)` },
+    { ...rightTeam, label: `${rightTeam.label} (right)` },
+  ]
+
+  const totalSorties = (leftTeam.sortieCount ?? 0) + (rightTeam.sortieCount ?? 0)
+  const totalWingNm =
+    Math.round(((leftTeam.totalNm ?? 0) + (rightTeam.totalNm ?? 0)) * 10) / 10
+
+  return {
+    ...leftResult,
+    assignmentModel: 'single-sequential',
+    teams,
+    totalSorties,
+    totalWingNm,
+    status: teams.some((t) => t.sorties.length > 0) ? 'planned' : 'scaffold',
+  }
+}
+
+/**
+ * Compare one-team full corridor (both sides sequential) vs two-team opposite-side staffing.
+ * @param {SurveyPlannerInput} input - must include at least Team 1 in `teams`
+ * @param {SurveyTeamInput} team2 - right-side team with departure coords
+ * @param {{ team1DepLabel?: string, team2DepLabel?: string }} [labels]
+ * @returns {StaffingCompareResult}
+ */
+export function compareOneVsTwoTeamStaffing(input, team2, labels = {}) {
+  const team1 = input.teams?.[0]
+  if (!team1) {
+    throw new Error('compareOneVsTwoTeamStaffing requires Team 1 in input.teams')
+  }
+
+  const oneTeam = planSingleTeamBothSides(input)
+  const twoTeams = planSurveyScenario({
+    ...input,
+    teams: [team1, team2],
+    assignmentModel: 'opposite-side',
+  })
+
+  const deltaSorties = (twoTeams.totalSorties ?? 0) - (oneTeam.totalSorties ?? 0)
+  const deltaWingNm =
+    Math.round(((twoTeams.totalWingNm ?? 0) - (oneTeam.totalWingNm ?? 0)) * 10) / 10
+
+  return {
+    sortieBudgetNm: input.sortieBudgetNm ?? 500,
+    team1DepLabel: labels.team1DepLabel ?? 'Team 1',
+    team2DepLabel: labels.team2DepLabel ?? team2.label ?? 'Team 2',
+    oneTeam,
+    twoTeams,
+    deltaSorties,
+    deltaWingNm,
+    oneTeamOverBudgetSorties: countOverBudgetSorties(oneTeam),
+    twoTeamsOverBudgetSorties: countOverBudgetSorties(twoTeams),
+  }
+}
+
+/**
+ * @typedef {object} TwoVsThreeStaffingCompareResult
+ * @property {number} sortieBudgetNm
+ * @property {string} team1DepLabel
+ * @property {string} team2DepLabel
+ * @property {string} team3DepLabel
+ * @property {SurveyScenarioResult} twoTeams
+ * @property {import('./surveyGeographicSplit.js').GeographicScenarioResult} threeTeams
+ * @property {number} deltaSorties
+ * @property {number} deltaWingNm
+ * @property {number} twoTeamsOverBudgetSorties
+ * @property {number} threeTeamsOverBudgetSorties
+ */
+
+/**
+ * Compare two-team opposite-side vs three-team geographic split (full corridor each).
+ * @param {SurveyPlannerInput} input - must include Team 1 in `teams`
+ * @param {SurveyTeamInput} team2
+ * @param {SurveyTeamInput} team3
+ * @param {{ team1DepLabel?: string, team2DepLabel?: string, team3DepLabel?: string }} [labels]
+ * @returns {TwoVsThreeStaffingCompareResult}
+ */
+import { planThreeTeamGeographicScenario } from './surveyGeographicSplit.js'
+
+export function compareTwoVsThreeTeamStaffing(input, team2, team3, labels = {}) {
+  const team1 = input.teams?.[0]
+  if (!team1) {
+    throw new Error('compareTwoVsThreeTeamStaffing requires Team 1 in input.teams')
+  }
+
+  const twoTeams = planSurveyScenario({
+    ...input,
+    teams: [{ ...team1, side: 'left' }, { ...team2, side: 'right' }],
+    assignmentModel: 'opposite-side',
+  })
+  const threeTeams = planThreeTeamGeographicScenario(input, [team1, team2, team3])
+
+  const deltaSorties = (threeTeams.totalSorties ?? 0) - (twoTeams.totalSorties ?? 0)
+  const deltaWingNm =
+    Math.round(((threeTeams.totalWingNm ?? 0) - (twoTeams.totalWingNm ?? 0)) * 10) / 10
+
+  return {
+    sortieBudgetNm: input.sortieBudgetNm ?? 500,
+    team1DepLabel: labels.team1DepLabel ?? team1.label ?? 'Team 1',
+    team2DepLabel: labels.team2DepLabel ?? team2.label ?? 'Team 2',
+    team3DepLabel: labels.team3DepLabel ?? team3.label ?? 'Team 3',
+    twoTeams,
+    threeTeams,
+    deltaSorties,
+    deltaWingNm,
+    twoTeamsOverBudgetSorties: countOverBudgetSorties(twoTeams),
+    threeTeamsOverBudgetSorties: countOverBudgetSorties(threeTeams),
+  }
+}
+
+export { planThreeTeamGeographicScenario }
