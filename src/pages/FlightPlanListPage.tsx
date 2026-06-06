@@ -60,12 +60,20 @@ export function FlightPlanListPage() {
               ❓
             </button>
           </div>
-          <Link
-            to="/flight-plans/new"
-            className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 shadow-sm"
-          >
-            New Flight Plan
-          </Link>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              to="/coordinator/survey"
+              className="px-3 py-2 text-sm font-medium text-cap-ultramarine border border-cap-ultramarine/40 rounded-lg hover:bg-cap-ultramarine/5"
+            >
+              Coordinator Console
+            </Link>
+            <Link
+              to="/flight-plans/new"
+              className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 shadow-sm"
+            >
+              New Flight Plan
+            </Link>
+          </div>
         </div>
         {plans.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-300 bg-slate-50 p-12 text-center">
@@ -105,6 +113,12 @@ export function FlightPlanListPage() {
                   >
                     🗑️
                   </button>
+                  <Link
+                    to={`/coordinator/survey?plan=${plan.id}`}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded"
+                  >
+                    Survey plan
+                  </Link>
                   <Link
                     to={`/flight-plans/${plan.id}`}
                     className="px-3 py-1.5 text-sm font-medium text-cap-ultramarine hover:bg-cap-ultramarine/10 rounded"

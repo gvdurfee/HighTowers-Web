@@ -10,6 +10,7 @@ import { ReportFormPage } from '@/pages/ReportFormPage'
 import { ExportDataPage } from '@/pages/ExportDataPage'
 import { ForeFlightContentPackPage } from '@/pages/ForeFlightContentPackPage'
 import { AdminContentPacksPage } from '@/pages/AdminContentPacksPage'
+import { CoordinatorSurveyConsolePage } from '@/pages/CoordinatorSurveyConsolePage'
 
 function App() {
   const basename =
@@ -31,6 +32,7 @@ function App() {
           <Route path="export" element={<ExportDataPage />} />
           <Route path="foreflight-content-pack" element={<ForeFlightContentPackPage />} />
           <Route path="admin/content-packs" element={<AdminContentPacksPage />} />
+          <Route path="coordinator/survey" element={<CoordinatorSurveyConsolePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
