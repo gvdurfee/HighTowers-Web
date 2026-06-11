@@ -134,6 +134,49 @@ Wait for a green workflow run.
 
 ---
 
+## Day-one Railway + pilot feedback loop
+
+Use this when **Railway** hosts the API for **interim training** (outside official CAP web hosting) and pilots use the **same GitHub Pages URL** every time.
+
+### One-time Railway setup
+
+1. Sign up at [railway.com](https://railway.com) and connect your **GitHub** account.
+2. **New Project → Deploy from GitHub repo** → **HighTowers-Web**.
+3. Service **Settings:** root directory **`server`**, start **`npm start`**.
+4. **Variables:** at minimum `CORS_ORIGINS=https://gvdurfee.github.io` (plus Mapbox and content-pack vars from Part 1).
+5. **Volumes:** mount **`/app/.mtr-cache`** so NASR downloads survive redeploys.
+6. **Networking → Generate Domain** → copy the HTTPS origin (e.g. `https://hightowers-api.up.railway.app`).
+7. Set GitHub **`VITE_API_BASE_URL`** to that origin (Part 2) and rebuild Pages.
+
+Full detail: [API_HOSTING.md § Railway](./API_HOSTING.md#railway-example).
+
+### Two deploys, one pilot bookmark
+
+| You change | What redeploys | Pilots see |
+|------------|----------------|------------|
+| `src/` (UI, coordinator console, etc.) | GitHub Pages (~1 min after push to `main`) | Same URL; refresh after the Actions workflow is green |
+| `server/` (MTR, width API, content packs) | Railway (~1–3 min after push to `main`) | Same URL; API behavior updates without a new bookmark |
+
+Pilots always open **https://gvdurfee.github.io/HighTowers-Web/** — not the Railway hostname.
+
+### Feedback loop with remote users
+
+1. Agree on a change (call, email, etc.).
+2. Develop locally with `npm run dev:all` until it looks right.
+3. **Push to `main`** when pilots should try it.
+4. Wait for **Deploy to GitHub Pages** (and Railway, if `server/` changed) to finish.
+5. Tell pilots: *“Refresh the app”* (hard refresh if the UI looks stale).
+
+You do **not** need Railway running on your laptop for day-to-day coding. Railway is for **shared** access; local dev uses the Vite proxy to port 3001.
+
+### Day-one smoke checks for pilots
+
+- Crew app loads at the Pages URL.
+- **Coordinator Survey Console** (from a flight plan) loads NASR width lines — confirms Railway + `VITE_API_BASE_URL` + CORS.
+- Wing admin and content packs work if you use those features (Part 3 onward).
+
+---
+
 ## Part 3 — One-time per browser: Content Pack API key
 
 The admin console sends **`X-API-Key`** on inventory and publish requests. The Pages build does **not** embed this key (by design). Use the same value as `CONTENT_PACK_API_KEY` on the server.
