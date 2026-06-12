@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coordinator Survey Console — Wing handout</title>
+  <style>
+    :root {
+      --cap-ultramarine: #0e2b8d;
+      --cap-pimento: #db0029;
+      --cap-silver: #ababab;
+      --cap-yellow: #ffd911;
+      --text: #1a1a1a;
+      --muted: #4b5563;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.45;
+      color: var(--text);
+      max-width: 8.5in;
+      margin: 0 auto;
+      padding: 0.55in 0.65in;
+    }
+    header {
+      border-bottom: 3px solid var(--cap-ultramarine);
+      padding-bottom: 0.35in;
+      margin-bottom: 0.3in;
+    }
+    h1 {
+      font-size: 20pt;
+      color: var(--cap-ultramarine);
+      margin: 0 0 0.15in;
+      line-height: 1.2;
+    }
+    .subtitle {
+      font-size: 11pt;
+      color: var(--muted);
+      margin: 0;
+    }
+    .audience {
+      font-size: 9.5pt;
+      margin-top: 0.12in;
+      color: var(--muted);
+    }
+    h2 {
+      font-size: 12pt;
+      color: var(--cap-ultramarine);
+      margin: 0.28in 0 0.12in;
+      page-break-after: avoid;
+    }
+    p { margin: 0.1in 0; }
+    ul { margin: 0.08in 0; padding-left: 0.22in; }
+    li { margin: 0.04in 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5pt;
+      margin: 0.1in 0 0.15in;
+    }
+    th, td {
+      border: 1px solid #d1d5db;
+      padding: 5px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f3f4f6;
+      font-weight: 600;
+      width: 28%;
+    }
+    .callout {
+      background: #f8fafc;
+      border-left: 4px solid var(--cap-ultramarine);
+      padding: 0.12in 0.15in;
+      margin: 0.15in 0;
+      font-size: 9.5pt;
+    }
+    .disclaimer {
+      color: var(--cap-pimento);
+      font-weight: 700;
+      font-size: 10pt;
+      margin-top: 0.2in;
+      padding: 0.1in 0;
+      border-top: 2px solid var(--cap-pimento);
+    }
+    .footer {
+      font-size: 8.5pt;
+      color: var(--muted);
+      margin-top: 0.15in;
+    }
+    code, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 9pt; }
+    @media print {
+      body { padding: 0.45in 0.55in; }
+      h2 { break-after: avoid; }
+      table, .callout { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Coordinator Survey Console</h1>
+    <p class="subtitle"><strong>HighTowers-Web</strong> — Wing planning aid for Low Level Route tower surveys</p>
+    <p class="audience"><strong>Audience:</strong> Wing coordinators, squadron leadership, and aircrew who need to understand how staffing decisions are made.</p>
+  </header>
+
+  <h2>What this tool is</h2>
+  <p>The <strong>Coordinator Survey Console</strong> helps a wing coordinator answer:</p>
+  <ul>
+    <li>How many <strong>sorties</strong> does each team need?</li>
+    <li>Which <strong>contiguous MTR waypoint ranges</strong> should each aircraft fly?</li>
+    <li>How do <strong>1 vs 2 vs 3 teams</strong> compare on <strong>total wing sorties</strong>?</li>
+  </ul>
+  <p>It uses <strong>NASR corridor width</strong>, your <strong>flight-plan waypoint sequence</strong>, <strong>departure airports you choose</strong>, and a <strong>per-sortie distance budget</strong> (typically 400–500 NM). It models <strong>G1000 parallel-track offsets</strong> on each side of the centerline.</p>
+  <p><strong>It is not:</strong> a weather tool, MOA planner, ATC product, or ForeFlight replacement. Crews still fly corridors in <strong>ForeFlight Military Flight Bag</strong>.</p>
+
+  <h2>Who uses what</h2>
+  <table>
+    <tr><th>Wing coordinator</th><td>Coordinator Survey Console — staffing what-if, sortie briefs</td></tr>
+    <tr><th>Aircrew</th><td>Main app — flight plans, tower analysis, maps, PDF export, content packs</td></tr>
+    <tr><th>Wing administrator</th><td>Content Pack console — pack lifecycle (separate from coordinator planning)</td></tr>
+  </table>
+
+  <h2>How coordinators work in practice</h2>
+  <ol>
+    <li><strong>Start with available squadrons</strong> — CAP teams operate from airports near their home base. The tool does <strong>not</strong> pick airports for you.</li>
+    <li><strong>Build or open a flight plan</strong> for the MTR; open the console from <strong>Flight Plans</strong>.</li>
+    <li><strong>Run a what-if</strong> — enter Team 2 and/or Team 3 airports; choose a mode or <strong>Compare 1 vs 2</strong> / <strong>Compare 2 vs 3</strong>.</li>
+    <li><strong>Brief teams</strong> — sortie rows: waypoint from→to, offsets, ferry and along-route NM.</li>
+    <li><strong>Re-run when the roster changes</strong> — weather or availability may drop a team the day before: recalculate with fewer teams, or swap in another squadron’s airport and re-brief everyone.</li>
+  </ol>
+  <div class="callout">
+    <strong>Management one-liner:</strong> The coordinator names which teams and airports can play; HighTowers calculates how to divide the route and sorties to cover the MTR with the fewest flights practical under the distance cap—and you can re-run when the roster changes.
+  </div>
+
+  <h2>Planner modes</h2>
+  <table>
+    <tr><th>1 team</th><td>One aircraft: inner then outer passes on the <strong>full route</strong> from one base.</td></tr>
+    <tr><th>2 teams</th><td><strong>Parallel:</strong> opposite sides of the corridor; same geography, different bases.</td></tr>
+    <tr><th>3 teams</th><td><strong>Geographic split:</strong> three route segments; each team flies both sides of its segment. Optimizer picks splits and base assignments (fewest sorties, then NM).</td></tr>
+    <tr><th>Compare 1 vs 2</th><td>One aircraft (full corridor) vs two aircraft (opposite sides).</td></tr>
+    <tr><th>Compare 2 vs 3</th><td>Two aircraft (opposite sides) vs three aircraft (geographic split).</td></tr>
+  </table>
+
+  <h2>What the optimizer does (and does not)</h2>
+  <table>
+    <tr><th>Does</th><td>Minimize total wing sorties (tie-break NM); pack waypoint chains into sorties under the budget; include ferry and offset legs; optimize each sortie’s start end; for 3-team mode, search segment boundaries and team assignments.</td></tr>
+    <tr><th>Does not</th><td>Choose squadrons or airports; change the MTR waypoint list; replace ForeFlight or weather judgment.</td></tr>
+  </table>
+
+  <h2>Reading the results</h2>
+  <table>
+    <tr><th>Inner / Outer</th><td>Left and right of centerline (asymmetric spans use different offset lists).</td></tr>
+    <tr><th>Offsets</th><td>G1000 parallel-track spacing in NM (default: 3 → 9 → 15 → outer margin).</td></tr>
+    <tr><th>Ferry in / out</th><td>Base ↔ route entry or exit for that sortie.</td></tr>
+    <tr><th>Along route</th><td>Directed offset legs on the assigned waypoint chain.</td></tr>
+    <tr><th>⚠ in Total</th><td>Over NM budget — shorter segment or more teams.</td></tr>
+  </table>
+
+  <h2>URLs (NM Wing pilot hosting)</h2>
+  <table>
+    <tr><th>Crew app</th><td class="mono">https://gvdurfee.github.io/HighTowers-Web/</td></tr>
+    <tr><th>Coordinator console</th><td>Flight Plans → <strong>Coordinator Survey Console</strong>, or <span class="mono">/coordinator/survey?plan=&lt;id&gt;</span></td></tr>
+    <tr><th>Wing admin</th><td><span class="mono">/admin/content-packs</span> — wing staff only</td></tr>
+  </table>
+  <p>After updates on <span class="mono">main</span>, hard refresh (Cmd+Shift+R). Pages rebuilds automatically; Railway API updates when <span class="mono">server/</span> changes.</p>
+
+  <p class="disclaimer">Wing planning aid only. Verify corridors and procedures in ForeFlight Military Flight Bag before flying.</p>
+  <p class="footer">HighTowers-Web · <span class="mono">docs/COORDINATOR_SURVEY_CONSOLE_HANDOUT.md</span> · Related: COORDINATOR_SURVEY_CONSOLE.md, content-pack-wing-workflow.md</p>
+</body>
+</html>

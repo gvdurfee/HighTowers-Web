@@ -6,6 +6,8 @@ Wing **coordinator what-if planner** for Low Level Route tower surveys: given MT
 
 **Launch:** Flight Plans → **Coordinator Survey Console** (bookmark `/coordinator/survey`; optional `?plan=<flightPlanId>`).
 
+**Wing handout (print/PDF):** [`docs/handouts/Coordinator-Survey-Console-Handout.pdf`](./handouts/Coordinator-Survey-Console-Handout.pdf) — coordinator and crew communication; source [`COORDINATOR_SURVEY_CONSOLE_HANDOUT.md`](./COORDINATOR_SURVEY_CONSOLE_HANDOUT.md). Regenerate: `npm run handout:coordinator-pdf`.
+
 **Status:** PR 1 scaffold — shared planner modules, `MTR_WDTH` API, UI shell, VR114 parser tests. Sortie packing and multi-team optimization follow in later commits on this branch.
 
 ---
@@ -157,5 +159,7 @@ Per scenario:
 
 ## 11. Related docs
 
+- [COORDINATOR_SURVEY_CONSOLE_HANDOUT.md](./COORDINATOR_SURVEY_CONSOLE_HANDOUT.md) — wing communication (print/PDF)
+- [handouts/Coordinator-Survey-Console-Handout.pdf](./handouts/Coordinator-Survey-Console-Handout.pdf) — same content, ready to email or print
 - [MTR_DATA_SOURCE_INVESTIGATION.md](./MTR_DATA_SOURCE_INVESTIGATION.md) — NASR vs ArcGIS
 - [content-pack-wing-workflow.md](./content-pack-wing-workflow.md) — crew close-out (separate from coordinator planning)

@@ -21,6 +21,13 @@ import { useHintsSeen } from '@/hooks/useHintsSeen'
 
 const HINT_COORD_QUICK_REF = 'coordinatorSurvey.quickReference'
 
+/** Match NewFlightPlanPage airport identifier fields. */
+const AIRPORT_CODE_INPUT_CLASS =
+  'flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent'
+const AIRPORT_LOOKUP_BTN_CLASS =
+  'px-4 py-2 bg-cap-ultramarine text-white rounded-lg text-sm font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50 whitespace-nowrap shrink-0 focus:outline-none focus:ring-2 focus:ring-cap-ultramarine focus:ring-offset-2'
+const AIRPORT_LOOKUP_RESULT_CLASS = 'text-sm text-green-700 mt-1.5 font-medium'
+
 function waypointPtIdent(originalName: string): string {
   const parsed = parseWaypointCode(originalName)
   return parsed?.waypointLetter ?? originalName
@@ -292,6 +299,8 @@ export function CoordinatorSurveyConsolePage() {
   const [team3Err, setTeam3Err] = useState<string | null>(null)
   const [team3Busy, setTeam3Busy] = useState(false)
 
+  const team3CodeInputRef = useRef<HTMLInputElement>(null)
+
   const [sortieBudgetNm, setSortieBudgetNm] = useState(500)
   const [widthTexts, setWidthTexts] = useState<string[]>([])
   const [widthErr, setWidthErr] = useState<string | null>(null)
@@ -367,7 +376,8 @@ export function CoordinatorSurveyConsolePage() {
     code: string,
     setAirport: (a: AirportResult | null) => void,
     setErr: (e: string | null) => void,
-    setBusy: (b: boolean) => void
+    setBusy: (b: boolean) => void,
+    onSuccess?: () => void
   ) => {
     const trimmed = code.trim()
     if (!trimmed) return
@@ -381,12 +391,24 @@ export function CoordinatorSurveyConsolePage() {
         return
       }
       setAirport(airport)
+      onSuccess?.()
     } catch {
       setAirport(null)
       setErr(`Could not find airport: ${trimmed}`)
     } finally {
       setBusy(false)
     }
+  }
+
+  const runTeam2Lookup = () => {
+    void lookupTeamAirport(team2Code, setTeam2Airport, setTeam2Err, setTeam2Busy, () => {
+      // After Team 2 resolves, move keyboard focus to Team 3 (same pattern as Flight Plans dep → dest).
+      queueMicrotask(() => team3CodeInputRef.current?.focus())
+    })
+  }
+
+  const runTeam3Lookup = () => {
+    void lookupTeamAirport(team3Code, setTeam3Airport, setTeam3Err, setTeam3Busy)
   }
 
   const team1Input = () => {
@@ -748,23 +770,27 @@ export function CoordinatorSurveyConsolePage() {
                           setTeam2Airport(null)
                           setTeam2Err(null)
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            if (team2Code.trim()) runTeam2Lookup()
+                          }
+                        }}
                         placeholder="e.g. KROW"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase"
+                        className={AIRPORT_CODE_INPUT_CLASS}
                         aria-label="Team 2 departure airport code"
                       />
                       <button
                         type="button"
-                        onClick={() =>
-                          void lookupTeamAirport(team2Code, setTeam2Airport, setTeam2Err, setTeam2Busy)
-                        }
+                        onClick={runTeam2Lookup}
                         disabled={!team2Code.trim() || team2Busy}
-                        className="px-3 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
+                        className={AIRPORT_LOOKUP_BTN_CLASS}
                       >
                         {team2Busy ? '…' : 'Look up'}
                       </button>
                     </div>
                     {team2Airport && (
-                      <p className="text-gray-600 mt-2">
+                      <p className={AIRPORT_LOOKUP_RESULT_CLASS}>
                         {team2Airport.identifier} — {team2Airport.name}
                       </p>
                     )}
@@ -786,6 +812,7 @@ export function CoordinatorSurveyConsolePage() {
                     <p className="font-medium text-gray-900 mb-2">Team 3 — departure</p>
                     <div className="flex gap-2 max-w-md">
                       <input
+                        ref={team3CodeInputRef}
                         type="text"
                         value={team3Code}
                         onChange={(e) => {
@@ -793,23 +820,27 @@ export function CoordinatorSurveyConsolePage() {
                           setTeam3Airport(null)
                           setTeam3Err(null)
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            if (team3Code.trim()) runTeam3Lookup()
+                          }
+                        }}
                         placeholder="e.g. KROW"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase"
+                        className={AIRPORT_CODE_INPUT_CLASS}
                         aria-label="Team 3 departure airport code"
                       />
                       <button
                         type="button"
-                        onClick={() =>
-                          void lookupTeamAirport(team3Code, setTeam3Airport, setTeam3Err, setTeam3Busy)
-                        }
+                        onClick={runTeam3Lookup}
                         disabled={!team3Code.trim() || team3Busy}
-                        className="px-3 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
+                        className={AIRPORT_LOOKUP_BTN_CLASS}
                       >
                         {team3Busy ? '…' : 'Look up'}
                       </button>
                     </div>
                     {team3Airport && (
-                      <p className="text-gray-600 mt-2">
+                      <p className={AIRPORT_LOOKUP_RESULT_CLASS}>
                         {team3Airport.identifier} — {team3Airport.name}
                       </p>
                     )}
