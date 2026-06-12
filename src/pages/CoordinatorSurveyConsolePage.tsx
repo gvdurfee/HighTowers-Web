@@ -25,8 +25,27 @@ const HINT_COORD_QUICK_REF = 'coordinatorSurvey.quickReference'
 const AIRPORT_CODE_INPUT_CLASS =
   'flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent'
 const AIRPORT_LOOKUP_BTN_CLASS =
-  'px-4 py-2 bg-cap-ultramarine text-white rounded-lg text-sm font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50 whitespace-nowrap shrink-0 focus:outline-none focus:ring-2 focus:ring-cap-ultramarine focus:ring-offset-2'
+  'px-4 py-2 bg-cap-ultramarine text-white rounded-lg text-sm font-medium hover:bg-cap-ultramarine/90 whitespace-nowrap shrink-0 focus:outline-none focus:ring-2 focus:ring-cap-ultramarine focus:ring-offset-2'
+const AIRPORT_LOOKUP_BTN_IDLE_CLASS = 'opacity-50 cursor-not-allowed'
 const AIRPORT_LOOKUP_RESULT_CLASS = 'text-sm text-green-700 mt-1.5 font-medium'
+
+function onAirportCodeInputKeyDown(
+  e: React.KeyboardEvent<HTMLInputElement>,
+  lookupBtn: HTMLButtonElement | null,
+  runLookup: () => void,
+  canLookup: boolean
+) {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    if (canLookup) runLookup()
+    return
+  }
+  // Grid layout can skip adjacent buttons in tab order; always visit Look up after the code field.
+  if (e.key === 'Tab' && !e.shiftKey) {
+    e.preventDefault()
+    lookupBtn?.focus()
+  }
+}
 
 function waypointPtIdent(originalName: string): string {
   const parsed = parseWaypointCode(originalName)
@@ -299,7 +318,9 @@ export function CoordinatorSurveyConsolePage() {
   const [team3Err, setTeam3Err] = useState<string | null>(null)
   const [team3Busy, setTeam3Busy] = useState(false)
 
+  const team2LookupRef = useRef<HTMLButtonElement>(null)
   const team3CodeInputRef = useRef<HTMLInputElement>(null)
+  const team3LookupRef = useRef<HTMLButtonElement>(null)
 
   const [sortieBudgetNm, setSortieBudgetNm] = useState(500)
   const [widthTexts, setWidthTexts] = useState<string[]>([])
@@ -400,7 +421,11 @@ export function CoordinatorSurveyConsolePage() {
     }
   }
 
+  const team2CanLookup = Boolean(team2Code.trim()) && !team2Busy
+  const team3CanLookup = Boolean(team3Code.trim()) && !team3Busy
+
   const runTeam2Lookup = () => {
+    if (!team2CanLookup) return
     void lookupTeamAirport(team2Code, setTeam2Airport, setTeam2Err, setTeam2Busy, () => {
       // After Team 2 resolves, move keyboard focus to Team 3 (same pattern as Flight Plans dep → dest).
       queueMicrotask(() => team3CodeInputRef.current?.focus())
@@ -408,6 +433,7 @@ export function CoordinatorSurveyConsolePage() {
   }
 
   const runTeam3Lookup = () => {
+    if (!team3CanLookup) return
     void lookupTeamAirport(team3Code, setTeam3Airport, setTeam3Err, setTeam3Busy)
   }
 
@@ -770,21 +796,36 @@ export function CoordinatorSurveyConsolePage() {
                           setTeam2Airport(null)
                           setTeam2Err(null)
                         }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            if (team2Code.trim()) runTeam2Lookup()
-                          }
-                        }}
+                        onKeyDown={(e) =>
+                          onAirportCodeInputKeyDown(
+                            e,
+                            team2LookupRef.current,
+                            runTeam2Lookup,
+                            team2CanLookup
+                          )
+                        }
                         placeholder="e.g. KROW"
                         className={AIRPORT_CODE_INPUT_CLASS}
                         aria-label="Team 2 departure airport code"
                       />
                       <button
+                        ref={team2LookupRef}
                         type="button"
                         onClick={runTeam2Lookup}
-                        disabled={!team2Code.trim() || team2Busy}
-                        className={AIRPORT_LOOKUP_BTN_CLASS}
+                        aria-disabled={!team2CanLookup}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            if (team2CanLookup) runTeam2Lookup()
+                            return
+                          }
+                          if (e.key === 'Tab' && !e.shiftKey && needsTeam3) {
+                            e.preventDefault()
+                            team3CodeInputRef.current?.focus()
+                          }
+                        }}
+                        className={`${AIRPORT_LOOKUP_BTN_CLASS}${team2CanLookup ? '' : ` ${AIRPORT_LOOKUP_BTN_IDLE_CLASS}`}`}
                       >
                         {team2Busy ? '…' : 'Look up'}
                       </button>
@@ -820,21 +861,31 @@ export function CoordinatorSurveyConsolePage() {
                           setTeam3Airport(null)
                           setTeam3Err(null)
                         }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            if (team3Code.trim()) runTeam3Lookup()
-                          }
-                        }}
+                        onKeyDown={(e) =>
+                          onAirportCodeInputKeyDown(
+                            e,
+                            team3LookupRef.current,
+                            runTeam3Lookup,
+                            team3CanLookup
+                          )
+                        }
                         placeholder="e.g. KROW"
                         className={AIRPORT_CODE_INPUT_CLASS}
                         aria-label="Team 3 departure airport code"
                       />
                       <button
+                        ref={team3LookupRef}
                         type="button"
                         onClick={runTeam3Lookup}
-                        disabled={!team3Code.trim() || team3Busy}
-                        className={AIRPORT_LOOKUP_BTN_CLASS}
+                        aria-disabled={!team3CanLookup}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            if (team3CanLookup) runTeam3Lookup()
+                          }
+                        }}
+                        className={`${AIRPORT_LOOKUP_BTN_CLASS}${team3CanLookup ? '' : ` ${AIRPORT_LOOKUP_BTN_IDLE_CLASS}`}`}
                       >
                         {team3Busy ? '…' : 'Look up'}
                       </button>
