@@ -161,5 +161,8 @@ Per scenario:
 
 - [COORDINATOR_SURVEY_CONSOLE_HANDOUT.md](./COORDINATOR_SURVEY_CONSOLE_HANDOUT.md) — wing communication (print/PDF)
 - [handouts/Coordinator-Survey-Console-Handout.pdf](./handouts/Coordinator-Survey-Console-Handout.pdf) — same content, ready to email or print
+- [PHASE_A_COORDINATOR_PERSISTENCE_BRIEF.md](./PHASE_A_COORDINATOR_PERSISTENCE_BRIEF.md) — Phase A persistence brief for wing leadership
+- [handouts/Phase-A-Coordinator-Persistence-Brief.pdf](./handouts/Phase-A-Coordinator-Persistence-Brief.pdf) — one-page PDF for Director of Operations
+- [handouts/README.md](./handouts/README.md) — all handouts and regenerate commands
 - [MTR_DATA_SOURCE_INVESTIGATION.md](./MTR_DATA_SOURCE_INVESTIGATION.md) — NASR vs ArcGIS
 - [content-pack-wing-workflow.md](./content-pack-wing-workflow.md) — crew close-out (separate from coordinator planning)

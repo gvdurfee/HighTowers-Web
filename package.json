@@ -10,7 +10,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "handout:coordinator-pdf": "node scripts/generate-coordinator-handout-pdf.mjs"
+    "handout:coordinator-pdf": "node scripts/generate-coordinator-handout-pdf.mjs",
+    "handout:phase-a-pdf": "node scripts/generate-phase-a-brief-pdf.mjs",
+    "handout:all": "npm run handout:coordinator-pdf && npm run handout:phase-a-pdf"
   },
   "dependencies": {
     "@zip.js/zip.js": "^2.7.63",
