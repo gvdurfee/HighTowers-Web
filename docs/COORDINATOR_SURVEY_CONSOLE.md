@@ -131,6 +131,7 @@ Per scenario:
 - Parsed **width table** (auditable vs ForeFlight)
 - **Passes per side per leg**
 - Per team: sortie list with waypoint range, offsets, NM breakdown (ferry / along-route / return)
+- **G1000 sortie `.fpl` export** per sortie row (serpentine route + pilot brief modal with offsets and Heading-mode SOP)
 - **Total sorties** and **total NM**
 - **Entry direction** recommendation (fewest turnarounds / shortest return)
 - Disclaimer: **Wing planning aid only**
@@ -145,7 +146,7 @@ Per scenario:
 | **Phase 1** | Single-team sortie packer + NM model with multi-offset legs |
 | **Phase 2** | Two-team opposite-side compare |
 | **Phase 3** | Third team + geographic split + scenario comparison UI |
-| **Phase 4** | Export / print coordinator brief |
+| **Phase 4** | Export / print coordinator brief; **sortie `.fpl` export + pilot card** |
 
 ---
 
@@ -154,6 +155,8 @@ Per scenario:
 - **VR114** — asymmetric width change at B; regression for parser and future packer
 - **5 NM entire route** — two passes per side, two-sortie mental model
 - Unit tests in `tests/coordinatorSurvey.test.mjs` (no live FAA download in CI)
+- Sortie `.fpl` route builder: `tests/surveySortieFplRoute.test.mjs`, `tests/g1000SortieFpl.test.mjs`
+- G1000 flight validation: [G1000_SORTIE_FPL_FLIGHT_TEST.md](./G1000_SORTIE_FPL_FLIGHT_TEST.md)
 
 ---
 
@@ -166,3 +169,4 @@ Per scenario:
 - [handouts/README.md](./handouts/README.md) — all handouts and regenerate commands
 - [MTR_DATA_SOURCE_INVESTIGATION.md](./MTR_DATA_SOURCE_INVESTIGATION.md) — NASR vs ArcGIS
 - [content-pack-wing-workflow.md](./content-pack-wing-workflow.md) — crew close-out (separate from coordinator planning)
+- [G1000_SORTIE_FPL_FLIGHT_TEST.md](./G1000_SORTIE_FPL_FLIGHT_TEST.md) — G1000 import and parallel-track flight test checklist

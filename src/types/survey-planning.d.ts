@@ -1,3 +1,56 @@
+declare module '@survey-planning/surveySortieFplRoute.js' {
+  export const SORTIE_FPL_ROUTE_POINT_WARN: number
+  export function sliceFragmentWaypoints(
+    allWaypoints: unknown[],
+    startIdx: number,
+    endIdx: number
+  ): unknown[]
+  export function buildSerpentineRouteSequence(
+    fragment: { ptIdent: string; g1000Name: string }[],
+    startAt: string,
+    offsets: number[]
+  ): { routeSequence: string[]; routePointCount: number; warnRoutePointLimit: boolean }
+  export function buildSortieFplExportInput(opts: {
+    sortie: {
+      sortieNumber: number
+      startIdx: number
+      endIdx: number
+      startAt: string
+      waypointFrom: string
+      waypointTo: string
+      offsets: number[]
+    }
+    fragmentWaypoints: { ptIdent: string; g1000Name: string; lat: number; lon: number }[]
+    teamDeparture: { identifier: string; name?: string; lat: number; lon: number; elevation?: number }
+    routeLabel: string
+  }): {
+    routeLabel: string
+    sortieNumber: number
+    waypointFrom: string
+    waypointTo: string
+    offsets: number[]
+    startAt: string
+    fragmentWaypoints: { ptIdent: string; g1000Name: string; lat: number; lon: number }[]
+    routeSequence: string[]
+    routePointCount: number
+    warnRoutePointLimit: boolean
+    teamDeparture: {
+      identifier: string
+      name: string
+      latitude: number
+      longitude: number
+      elevation?: number
+    }
+  }
+  export function formatSortieFplFilename(opts: {
+    dep: string
+    routeName: string
+    from: string
+    to: string
+    sortieNumber: number
+  }): string
+}
+
 declare module '@survey-planning/surveySortiePlanner.js' {
   export const DEFAULT_PARALLEL_TRACK_POLICY: {
     firstOffsetNm: number
@@ -126,6 +179,8 @@ declare module '@survey-planning/surveySortiePlanner.js' {
       note: string | null
       sorties: {
         sortieNumber: number
+        startIdx: number
+        endIdx: number
         waypointFrom: string
         waypointTo: string
         startAt: string

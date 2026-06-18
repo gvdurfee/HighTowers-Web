@@ -17,6 +17,13 @@ import {
   GuidedHintTriggerFace,
   guidedHintTriggerClassName,
 } from '@/components/GuidedHint'
+import type { AirportRecord, WaypointRecord } from '@/db/schema'
+import {
+  exportSortieFplDownload,
+  type SortieFplPilotBrief,
+  type SortieFplSortie,
+} from '@/services/sortieFplExport'
+import { SortiePilotCard } from '@/components/SortiePilotCard'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 
 const HINT_COORD_QUICK_REF = 'coordinatorSurvey.quickReference'
@@ -78,6 +85,20 @@ type Compare23Result = ReturnType<typeof compareTwoVsThreeTeamStaffing>
 type CompareBundle =
   | { kind: '1-2'; data: Compare12Result }
   | { kind: '2-3'; data: Compare23Result }
+
+type SortieExportContext = {
+  waypoints: WaypointRecord[]
+  routeLabel: string
+  resolveTeamAirport: (teamLabel: string) => AirportRecord | null
+}
+
+type PlannerSortie = SortieFplSortie & {
+  ferryInNm: number
+  alongRouteNm: number
+  ferryOutNm: number
+  totalNm: number
+  overBudget?: boolean
+}
 
 function CoordinatorConsoleGuide() {
   const detailsRef = useRef<HTMLDetailsElement>(null)
@@ -204,10 +225,41 @@ function CoordinatorConsoleGuide() {
 function SurveyPlannerResults({
   title,
   result,
+  exportCtx,
+  onPilotBrief,
 }: {
   title?: string
   result: PlannerResult
+  exportCtx?: SortieExportContext | null
+  onPilotBrief?: (brief: SortieFplPilotBrief) => void
 }) {
+  const [exportErr, setExportErr] = useState<string | null>(null)
+
+  const handleExportSortie = (
+    team: PlannerResult['teams'][0],
+    sortie: PlannerSortie
+  ) => {
+    if (!exportCtx) return
+    setExportErr(null)
+    try {
+      const dep = exportCtx.resolveTeamAirport(team.label)
+      if (!dep) {
+        setExportErr(`No departure airport for team ${team.label}.`)
+        return
+      }
+      const brief = exportSortieFplDownload({
+        waypoints: exportCtx.waypoints,
+        sortie,
+        teamDeparture: dep,
+        routeLabel: exportCtx.routeLabel,
+        teamLabel: team.label,
+        side: formatSurveySide(team.side),
+      })
+      onPilotBrief?.(brief)
+    } catch (e) {
+      setExportErr(e instanceof Error ? e.message : 'Failed to export sortie .fpl')
+    }
+  }
   return (
     <div className={title ? 'mb-8 last:mb-0' : ''}>
       {title && <h3 className="text-base font-semibold text-gray-900 mb-3">{title}</h3>}
@@ -242,6 +294,12 @@ function SurveyPlannerResults({
         </div>
       )}
 
+      {exportErr && (
+        <p className="text-sm text-red-700 mb-3" role="alert">
+          {exportErr}
+        </p>
+      )}
+
       {result.teams.map((t) => (
         <div key={t.label} className="mb-6 last:mb-0">
           <p className="text-sm text-gray-700 mb-2">
@@ -270,7 +328,8 @@ function SurveyPlannerResults({
                   <th className="py-2 pr-3">Ferry in</th>
                   <th className="py-2 pr-3">Along route</th>
                   <th className="py-2 pr-3">Ferry out</th>
-                  <th className="py-2">Total</th>
+                  <th className="py-2 pr-3">Total</th>
+                  {exportCtx && <th className="py-2">G1000</th>}
                 </tr>
               </thead>
               <tbody>
@@ -288,10 +347,21 @@ function SurveyPlannerResults({
                     <td className="py-2 pr-3 tabular-nums">{s.ferryInNm}</td>
                     <td className="py-2 pr-3 tabular-nums">{s.alongRouteNm}</td>
                     <td className="py-2 pr-3 tabular-nums">{s.ferryOutNm}</td>
-                    <td className="py-2 tabular-nums font-medium">
+                    <td className="py-2 pr-3 tabular-nums font-medium">
                       {s.totalNm}
                       {s.overBudget ? ' ⚠' : ''}
                     </td>
+                    {exportCtx && (
+                      <td className="py-2">
+                        <button
+                          type="button"
+                          onClick={() => handleExportSortie(t, s as PlannerSortie)}
+                          className="text-xs font-medium text-cap-ultramarine hover:underline whitespace-nowrap"
+                        >
+                          Export .fpl
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -301,6 +371,17 @@ function SurveyPlannerResults({
       ))}
     </div>
   )
+}
+
+function airportResultToRecord(a: AirportResult): AirportRecord {
+  return {
+    id: a.identifier,
+    identifier: a.identifier,
+    name: a.name,
+    latitude: a.latitude,
+    longitude: a.longitude,
+    elevation: a.elevation,
+  }
 }
 
 export function CoordinatorSurveyConsolePage() {
@@ -328,6 +409,7 @@ export function CoordinatorSurveyConsolePage() {
   const [widthBusy, setWidthBusy] = useState(false)
   const [plannerResult, setPlannerResult] = useState<PlannerResult | null>(null)
   const [compareBundle, setCompareBundle] = useState<CompareBundle | null>(null)
+  const [pilotBrief, setPilotBrief] = useState<SortieFplPilotBrief | null>(null)
 
   const planBundle = useLiveQuery(async () => {
     if (!planId) return null
@@ -352,6 +434,23 @@ export function CoordinatorSurveyConsolePage() {
     if (!parsed) return null
     return { routeType: parsed.routeType, routeNumber: parsed.routeNumber }
   }, [planBundle])
+
+  const sortieExportCtx = useMemo((): SortieExportContext | null => {
+    if (!planBundle?.waypoints.length) return null
+    const routeLabel = routeMeta
+      ? `${routeMeta.routeType}${routeMeta.routeNumber}`
+      : planBundle.plan.name.replace(/\s+/g, '')
+    return {
+      waypoints: planBundle.waypoints,
+      routeLabel,
+      resolveTeamAirport: (teamLabel: string) => {
+        if (planBundle.departure?.identifier === teamLabel) return planBundle.departure
+        if (team2Airport?.identifier === teamLabel) return airportResultToRecord(team2Airport)
+        if (team3Airport?.identifier === teamLabel) return airportResultToRecord(team3Airport)
+        return null
+      },
+    }
+  }, [planBundle, routeMeta, team2Airport, team3Airport])
 
   useEffect(() => {
     if (!planBundle) return
@@ -589,6 +688,9 @@ export function CoordinatorSurveyConsolePage() {
 
   return (
     <div className="app-page-shell overflow-auto">
+      {pilotBrief && (
+        <SortiePilotCard brief={pilotBrief} isOpen onClose={() => setPilotBrief(null)} />
+      )}
       <div className="app-panel max-w-4xl mx-auto p-6 md:p-8">
         <header className="mb-6">
           <p className="text-sm text-gray-500 mb-1">
@@ -1216,10 +1318,14 @@ export function CoordinatorSurveyConsolePage() {
                     <SurveyPlannerResults
                       title={`1 team — ${compareBundle.data.team1DepLabel} (both sides, sequential)`}
                       result={compareBundle.data.oneTeam}
+                      exportCtx={sortieExportCtx}
+                      onPilotBrief={setPilotBrief}
                     />
                     <SurveyPlannerResults
                       title={`2 teams — ${compareBundle.data.team1DepLabel} + ${compareBundle.data.team2DepLabel} (inner / outer)`}
                       result={compareBundle.data.twoTeams}
+                      exportCtx={sortieExportCtx}
+                      onPilotBrief={setPilotBrief}
                     />
                   </>
                 ) : compareBundle?.kind === '2-3' ? (
@@ -1227,14 +1333,24 @@ export function CoordinatorSurveyConsolePage() {
                     <SurveyPlannerResults
                       title={`2 teams — ${compareBundle.data.team1DepLabel} inner + ${compareBundle.data.team2DepLabel} outer`}
                       result={compareBundle.data.twoTeams}
+                      exportCtx={sortieExportCtx}
+                      onPilotBrief={setPilotBrief}
                     />
                     <SurveyPlannerResults
                       title={`3 teams — geographic (${compareBundle.data.team1DepLabel}, ${compareBundle.data.team2DepLabel}, ${compareBundle.data.team3DepLabel})`}
                       result={compareBundle.data.threeTeams}
+                      exportCtx={sortieExportCtx}
+                      onPilotBrief={setPilotBrief}
                     />
                   </>
                 ) : (
-                  plannerResult && <SurveyPlannerResults result={plannerResult} />
+                  plannerResult && (
+                    <SurveyPlannerResults
+                      result={plannerResult}
+                      exportCtx={sortieExportCtx}
+                      onPilotBrief={setPilotBrief}
+                    />
+                  )
                 )}
 
                 <p className="text-sm font-bold text-cap-pimento mt-4" role="note">

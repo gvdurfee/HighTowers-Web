@@ -26,6 +26,19 @@ type FlightPlanInput = {
   waypoints: WaypointInput[]
 }
 
+/** Sortie fragment export: serpentine route sequence + unique fragment waypoints for table. */
+export type SortieFlightPlanInput = {
+  routeLabel: string
+  sortieNumber: number
+  departureAirport: AirportInput
+  /** Round-robin sorties use the same airport as departure. */
+  destinationAirport: AirportInput
+  /** Unique MTR user waypoints in the fragment (waypoint-table). */
+  fragmentWaypoints: Pick<WaypointInput, 'g1000Name' | 'latitude' | 'longitude'>[]
+  /** Ordered g1000 names including non-consecutive reuse for serpentine legs. */
+  routeSequence: string[]
+}
+
 function escapeXml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -94,6 +107,20 @@ function buildWaypointTableRows(
   return rows
 }
 
+function emitRoutePointLines(
+  identifier: string,
+  type: 'AIRPORT' | 'USER WAYPOINT',
+  countryCode: string
+): string[] {
+  return [
+    '    <route-point>',
+    `      <waypoint-identifier>${escapeXml(identifier)}</waypoint-identifier>`,
+    `      <waypoint-type>${type}</waypoint-type>`,
+    `      <waypoint-country-code>${countryCode}</waypoint-country-code>`,
+    '    </route-point>',
+  ]
+}
+
 function emitWaypointTableLine(row: TableRow): string[] {
   if (row.kind === 'airport') {
     return [
@@ -119,7 +146,67 @@ function emitWaypointTableLine(row: TableRow): string[] {
   ]
 }
 
+function fragmentWaypointsForTable(
+  fragmentWaypoints: SortieFlightPlanInput['fragmentWaypoints']
+): WaypointInput[] {
+  return fragmentWaypoints.map((wp, i) => ({
+    id: `sortie-${i}`,
+    originalName: wp.g1000Name,
+    g1000Name: wp.g1000Name,
+    latitude: wp.latitude,
+    longitude: wp.longitude,
+    routeType: 'VR',
+    sequence: i,
+  }))
+}
+
 export const G1000Service = {
+  generateSortieFlightPlan(input: SortieFlightPlanInput): string {
+    const created = formatDate(new Date())
+    const dep = input.departureAirport
+    const dest = input.destinationAirport
+    const tableWaypoints = fragmentWaypointsForTable(input.fragmentWaypoints)
+    const tableRows = buildWaypointTableRows(dep, dest, tableWaypoints)
+
+    const routeName = [
+      dep.identifier,
+      input.routeLabel,
+      `sortie${input.sortieNumber}`,
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    const lines: string[] = []
+    lines.push(
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<flight-plan xmlns="http://www8.garmin.com/xmlschemas/FlightPlan/v1">',
+      `  <created>${escapeXml(created)}</created>`,
+      '  <waypoint-table>'
+    )
+
+    for (const row of tableRows) {
+      lines.push(...emitWaypointTableLine(row))
+    }
+
+    lines.push(
+      '  </waypoint-table>',
+      '  <route>',
+      `    <route-name>${escapeXml(routeName)}</route-name>`,
+      '    <flight-plan-index>1</flight-plan-index>'
+    )
+
+    lines.push(...emitRoutePointLines(dep.identifier, 'AIRPORT', 'K2'))
+
+    for (const id of input.routeSequence) {
+      lines.push(...emitRoutePointLines(id.trim(), 'USER WAYPOINT', ''))
+    }
+
+    lines.push(...emitRoutePointLines(dest.identifier, 'AIRPORT', 'K2'))
+
+    lines.push('  </route>', '</flight-plan>', '')
+    return lines.join('\n')
+  },
+
   generateFlightPlan(flightPlan: FlightPlanInput): string {
     const waypoints = [...flightPlan.waypoints].sort(
       (a, b) => a.sequence - b.sequence
@@ -158,13 +245,7 @@ export const G1000Service = {
     )
 
     if (flightPlan.departureAirport) {
-      lines.push(
-        '    <route-point>',
-        `      <waypoint-identifier>${escapeXml(flightPlan.departureAirport.identifier)}</waypoint-identifier>`,
-        '      <waypoint-type>AIRPORT</waypoint-type>',
-        '      <waypoint-country-code>K2</waypoint-country-code>',
-        '    </route-point>'
-      )
+      lines.push(...emitRoutePointLines(flightPlan.departureAirport.identifier, 'AIRPORT', 'K2'))
     }
 
     let lastUserWaypointId: string | null = null
@@ -173,22 +254,12 @@ export const G1000Service = {
       // Some avionics reject routes with consecutive duplicate user route-points (e.g. XM112 twice in a row).
       if (lastUserWaypointId && id.toUpperCase() === lastUserWaypointId.toUpperCase()) continue
       lastUserWaypointId = id
-      lines.push(
-        '    <route-point>',
-        `      <waypoint-identifier>${escapeXml(id)}</waypoint-identifier>`,
-        '      <waypoint-type>USER WAYPOINT</waypoint-type>',
-        '      <waypoint-country-code/>',
-        '    </route-point>'
-      )
+      lines.push(...emitRoutePointLines(id, 'USER WAYPOINT', ''))
     }
 
     if (flightPlan.destinationAirport) {
       lines.push(
-        '    <route-point>',
-        `      <waypoint-identifier>${escapeXml(flightPlan.destinationAirport.identifier)}</waypoint-identifier>`,
-        '      <waypoint-type>AIRPORT</waypoint-type>',
-        '      <waypoint-country-code>K2</waypoint-country-code>',
-        '    </route-point>'
+        ...emitRoutePointLines(flightPlan.destinationAirport.identifier, 'AIRPORT', 'K2')
       )
     }
 

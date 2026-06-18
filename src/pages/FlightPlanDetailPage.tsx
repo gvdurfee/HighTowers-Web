@@ -22,14 +22,30 @@ function creationLoadMethodLabel(m: FlightPlanCreationLoadMethod): string {
 }
 import { G1000Service } from '@/services/g1000'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
+import { parseWaypointCode } from '@/utils/mtrWaypointCode'
+import {
+  buildManualSortieFromPtIdents,
+  exportSortieFplDownload,
+  parseOffsetsInput,
+  type SortieFplPilotBrief,
+} from '@/services/sortieFplExport'
+import { SortiePilotCard } from '@/components/SortiePilotCard'
 import { FlightPlanContentPackCard } from '@/components/FlightPlanContentPackCard'
+import { GuidedHint } from '@/components/GuidedHint'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
+
+const HINT_FP_SORTIE_EXPORT = 'flightPlan.sortieExport'
 
 type LocationState = { skippedWaypoints?: string[]; message?: string } | null
 
 type DisplayItem =
   | { type: 'waypoint'; sequence: number; waypoint: WaypointRecord }
   | { type: 'pending'; sequence: number; pending: PendingWaypoint }
+
+function waypointPtIdent(originalName: string): string {
+  const parsed = parseWaypointCode(originalName)
+  return parsed?.waypointLetter ?? originalName
+}
 
 export function FlightPlanDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -42,11 +58,18 @@ export function FlightPlanDetailPage() {
   const [destination, setDestination] = useState<AirportRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [showExport, setShowExport] = useState(false)
+  const [showSortieExport, setShowSortieExport] = useState(false)
+  const [sortieFromPt, setSortieFromPt] = useState('')
+  const [sortieToPt, setSortieToPt] = useState('')
+  const [sortieStartAt, setSortieStartAt] = useState('')
+  const [sortieOffsets, setSortieOffsets] = useState('3, 9, 15, 21')
+  const [sortieExportErr, setSortieExportErr] = useState<string | null>(null)
+  const [pilotBrief, setPilotBrief] = useState<SortieFplPilotBrief | null>(null)
   const [coordsByPending, setCoordsByPending] = useState<
     Record<string, { latDeg: string; latMin: string; lonDeg: string; lonMin: string }>
   >({})
   const [supplyingCode, setSupplyingCode] = useState<string | null>(null)
-  const { resetAll: resetAllHints } = useHintsSeen()
+  const { isSeen, markSeen, resetAll: resetAllHints } = useHintsSeen()
 
   useEffect(() => {
     if (!id) return
@@ -107,6 +130,20 @@ export function FlightPlanDetailPage() {
     setShowExport(false)
   }
 
+  const setCoordForPending = (
+    code: string,
+    field: 'latDeg' | 'latMin' | 'lonDeg' | 'lonMin',
+    value: string
+  ) => {
+    setCoordsByPending((prev) => ({
+      ...prev,
+      [code]: {
+        ...(prev[code] ?? { latDeg: '', latMin: '', lonDeg: '', lonMin: '' }),
+        [field]: value,
+      },
+    }))
+  }
+
   if (loading || !plan) {
     return (
       <div className="app-page-shell overflow-auto">
@@ -119,7 +156,7 @@ export function FlightPlanDetailPage() {
     )
   }
 
-  const pendingWaypoints = plan?.pendingWaypoints ?? []
+  const pendingWaypoints = plan.pendingWaypoints ?? []
   const showPostCreateBanner =
     !dismissedSkippedWarning &&
     (!!navState?.message?.trim() || pendingWaypoints.length > 0)
@@ -194,22 +231,64 @@ export function FlightPlanDetailPage() {
     }
   }
 
-  const setCoordForPending = (
-    code: string,
-    field: 'latDeg' | 'latMin' | 'lonDeg' | 'lonMin',
-    value: string
-  ) => {
-    setCoordsByPending((prev) => ({
-      ...prev,
-      [code]: {
-        ...(prev[code] ?? { latDeg: '', latMin: '', lonDeg: '', lonMin: '' }),
-        [field]: value,
-      },
-    }))
+  const waypointPtIdents = waypoints.map((w) => waypointPtIdent(w.originalName))
+  const sortieEndpointOptions = (() => {
+    if (!sortieFromPt || !sortieToPt) return [] as string[]
+    const lo = waypointPtIdents.indexOf(sortieFromPt)
+    const hi = waypointPtIdents.indexOf(sortieToPt)
+    if (lo < 0 || hi < 0 || lo === hi) return []
+    const a = waypointPtIdents[Math.min(lo, hi)]
+    const b = waypointPtIdents[Math.max(lo, hi)]
+    return [a, b]
+  })()
+
+  const handleSortieExport = () => {
+    if (!departure) {
+      setSortieExportErr('Set a departure airport on this flight plan first.')
+      return
+    }
+    setSortieExportErr(null)
+    try {
+      const offsets = parseOffsetsInput(sortieOffsets)
+      const sortie = buildManualSortieFromPtIdents({
+        waypoints,
+        fromPt: sortieFromPt,
+        toPt: sortieToPt,
+        startAt: sortieStartAt,
+        offsets,
+        teamDeparture: departure,
+        routeLabel: plan.name.replace(/\s+/g, ''),
+      })
+      const brief = exportSortieFplDownload({
+        waypoints,
+        sortie,
+        teamDeparture: departure,
+        routeLabel: plan.name.replace(/\s+/g, ''),
+        teamLabel: departure.identifier,
+        side: 'manual fragment',
+      })
+      setPilotBrief(brief)
+      setShowSortieExport(false)
+    } catch (e) {
+      setSortieExportErr(e instanceof Error ? e.message : 'Failed to export sortie .fpl')
+    }
+  }
+
+  const toggleSortieExport = () => {
+    setShowSortieExport((v) => !v)
+    setSortieExportErr(null)
+    if (!sortieFromPt && waypointPtIdents.length >= 2) {
+      setSortieFromPt(waypointPtIdents[0])
+      setSortieToPt(waypointPtIdents[waypointPtIdents.length - 1])
+      setSortieStartAt(waypointPtIdents[0])
+    }
   }
 
   return (
     <div className="app-page-shell overflow-auto">
+      {pilotBrief && (
+        <SortiePilotCard brief={pilotBrief} isOpen onClose={() => setPilotBrief(null)} />
+      )}
       <div className="app-panel max-w-3xl mx-auto p-6 md:p-8">
       {showPostCreateBanner && (
         <div className="mb-4 p-4 bg-cap-yellow/20 border border-cap-yellow rounded-lg flex items-start justify-between gap-3">
@@ -413,23 +492,159 @@ export function FlightPlanDetailPage() {
 
         <FlightPlanContentPackCard waypoints={waypoints} />
 
-        <div className="flex gap-3">
+        {waypoints.length >= 2 && (
+          <section className="p-4 bg-white rounded-lg border border-gray-200">
+            <div className="flex items-start justify-between gap-2">
+              <button
+                type="button"
+                onClick={toggleSortieExport}
+                className="flex-1 min-w-0 text-left"
+                aria-expanded={showSortieExport}
+              >
+                <span className="font-semibold text-gray-900 block">Export sortie fragment (.fpl)</span>
+                {!showSortieExport && (
+                  <span className="text-gray-500 text-sm font-normal mt-0.5 block">
+                    One sortie&apos;s serpentine legs — not the full plan
+                  </span>
+                )}
+              </button>
+              <GuidedHint
+                hintId={HINT_FP_SORTIE_EXPORT}
+                stepNumber={2}
+                title="Sortie fragment vs full route"
+                body={
+                  <>
+                    Use <strong>Export sortie .fpl</strong> here for one coordinator sortie: a serpentine
+                    sub-route between your From/To waypoints with parallel-track offsets. Use{' '}
+                    <strong>Export full route (.fpl)</strong> below when you need every waypoint in this
+                    plan. Copy the file to the SD card root, eject before removing the card, then import on
+                    the G1000.
+                  </>
+                }
+                isSeen={isSeen(HINT_FP_SORTIE_EXPORT)}
+                onDismiss={markSeen}
+                surface="light"
+              />
+              <button
+                type="button"
+                onClick={toggleSortieExport}
+                className="text-gray-500 text-sm font-normal shrink-0 px-1 py-0.5 hover:bg-gray-100 rounded"
+                aria-label={showSortieExport ? 'Collapse sortie export' : 'Expand sortie export'}
+              >
+                {showSortieExport ? '−' : '+'}
+              </button>
+            </div>
+            {showSortieExport && (
+              <div className="mt-4 space-y-3 text-sm">
+                <p className="text-gray-600">
+                  Build a serpentine G1000 route for one coordinator sortie: team departure, waypoint
+                  sub-range, and parallel-track offsets. Uses plan departure (
+                  {departure?.identifier ?? 'not set'}) for ferry legs.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-gray-700 font-medium">From</span>
+                    <select
+                      value={sortieFromPt}
+                      onChange={(e) => {
+                        setSortieFromPt(e.target.value)
+                        setSortieStartAt(e.target.value)
+                      }}
+                      className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Select…</option>
+                      {waypointPtIdents.map((pt) => (
+                        <option key={`from-${pt}`} value={pt}>
+                          {pt}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-gray-700 font-medium">To</span>
+                    <select
+                      value={sortieToPt}
+                      onChange={(e) => setSortieToPt(e.target.value)}
+                      className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Select…</option>
+                      {waypointPtIdents.map((pt) => (
+                        <option key={`to-${pt}`} value={pt}>
+                          {pt}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="text-gray-700 font-medium">Start at (first leg)</span>
+                  <select
+                    value={sortieStartAt}
+                    onChange={(e) => setSortieStartAt(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">Select…</option>
+                    {sortieEndpointOptions.map((pt) => (
+                      <option key={`start-${pt}`} value={pt}>
+                        {pt}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-gray-700 font-medium">Offsets (NM)</span>
+                  <input
+                    type="text"
+                    value={sortieOffsets}
+                    onChange={(e) => setSortieOffsets(e.target.value)}
+                    placeholder="3, 9, 15, 21"
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg font-mono"
+                  />
+                </label>
+                {sortieExportErr && (
+                  <p className="text-red-700" role="alert">
+                    {sortieExportErr}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 border-t border-gray-100 pt-3">
+                  <strong className="font-medium text-gray-700">Sortie only</strong> — serpentine sub-route
+                  for the From/To range above. For{' '}
+                  <strong className="font-medium text-gray-700">every waypoint in this plan</strong>, use{' '}
+                  <strong className="font-medium text-gray-700">Export full route (.fpl)</strong> below.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSortieExport}
+                  className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90"
+                >
+                  Export sortie .fpl
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+
+        <section className="p-4 bg-white rounded-lg border border-gray-200">
+          <h3 className="font-semibold text-gray-900">Full flight plan</h3>
+          <p className="text-sm text-gray-600 mt-1 mb-3">
+            All waypoints in this plan — for G1000 import of the complete route.
+          </p>
           <button
             type="button"
             onClick={() => setShowExport(true)}
             className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90"
           >
-            Export .fpl
+            Export full route (.fpl)
           </button>
-        </div>
+        </section>
       </div>
 
       {showExport && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 max-w-lg w-full">
-            <h3 className="font-semibold text-lg mb-4">Export Flight Plan</h3>
+            <h3 className="font-semibold text-lg mb-4">Export full flight plan</h3>
             <p className="text-gray-600 text-sm mb-4">
-              Download the G1000 .fpl file for import into your avionics.
+              Download the complete G1000 .fpl (all waypoints) for import into your avionics.
             </p>
             <div className="flex justify-end gap-3">
               <button
