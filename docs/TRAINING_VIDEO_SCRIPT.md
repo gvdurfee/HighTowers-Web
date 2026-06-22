@@ -1,13 +1,17 @@
 # HighTowers-Web — Training video script
 
 Audience: **CAP aircrew** conducting an Air Force route survey (MTR tower documentation), using this web app plus ForeFlight and the aircraft G1000.  
+Secondary audience: **Wing survey coordinators** staffing one to three aircraft and comparing sortie plans before the season.  
 Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 **Recording assumptions**
 
 - Host: `http://localhost:5173` for local training, or your deployed Wing URL for production-style video.
-- Use a **demo mission** and route (e.g. IR112) with non-sensitive coordinates if the video will be shared outside the Wing.
+- For **Coordinator Survey Console** width data locally, run **`npm run dev:all`** (Vite + Node API on port 3001). Deployed Wings use the same API on Railway.
+- Use a **demo mission** and route (e.g. **VR114** or IR112) with non-sensitive coordinates if the video will be shared outside the Wing.
 - Sidebar labels match the app: **Workflow Guide**, **Flight Plans**, **Tower Data Analysis**, **Map View**, **Air Force Report Form**, **Export Reported Data**, **ForeFlight Content Pack Update**.
+- **Coordinator Survey Console** is not in the sidebar — open from **Flight Plans** (**Coordinator Console** header link, **Survey plan** on a row, or **Survey planner** on Flight Plan detail). Bookmark: `/coordinator/survey?plan=<flightPlanId>`.
+- For **Chapter 3**, have a **printed** copy of [`docs/handouts/Coordinator-Survey-Console-Handout.pdf`](./handouts/Coordinator-Survey-Console-Handout.pdf) on desk (or open the PDF on a second monitor) to show wing crews the same symbology and staffing models off-screen.
 - Optional on-screen subtitle in corner: “HighTowers — Air Force Route Survey workflow”.
 
 **How to use this document**
@@ -16,16 +20,17 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 - **ON-SCREEN** — what the viewer should see; align your cursor and pauses here.
 - **PAUSE** — hold 2–3 seconds for editors or live narration breathing room.
 
-**Suggested total runtime** — 18–28 minutes main program; +3–5 minutes for appendix (admin).
+**Suggested total runtime** — 24–36 minutes main program (includes coordinator chapter); +3–5 minutes for appendix (admin).  
+**Optional split** — record **Chapter 3** as a standalone *Wing coordinator* clip if the primary audience is aircrew only.
 
 ---
 
 ## Chapter 0 — Cold open (optional, 30–45 s)
 
-**ON-SCREEN** — Workflow Guide; slow pan down the four numbered steps.
+**ON-SCREEN** — Workflow Guide; slow pan down the numbered steps.
 
 **NARRATION**  
-“This app walks a Civil Air Patrol crew through an Air Force route survey: flight planning that lines up with ForeFlight and the G1000, documenting towers on the Air Force report form, measuring them in Tower Data Analysis, exporting the customer PDF, and refreshing ForeFlight content packs for the next season. I’ll follow the same order the Workflow Guide uses.”
+“This app walks a Civil Air Patrol crew through an Air Force route survey: flight planning that lines up with ForeFlight and the G1000, wing-level sortie planning when you staff one to three teams, documenting towers on the Air Force report form, measuring them in Tower Data Analysis, exporting the customer PDF, and refreshing ForeFlight content packs for the next season. I’ll follow the same order the Workflow Guide uses, with an extra stop for coordinators comparing team staffing.”
 
 **PAUSE**
 
@@ -36,7 +41,12 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 **ON-SCREEN** — Left sidebar fully expanded; point at **Getting Started** → **Workflow Guide**.
 
 **NARRATION**  
-“Everything runs in the left sidebar. **Workflow Guide** is your checklist. Under **Mission Planning** you’ll use **Flight Plans**. **Mission Execution** is **Tower Data Analysis** and **Map View**. Under **Reporting** you’ll use the **Air Force Report Form**, **Export Reported Data**, and when it’s time to update ForeFlight packs, **ForeFlight Content Pack Update**. Tips appear as numbered lightbulbs — optional help; you can reset them from individual pages if you want them back.”
+“Everything runs in the left sidebar. **Workflow Guide** is your checklist. Under **Mission Planning** you’ll use **Flight Plans** — and from there, wing coordinators open the **Coordinator Survey Console** for sortie what-if planning. **Mission Execution** is **Tower Data Analysis** and **Map View**. Under **Reporting** you’ll use the **Air Force Report Form**, **Export Reported Data**, and when it’s time to update ForeFlight packs, **ForeFlight Content Pack Update**. Tips appear as numbered lightbulbs — optional help; you can reset them from individual pages if you want them back.”
+
+**ON-SCREEN** — **Flight Plans** list; briefly highlight **Coordinator Console** (top right) and **Survey plan** on one row.
+
+**NARRATION**  
+“The coordinator console loads a flight plan you already built — same waypoint sequence and departure airport the crews will fly.”
 
 **ON-SCREEN** — Briefly collapse and expand sidebar using the arrow control.
 
@@ -62,20 +72,93 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 **ON-SCREEN** — Save or continue until the plan exists; open **Flight Plans** list and click the plan to open **Flight Plan detail**.
 
 **NARRATION**  
-“After you save, open the plan from **Flight Plans** to review waypoints and export the file the G1000 expects.”
+“After you save, open the plan from **Flight Plans** to review waypoints and export G1000 files. Use **Survey planner** here when you’re ready to run the coordinator console for this route.”
 
-**ON-SCREEN** — Scroll to **Export .fpl** (or equivalent export control on the detail page); click export; show file appearing in downloads bar if browser shows it.
+**ON-SCREEN** — Scroll to **Full flight plan** → **Export full route (.fpl)**; click export; show file in downloads bar if the browser shows it.
 
 **NARRATION**  
-“Export the **.fpl** and load it into the G1000 per your aircraft procedures. That keeps the metal airplane aligned with what you planned here.”
+“**Export full route** downloads the complete **.fpl** — every waypoint in the plan — for G1000 import per your aircraft procedures.”
+
+**ON-SCREEN** — Expand **Export sortie fragment (.fpl)**; point at the numbered lightbulb tip; show From/To, offsets, and **Export sortie .fpl** briefly without a full export unless you want a second file in the demo.
+
+**NARRATION**  
+“**Export sortie fragment** is for one survey sortie only — a serpentine sub-route with parallel-track offsets, not the whole MTR. Coordinators usually export from the Survey Console; pilots can use this section when a last-minute assignment change doesn’t match the coordinator brief. The lightbulb tip explains the difference between the two export buttons.”
 
 **PAUSE**
 
 ---
 
-## Chapter 3 — Content pack for mission prep (ForeFlight) (3–5 min)
+## Chapter 3 — Coordinator Survey Console (1–3 teams) (6–9 min)
 
-**ON-SCREEN** — Stay on **Flight Plan detail** for the same route; scroll to **Content Pack for this route** card.
+**Audience note** — Wing coordinators, ops staff, and pilots who want to see how sortie assignments are derived. Can be a separate video.
+
+**ON-SCREEN** — Hold up or fan open the printed **Coordinator Survey Console** handout (`docs/handouts/Coordinator-Survey-Console-Handout.pdf`); show cover/title briefly, then switch to the app.
+
+**NARRATION**  
+“Your Wing should have this one-page handout in the ops room and in each survey aircraft kit. It mirrors what you’ll see on screen — inner and outer passes, one- versus two- versus three-team staffing, and how to read a sortie row — so coordinators and crews stay aligned when you’re not both looking at the same laptop.”
+
+**ON-SCREEN** — From **Flight Plan detail**, click **Survey planner** (or **Flight Plans** → **Survey plan** on the same route). URL shows `/coordinator/survey?plan=…`.
+
+**NARRATION**  
+“The **Coordinator Survey Console** is a wing planning aid — not a replacement for ForeFlight corridor display or ATP routing. Given your flight plan’s waypoint chain, NASR corridor width, team departure airports, and a per-sortie distance budget, it estimates how many sorties each team needs and which waypoint ranges to assign.”
+
+**ON-SCREEN** — Expand **Coordinator quick reference & symbology**; open the lightbulb tip if unseen.
+
+**NARRATION**  
+“The in-app quick reference and the printed handout use the same symbology — inner versus outer passes, default G1000 offset spacing — typically three, nine, fifteen, twenty-one nautical miles for a twenty-NM half-width — and what the sortie budget means for a four-and-a-half to five-hour sortie with reserve. Keep the PDF on the Wing share or regenerate it with `npm run handout:coordinator-pdf` when the console changes.”
+
+**ON-SCREEN** — **Scenario** card: flight plan name, route ID, waypoint list.
+
+**NARRATION**  
+“The scenario loads from the linked flight plan. Route type and number drive corridor width from NASR.”
+
+**ON-SCREEN** — **Teams & parameters** → **Planner mode**.
+
+**NARRATION**  
+“Three planner modes: **Single scenario** for one staffing model at a time; **Compare 1 vs 2 teams** for one aircraft doing both sides sequentially versus two aircraft on opposite sides; **Compare 2 vs 3 teams** for opposite-side parallel staffing versus a geographic split across three bases.”
+
+**ON-SCREEN** — Select **Single scenario** → **Aircraft count** → click **1 team**, then **2 teams**, then **3 teams** (briefly show each radio option).
+
+**NARRATION**  
+“Under single scenario, pick **one team** for both corridor sides flown sequentially from one departure; **two teams** for inner and outer in parallel from two airports; or **three teams** for a geographic split — each team owns a route segment and flies both sides from its own base. Three-team mode needs at least four waypoints on the plan.”
+
+**ON-SCREEN** — Select **Compare 1 vs 2 teams**; show Team 1 departure from the flight plan; **Look up** Team 2 airport (e.g. a second base near the route).
+
+**NARRATION**  
+“Comparison modes run two full what-if scenarios with the same sortie budget so you can brief leadership with numbers. Look up departure airports for Teams 2 and 3 before you run — same FAA identifier lookup as elsewhere in the app.”
+
+**ON-SCREEN** — **Sortie distance budget (NM)** — show 400–500; scroll to NASR **width text** lines if loaded.
+
+**NARRATION**  
+“Set the sortie budget your Wing uses — typically four hundred to five hundred nautical miles. The console loads **MTR_WDTH** text from NASR for the route; asymmetric spans like VR114 at waypoint B change inner and outer offset lists per leg.”
+
+**ON-SCREEN** — Click **Compare 1 vs 2 teams** (or **Run planner** for single mode). Wait for **Results**.
+
+**NARRATION**  
+“Results show centerline length, parsed legs with inner and outer offsets per span, total wing sorties, and NM breakdown per sortie — ferry in, along the route, ferry out.”
+
+**ON-SCREEN** — **Staffing comparison** table (1 vs 2) or **Geographic assignment** table (3 teams); scroll sortie rows.
+
+**NARRATION**  
+“In compare mode, read the summary row first — wing sorties, wing NM, and any over-budget warning. Then drill into each team’s sortie table: waypoint range, which side, start direction, and offsets. Geographic split shows boundary waypoints and segment ownership per team.”
+
+**ON-SCREEN** — Click **Export .fpl** on one sortie row; show **Sortie pilot brief** modal (offsets, Heading-mode SOP); dismiss or complete download.
+
+**NARRATION**  
+“Each sortie row can export a G1000 **.fpl** with the serpentine route for that assignment. The pilot brief lists parallel-track offsets and heading-mode reminders — offsets are set on the G1000, not in the file. Copy to the SD card root, eject before removing the card, then import on the panel. Rename to your Wing’s dep-to-dep filename if the G1000 catalog expects it.”
+
+**ON-SCREEN** — Red **Wing planning aid only** disclaimer at bottom of results; cut back to printed handout, point at crew-communication section if present.
+
+**NARRATION**  
+“Treat every number as a planning aid — crews still fly corridors in ForeFlight Military Flight Bag and follow Wing SOP for MOA, scheduling, and safety. After you run a scenario, use the printed handout to brief each crew: team, segment, sortie number, offsets, and side — the same fields in the sortie table and pilot brief modal.”
+
+**PAUSE**
+
+---
+
+## Chapter 4 — Content pack for mission prep (ForeFlight) (3–5 min)
+
+**ON-SCREEN** — Return to **Flight Plan detail** for the same route; scroll to **ForeFlight content pack** card.
 
 **NARRATION**  
 “Before the flight, crews pull the latest tower waypoints from the Wing server as a ForeFlight **content pack**. The app matches your flight plan’s route number to the right pack when one exists.”
@@ -94,7 +177,7 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ---
 
-## Chapter 4 — Map View (2–3 min)
+## Chapter 5 — Map View (2–3 min)
 
 **ON-SCREEN** — Sidebar → **Map View** (`/map`).
 
@@ -110,7 +193,7 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ---
 
-## Chapter 5 — Air Force Report Form (3–5 min)
+## Chapter 6 — Air Force Report Form (3–5 min)
 
 **ON-SCREEN** — Sidebar → **Air Force Report Form**.
 
@@ -131,7 +214,7 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ---
 
-## Chapter 6 — Tower Data Analysis (5–8 min)
+## Chapter 7 — Tower Data Analysis (5–8 min)
 
 **ON-SCREEN** — Sidebar → **Tower Data Analysis**.
 
@@ -157,7 +240,7 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ---
 
-## Chapter 7 — Export and customer deliverable (2–4 min)
+## Chapter 8 — Export and customer deliverable (2–4 min)
 
 **ON-SCREEN** — Sidebar → **Export Reported Data**.
 
@@ -173,7 +256,7 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ---
 
-## Chapter 8 — ForeFlight content pack **close-out** (next season’s data) (4–6 min)
+## Chapter 9 — ForeFlight content pack **close-out** (next season’s data) (4–6 min)
 
 **ON-SCREEN** — Sidebar → **ForeFlight Content Pack Update**; ensure a **mission** is selected that has tower work and a flight plan.
 
@@ -199,12 +282,15 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ---
 
-## Chapter 9 — Wrap-up and recurring operations (1–2 min)
+## Chapter 10 — Wrap-up and recurring operations (1–2 min)
 
-**ON-SCREEN** — Return to **Workflow Guide**; highlight all four steps.
+**ON-SCREEN** — Return to **Workflow Guide**; highlight crew steps; optionally flash **Coordinator Survey Console** from **Flight Plans**.
 
 **NARRATION**  
-“Same four beats every sortie: plan and export the G1000 file, prep ForeFlight from the server pack, execute towers in **Tower Data Analysis** with **Map View** support, finish the **Air Force Report Form**, export the PDF, then apply towers to the content pack so the next crew inherits your work.”
+“For aircrew: plan and export the G1000 file — full route or sortie fragment when needed — prep ForeFlight from the server pack, execute towers in **Tower Data Analysis** with **Map View** support, finish the **Air Force Report Form**, export the PDF, then apply towers to the content pack so the next crew inherits your work.”
+
+**NARRATION**  
+“For wing coordinators: build the flight plan first, then run the **Coordinator Survey Console** to compare one, two, or three teams, export sortie **.fpl** files and pilot briefs, and communicate assignments before the sortie.”
 
 **NARRATION**  
 “Questions go to your Wing’s training officer or whoever owns the ForeFlight API key and admin PIN.”
@@ -236,7 +322,8 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 - [ ] Bleep or omit real API keys, PINs, customer names, and precise tower coordinates if the video is public.
 - [ ] Add chapter markers in YouTube/Vimeo matching headings above.
 - [ ] Attach Wing SOP PDF or QR code to end screen if your policy allows.
-- [ ] Re-record Chapter 3 if `CONTENT_PACK_API_KEY` UI changes; re-record Appendix A if admin flows change.
+- [ ] Re-record Chapter 3 if coordinator planner modes, sortie export, or width API change; re-record Chapter 4 if `CONTENT_PACK_API_KEY` UI changes; re-record Appendix A if admin flows change.
+- [ ] Show or mention the printed **Coordinator Survey Console** handout in Chapter 3; link `docs/handouts/Coordinator-Survey-Console-Handout.pdf` in the video description for coordinators.
 
 ---
 
@@ -245,3 +332,4 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 | Date | Author | Notes |
 |------|--------|--------|
 | 2026-05-14 | Project doc | Initial script aligned to `WorkflowGuidePage` and `MainLayout` nav. |
+| 2026-06-13 | Project doc | Added Chapter 3 Coordinator Survey Console (1–3 teams, compare modes, sortie `.fpl` export, printed handout); updated flight plan export (full route vs sortie fragment); renumbered chapters. |
