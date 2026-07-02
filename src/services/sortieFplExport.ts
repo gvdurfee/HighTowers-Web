@@ -15,6 +15,8 @@ export type SortieFplSortie = {
   waypointFrom: string
   waypointTo: string
   offsets: number[]
+  ferryInLabel?: string
+  ferryOutLabel?: string
 }
 
 export type SortieFplPilotBrief = {
@@ -24,6 +26,8 @@ export type SortieFplPilotBrief = {
   startAt: string
   passCount: number
   offsetsLabel: string
+  ferryInLabel?: string
+  ferryOutLabel?: string
   warnRoutePointLimit: boolean
   routePointCount: number
   filename: string
@@ -57,6 +61,7 @@ export function buildSortieFplFromWaypoints(opts: {
   waypoints: WaypointRecord[]
   sortie: SortieFplSortie
   teamDeparture: AirportRecord
+  destinationAirport?: AirportRecord
   routeLabel: string
   teamLabel: string
   side: string
@@ -71,6 +76,7 @@ export function buildSortieFplFromWaypoints(opts: {
   })
 
   const dep = exportInput.teamDeparture
+  const destRecord = opts.destinationAirport ?? opts.teamDeparture
   const airportInput = {
     identifier: dep.identifier,
     name: dep.name,
@@ -78,12 +84,19 @@ export function buildSortieFplFromWaypoints(opts: {
     longitude: dep.longitude,
     elevation: dep.elevation,
   }
+  const destInput = {
+    identifier: destRecord.identifier,
+    name: destRecord.name,
+    latitude: destRecord.latitude,
+    longitude: destRecord.longitude,
+    elevation: destRecord.elevation,
+  }
 
   const xml = G1000Service.generateSortieFlightPlan({
     routeLabel: exportInput.routeLabel,
     sortieNumber: exportInput.sortieNumber,
     departureAirport: airportInput,
-    destinationAirport: airportInput,
+    destinationAirport: destInput,
     fragmentWaypoints: exportInput.fragmentWaypoints.map((wp) => ({
       g1000Name: wp.g1000Name,
       latitude: wp.lat,
@@ -109,6 +122,8 @@ export function buildSortieFplFromWaypoints(opts: {
       startAt: opts.sortie.startAt,
       passCount: opts.sortie.offsets.length,
       offsetsLabel: opts.sortie.offsets.join(', '),
+      ferryInLabel: opts.sortie.ferryInLabel ?? dep.identifier,
+      ferryOutLabel: opts.sortie.ferryOutLabel ?? destRecord.identifier,
       warnRoutePointLimit: exportInput.warnRoutePointLimit,
       routePointCount: exportInput.routePointCount,
       filename,

@@ -1,3 +1,20 @@
+declare module '@survey-planning/mtrWidthParser.js' {
+  export function parseWidthTexts(widthTexts: string[]): {
+    fromPt: string
+    toPt: string
+    leftNm: number
+    rightNm: number
+    rawText?: string
+  }[]
+}
+
+declare module '@survey-planning/surveyGeometry.js' {
+  export function parallelOffsetsForHalfWidth(
+    halfWidthNm: number,
+    policy?: { firstOffsetNm?: number; stepNm?: number; outerMarginNm?: number }
+  ): number[]
+}
+
 declare module '@survey-planning/surveySortieFplRoute.js' {
   export const SORTIE_FPL_ROUTE_POINT_WARN: number
   export function sliceFragmentWaypoints(
@@ -142,6 +159,23 @@ declare module '@survey-planning/surveySortiePlanner.js' {
     oneTeamOverBudgetSorties: number
     twoTeamsOverBudgetSorties: number
   }
+
+  export function buildLegWidthSummaries(input: {
+    routeType?: string
+    routeNumber?: string
+    waypoints: { ptIdent: string; lat: number; lon: number }[]
+    widthTexts: string[]
+    teams: unknown[]
+    sortieBudgetNm?: number
+  }): {
+    fromPt: string
+    toPt: string
+    leftNm: number | null
+    rightNm: number | null
+    leftOffsets: number[]
+    rightOffsets: number[]
+    chainNm: number
+  }[]
 
   export function planSurveyScenario(input: {
     routeType?: string

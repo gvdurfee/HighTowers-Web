@@ -17,6 +17,21 @@ import {
  */
 
 /**
+ * @typedef {object} FerryLatLonLabel
+ * @property {number} lat
+ * @property {number} lon
+ * @property {string} [label]
+ */
+
+/**
+ * @typedef {object} StagedRefuelContext
+ * @property {FerryLatLonLabel} home
+ * @property {FerryLatLonLabel} recovery
+ * @property {'left' | 'right' | 'single-side'} sideRole
+ * @property {boolean} hasOppositeSideAfter
+ */
+
+/**
  * @typedef {object} SortiePlan
  * @property {number} sortieNumber
  * @property {string} waypointFrom
@@ -30,6 +45,8 @@ import {
  * @property {number} alongRouteNm
  * @property {number} ferryOutNm
  * @property {number} totalNm
+ * @property {string} [ferryInLabel]
+ * @property {string} [ferryOutLabel]
  * @property {boolean} [overBudget]
  */
 
@@ -92,15 +109,59 @@ function segmentFromLegRange(wps, legs, legStart, legEnd, side) {
 }
 
 /**
+ * @param {StagedRefuelContext} ctx
+ * @param {number} sideSortieIndex
+ * @param {boolean} isTerminalChunk
+ */
+export function resolveStagedFerryEndpoints(ctx, sideSortieIndex, isTerminalChunk) {
+  const { home, recovery, sideRole, hasOppositeSideAfter } = ctx
+  const ferryInPt =
+    sideSortieIndex === 0 && (sideRole === 'left' || sideRole === 'single-side') ? home : recovery
+
+  let ferryOutPt = recovery
+  if (sideRole === 'right' && isTerminalChunk) {
+    ferryOutPt = home
+  } else if (sideRole === 'left' && isTerminalChunk && !hasOppositeSideAfter) {
+    ferryOutPt = home
+  }
+
+  return {
+    ferryInPt,
+    ferryOutPt,
+    ferryInLabel: ferryInPt.label ?? 'HOME',
+    ferryOutLabel: ferryOutPt.label ?? 'RECOVERY',
+  }
+}
+
+/**
+ * @param {SurveyTeamInput} team
+ * @param {object} [ferry]
+ * @param {FerryLatLonLabel} [ferry.ferryInPt]
+ * @param {FerryLatLonLabel} [ferry.ferryOutPt]
+ * @param {string} [ferry.ferryInLabel]
+ * @param {string} [ferry.ferryOutLabel]
+ */
+function defaultFerryFromTeam(team, ferry) {
+  const dep = { lat: team.depLat, lon: team.depLon, label: team.label }
+  return {
+    ferryInPt: ferry?.ferryInPt ?? dep,
+    ferryOutPt: ferry?.ferryOutPt ?? dep,
+    ferryInLabel: ferry?.ferryInLabel ?? team.label,
+    ferryOutLabel: ferry?.ferryOutLabel ?? team.label,
+  }
+}
+
+/**
  * Best orientation for one sortie on [startIdx..endIdx] with given offsets.
  * @param {SurveyWaypoint[]} wps
  * @param {SurveyTeamInput} team
  * @param {number} startIdx
  * @param {number} endIdx
  * @param {number[]} offsets
+ * @param {object} [ferry]
  */
-export function bestSortiePlan(wps, team, startIdx, endIdx, offsets) {
-  const dep = { lat: team.depLat, lon: team.depLon }
+export function bestSortiePlan(wps, team, startIdx, endIdx, offsets, ferry) {
+  const { ferryInPt, ferryOutPt, ferryInLabel, ferryOutLabel } = defaultFerryFromTeam(team, ferry)
   const k = offsets.length
   const chain = chainLengthNm(wps, startIdx, endIdx)
 
@@ -111,8 +172,8 @@ export function bestSortiePlan(wps, team, startIdx, endIdx, offsets) {
     const endAtIdx = k % 2 === 0 ? beginIdx : beginIdx === startIdx ? endIdx : startIdx
     const beginWp = wps[beginIdx]
     const endWp = wps[endAtIdx]
-    const ferryIn = nauticalMilesBetween(dep, { lat: beginWp.lat, lon: beginWp.lon })
-    const ferryOut = nauticalMilesBetween({ lat: endWp.lat, lon: endWp.lon }, dep)
+    const ferryIn = nauticalMilesBetween(ferryInPt, { lat: beginWp.lat, lon: beginWp.lon })
+    const ferryOut = nauticalMilesBetween({ lat: endWp.lat, lon: endWp.lon }, ferryOutPt)
     const total = estimateSortieNm({
       ferryInNm: ferryIn,
       chainNm: chain,
@@ -137,8 +198,20 @@ export function bestSortiePlan(wps, team, startIdx, endIdx, offsets) {
     ferryInNm,
     alongRouteNm,
     ferryOutNm,
+    ferryInLabel,
+    ferryOutLabel,
     totalNm: Math.round((ferryInNm + alongRouteNm + ferryOutNm) * 10) / 10,
   }
+}
+
+/**
+ * @param {object | null} ferryState
+ * @param {boolean} isTerminalChunk
+ */
+function ferryForChunk(ferryState, isTerminalChunk) {
+  if (!ferryState?.stagedRefuel) return null
+  const idx = ferryState.sideCounter.n
+  return resolveStagedFerryEndpoints(ferryState.stagedRefuel, idx, isTerminalChunk)
 }
 
 /**
@@ -149,14 +222,28 @@ export function bestSortiePlan(wps, team, startIdx, endIdx, offsets) {
  * @param {number} endIdx
  * @param {number[]} offsets
  * @param {number} budgetNm
+ * @param {object | null} [ferryState]
+ * @param {StagedRefuelContext} [ferryState.stagedRefuel]
+ * @param {{ n: number }} [ferryState.sideCounter]
+ * @param {number} [ferryState.segmentEndIdx]
  * @returns {Omit<SortiePlan, 'sortieNumber'>[]}
  */
-function packRangeWithOffsets(wps, team, startIdx, endIdx, offsets, budgetNm) {
+function packRangeWithOffsets(wps, team, startIdx, endIdx, offsets, budgetNm, ferryState = null) {
   if (offsets.length === 0 || startIdx >= endIdx) return []
+
+  const segmentEndIdx = ferryState?.segmentEndIdx ?? wps.length - 1
+  const isTerminalChunk = endIdx >= segmentEndIdx
 
   let fitCount = 0
   for (let c = offsets.length; c >= 1; c--) {
-    const plan = bestSortiePlan(wps, team, startIdx, endIdx, offsets.slice(0, c))
+    const plan = bestSortiePlan(
+      wps,
+      team,
+      startIdx,
+      endIdx,
+      offsets.slice(0, c),
+      ferryForChunk(ferryState, isTerminalChunk)
+    )
     if (plan.totalNm <= budgetNm + 1e-6) {
       fitCount = c
       break
@@ -164,28 +251,45 @@ function packRangeWithOffsets(wps, team, startIdx, endIdx, offsets, budgetNm) {
   }
 
   if (fitCount > 0) {
-    const first = bestSortiePlan(wps, team, startIdx, endIdx, offsets.slice(0, fitCount))
+    const first = bestSortiePlan(
+      wps,
+      team,
+      startIdx,
+      endIdx,
+      offsets.slice(0, fitCount),
+      ferryForChunk(ferryState, isTerminalChunk)
+    )
+    if (ferryState?.stagedRefuel) ferryState.sideCounter.n += 1
     const rest = packRangeWithOffsets(
       wps,
       team,
       startIdx,
       endIdx,
       offsets.slice(fitCount),
-      budgetNm
+      budgetNm,
+      ferryState
     )
     return [{ ...first }, ...rest]
   }
 
   if (endIdx - startIdx < 2) {
-    const forced = bestSortiePlan(wps, team, startIdx, endIdx, offsets)
+    const forced = bestSortiePlan(
+      wps,
+      team,
+      startIdx,
+      endIdx,
+      offsets,
+      ferryForChunk(ferryState, isTerminalChunk)
+    )
+    if (ferryState?.stagedRefuel) ferryState.sideCounter.n += 1
     return [{ ...forced, overBudget: forced.totalNm > budgetNm }]
   }
 
   const mid = Math.floor((startIdx + endIdx) / 2)
   const splitAt = mid <= startIdx ? startIdx + 1 : mid
   return [
-    ...packRangeWithOffsets(wps, team, startIdx, splitAt, offsets, budgetNm),
-    ...packRangeWithOffsets(wps, team, splitAt, endIdx, offsets, budgetNm),
+    ...packRangeWithOffsets(wps, team, startIdx, splitAt, offsets, budgetNm, ferryState),
+    ...packRangeWithOffsets(wps, team, splitAt, endIdx, offsets, budgetNm, ferryState),
   ]
 }
 
@@ -194,15 +298,34 @@ function packRangeWithOffsets(wps, team, startIdx, endIdx, offsets, budgetNm) {
  * @param {LegWidthSummary[]} legs
  * @param {SurveyTeamInput} team
  * @param {number} budgetNm
+ * @param {StagedRefuelContext | null} [stagedRefuel]
  * @returns {SortiePlan[]}
  */
-export function packSortiesForTeam(wps, legs, team, budgetNm) {
+export function packSortiesForTeam(wps, legs, team, budgetNm, stagedRefuel = null) {
   const segments = buildUniformOffsetSegments(wps, legs, team.side)
   /** @type {Omit<SortiePlan, 'sortieNumber'>[]} */
   const raw = []
 
+  const ferryState = stagedRefuel
+    ? {
+        stagedRefuel,
+        sideCounter: { n: 0 },
+        segmentEndIdx: wps.length - 1,
+      }
+    : null
+
   for (const seg of segments) {
-    raw.push(...packRangeWithOffsets(wps, team, seg.startIdx, seg.endIdx, seg.offsets, budgetNm))
+    raw.push(
+      ...packRangeWithOffsets(
+        wps,
+        team,
+        seg.startIdx,
+        seg.endIdx,
+        seg.offsets,
+        budgetNm,
+        ferryState
+      )
+    )
   }
 
   return raw.map((s, i) => ({ sortieNumber: i + 1, ...s }))

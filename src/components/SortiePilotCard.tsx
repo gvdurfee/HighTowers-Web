@@ -35,6 +35,12 @@ export function SortiePilotCard({ brief, isOpen, onClose }: SortiePilotCardProps
             <dd className="text-gray-700">{brief.side}</dd>
           </div>
           <div className="flex gap-2">
+            <dt className="font-semibold text-gray-800 w-28 shrink-0">Ferry</dt>
+            <dd className="text-gray-700 font-mono">
+              {brief.ferryInLabel ?? brief.teamLabel} → {brief.ferryOutLabel ?? brief.teamLabel}
+            </dd>
+          </div>
+          <div className="flex gap-2">
             <dt className="font-semibold text-gray-800 w-28 shrink-0">Range</dt>
             <dd className="text-gray-700 font-mono">{brief.rangeLabel}</dd>
           </div>
@@ -85,6 +91,25 @@ export function SortiePilotCard({ brief, isOpen, onClose }: SortiePilotCardProps
               Clear survey-specific user waypoints in the G1000 before and after import per wing SOP. The{' '}
               <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> loads names once in the library and
               defines serpentine traversal in the active route.
+            </p>
+          </section>
+          <section>
+            <h3 className="font-semibold text-gray-900 mb-1">Multi-aircraft &amp; recovery days</h3>
+            <p className="mb-2">
+              When several aircraft survey the same corridor, <strong>deconfliction is pilot responsibility</strong>
+              — maintain radio contact and <strong>stagger takeoff times</strong>.
+            </p>
+            <p className="mb-2">
+              Coordinator assigns <strong>one shared refuel airport</strong> near the route for all aircraft. On
+              staged-refuel days, <strong>sortie 1</strong> ferry out ends at that field (ferry in from home may be
+              long); after refuel, <strong>sortie 2</strong> flies the opposite side and returns <strong>home</strong>.
+              Sortie 2 waypoint ranges may differ per aircraft when the planner optimizes that way.
+            </p>
+            <p>
+              For sortie 2 you may <strong>invert</strong> the G1000 active flight plan, or load this{' '}
+              <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> and delete waypoints you will not fly
+              from the <strong>active route only</strong>. That does not remove user waypoints from G1000 memory — only
+              from the selected active plan.
             </p>
           </section>
         </div>

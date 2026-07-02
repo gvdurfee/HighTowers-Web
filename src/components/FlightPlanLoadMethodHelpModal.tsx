@@ -98,6 +98,22 @@ export function FlightPlanLoadMethodHelpModal({
             </p>
           </section>
 
+          <section>
+            <h3 className="font-semibold text-gray-900 mb-1">
+              Coordinator departure choices (survey planning)
+            </h3>
+            <p>
+              Loads route waypoints using the same <strong>Waypoint sequence</strong> entry as above, but{' '}
+              <strong>without</strong> departure or destination on the New Flight Plan form. After create, the app
+              opens the <strong>Coordinator Survey Console</strong> where you look up Team 1, Team 2, refuel, and
+              other airports to compare what-if sortie staffing.
+            </p>
+            <p className="text-gray-600">
+              <strong>Use this</strong> when the coordinator needs to weigh departure and team options before crews
+              build pilot-ready flight plans with airports set.
+            </p>
+          </section>
+
           <p className="text-xs text-gray-500 border-t border-gray-100 pt-3">
             Use <strong>Fetch</strong> before creating the plan to confirm the database has your
             points. If you see missing points, still press <strong>Create Flight Plan</strong>—then

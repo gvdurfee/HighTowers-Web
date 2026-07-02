@@ -37,6 +37,17 @@ export { DEFAULT_PARALLEL_TRACK_POLICY }
  */
 
 /**
+ * @typedef {object} RecoveryAirportInput
+ * @property {number} lat
+ * @property {number} lon
+ * @property {string} [label]
+ */
+
+/**
+ * @typedef {'return-home' | 'staged-refuel'} FerryMode
+ */
+
+/**
  * @typedef {object} SurveyPlannerInput
  * @property {string} routeType - IR | VR | SR
  * @property {string} routeNumber
@@ -47,6 +58,8 @@ export { DEFAULT_PARALLEL_TRACK_POLICY }
  * @property {Partial<import('./surveyGeometry.js').ParallelTrackPolicy>} [trackPolicy]
  * @property {TeamAssignmentModel} [assignmentModel]
  * @property {string[]} [fullRoutePtIdents] - full-route point order when `waypoints` is a slice
+ * @property {FerryMode} [ferryMode] - return home after each sortie vs staged refuel between sides
+ * @property {RecoveryAirportInput} [recoveryAirport] - shared refuel field when ferryMode is staged-refuel
  */
 
 /**
@@ -98,12 +111,106 @@ export function buildLegWidthSummaries(input, options = {}) {
 
 /**
  * @param {SurveyPlannerInput} input
+ * @param {SurveyTeamInput} team
+ * @returns {import('./surveySortiePacker.js').StagedRefuelContext | null}
+ */
+function stagedRefuelContextForSide(input, team, sideRole, hasOppositeSideAfter) {
+  if (input.ferryMode !== 'staged-refuel' || !input.recoveryAirport) return null
+  return {
+    home: {
+      lat: team.depLat,
+      lon: team.depLon,
+      label: team.label,
+    },
+    recovery: {
+      lat: input.recoveryAirport.lat,
+      lon: input.recoveryAirport.lon,
+      label: input.recoveryAirport.label ?? 'RECOVERY',
+    },
+    sideRole,
+    hasOppositeSideAfter,
+  }
+}
+
+/**
+ * Pack both corridor sides for one team (inner then outer).
+ * @param {SurveyPlannerInput} input
+ * @param {SurveyTeamInput} team
+ */
+function packBothSidesForTeam(input, team) {
+  const wps = input.waypoints ?? []
+  const legs = buildLegWidthSummaries(input)
+  const budget = input.sortieBudgetNm ?? 500
+
+  const leftCtx = stagedRefuelContextForSide(input, team, 'left', true)
+  const rightCtx = stagedRefuelContextForSide(input, team, 'right', false)
+
+  const leftSorties = packSortiesForTeam(
+    wps,
+    legs,
+    { ...team, side: 'left' },
+    budget,
+    leftCtx
+  )
+  const rightSorties = packSortiesForTeam(
+    wps,
+    legs,
+    { ...team, side: 'right' },
+    budget,
+    rightCtx
+  ).map((s, i) => ({ ...s, sortieNumber: leftSorties.length + i + 1 }))
+
+  return { leftSorties, rightSorties }
+}
+
+/**
+ * Ferry-only sortie from shared refuel back to team home (opposite-side staffing).
+ * @param {RecoveryAirportInput} recoveryAirport
+ * @param {SurveyTeamInput} team
+ * @param {number} sortieNumber
+ * @param {number} budgetNm
+ */
+function buildReturnToHomeSortie(recoveryAirport, team, sortieNumber, budgetNm) {
+  const recovery = {
+    lat: recoveryAirport.lat,
+    lon: recoveryAirport.lon,
+    label: recoveryAirport.label ?? 'RECOVERY',
+  }
+  const home = { lat: team.depLat, lon: team.depLon, label: team.label }
+  const ferryNm = Math.round(nauticalMilesBetween(recovery, home) * 10) / 10
+  return {
+    sortieNumber,
+    waypointFrom: '(return home)',
+    waypointTo: '(return home)',
+    startIdx: -1,
+    endIdx: -1,
+    startAt: '—',
+    offsets: [],
+    offsetLegCount: 0,
+    ferryInNm: 0,
+    alongRouteNm: 0,
+    ferryOutNm: ferryNm,
+    ferryInLabel: recovery.label,
+    ferryOutLabel: home.label,
+    totalNm: ferryNm,
+    overBudget: ferryNm > budgetNm + 1e-6,
+    returnHomeOnly: true,
+  }
+}
+
+/**
+ * @param {SurveyPlannerInput} input
  */
 export function planSurveyScenario(input) {
   const wps = input.waypoints ?? []
   const legs = buildLegWidthSummaries(input)
   const budget = input.sortieBudgetNm ?? 500
   const policy = input.trackPolicy ?? DEFAULT_PARALLEL_TRACK_POLICY
+  const assignmentModel = input.assignmentModel ?? 'opposite-side'
+  const appendReturnHome =
+    input.ferryMode === 'staged-refuel' &&
+    input.recoveryAirport &&
+    assignmentModel === 'opposite-side'
 
   const teams = (input.teams ?? []).map((team) => {
     const entryIdx =
@@ -119,13 +226,38 @@ export function planSurveyScenario(input) {
           )
         : 0
 
-    const sorties = wps.length >= 2 && legs.length > 0 ? packSortiesForTeam(wps, legs, team, budget) : []
+    const surveySorties =
+      wps.length >= 2 && legs.length > 0
+        ? packSortiesForTeam(
+            wps,
+            legs,
+            team,
+            budget,
+            stagedRefuelContextForSide(input, team, 'single-side', false)
+          )
+        : []
+    const sorties = appendReturnHome
+      ? [
+          ...surveySorties,
+          buildReturnToHomeSortie(
+            input.recoveryAirport,
+            team,
+            surveySorties.length + 1,
+            budget
+          ),
+        ]
+      : surveySorties
     const totalTeamNm = sorties.reduce((sum, s) => sum + s.totalNm, 0)
     const overBudgetCount = sorties.filter((s) => s.overBudget).length
 
     let note = null
     if (overBudgetCount > 0) {
       note = `${overBudgetCount} sortie(s) exceed the ${budget} NM budget — consider a lower budget split or more teams.`
+    }
+    if (appendReturnHome && surveySorties.length > 0) {
+      const returnNote =
+        'Sortie 1 completes survey work at the shared refuel airport; sortie 2 is return to home (pilots plan fuel and route).'
+      note = note ? `${note} ${returnNote}` : returnNote
     }
 
     return {
@@ -148,8 +280,10 @@ export function planSurveyScenario(input) {
   return {
     status: teams.some((t) => t.sorties.length > 0) ? 'planned' : 'scaffold',
     route: `${input.routeType ?? ''}${input.routeNumber ?? ''}`.trim(),
-    assignmentModel: input.assignmentModel ?? 'opposite-side',
+    assignmentModel,
     sortieBudgetNm: budget,
+    ferryMode: input.ferryMode ?? 'return-home',
+    recoveryAirport: input.recoveryAirport ?? null,
     trackPolicy: { ...DEFAULT_PARALLEL_TRACK_POLICY, ...policy },
     totalCenterlineNm: Math.round(totalChainNm * 10) / 10,
     legs,
@@ -196,35 +330,67 @@ export function planSingleTeamBothSides(input) {
     throw new Error('planSingleTeamBothSides requires Team 1 in input.teams')
   }
 
-  const leftResult = planSurveyScenario({
-    ...input,
-    teams: [{ ...team1, side: 'left' }],
-    assignmentModel: 'single',
-  })
-  const rightResult = planSurveyScenario({
-    ...input,
-    teams: [{ ...team1, side: 'right' }],
-    assignmentModel: 'single',
-  })
+  const wps = input.waypoints ?? []
+  const legs = buildLegWidthSummaries(input)
+  const budget = input.sortieBudgetNm ?? 500
+  const policy = input.trackPolicy ?? DEFAULT_PARALLEL_TRACK_POLICY
+  const { leftSorties, rightSorties } = packBothSidesForTeam(input, team1)
 
-  const leftTeam = leftResult.teams[0]
-  const rightTeam = rightResult.teams[0]
-  const teams = [
-    { ...leftTeam, label: `${leftTeam.label} (left)` },
-    { ...rightTeam, label: `${rightTeam.label} (right)` },
-  ]
+  const entryIdx =
+    wps.length > 0 ? closestWaypointIndex({ lat: team1.depLat, lon: team1.depLon }, wps) : null
+  const entryPt = entryIdx != null ? wps[entryIdx]?.ptIdent ?? null : null
+  const ferryInNm =
+    entryIdx != null
+      ? nauticalMilesBetween(
+          { lat: team1.depLat, lon: team1.depLon },
+          { lat: wps[entryIdx].lat, lon: wps[entryIdx].lon }
+        )
+      : 0
 
-  const totalSorties = (leftTeam.sortieCount ?? 0) + (rightTeam.sortieCount ?? 0)
+  function teamFromSorties(label, side, sorties) {
+    const totalTeamNm = sorties.reduce((sum, s) => sum + s.totalNm, 0)
+    const overBudgetCount = sorties.filter((s) => s.overBudget).length
+    let note = null
+    if (overBudgetCount > 0) {
+      note = `${overBudgetCount} sortie(s) exceed the ${budget} NM budget — consider a lower budget split or more teams.`
+    }
+    return {
+      label,
+      side,
+      entryWaypoint: entryPt,
+      entryIndex: entryIdx,
+      ferryInNm: Math.round(ferryInNm * 10) / 10,
+      sorties,
+      sortieCount: sorties.length,
+      totalNm: Math.round(totalTeamNm * 10) / 10,
+      note,
+    }
+  }
+
+  const leftTeam = teamFromSorties(`${team1.label} (left)`, 'left', leftSorties)
+  const rightTeam = teamFromSorties(`${team1.label} (right)`, 'right', rightSorties)
+  const teams = [leftTeam, rightTeam]
+
+  const totalSorties = leftSorties.length + rightSorties.length
   const totalWingNm =
     Math.round(((leftTeam.totalNm ?? 0) + (rightTeam.totalNm ?? 0)) * 10) / 10
+  const totalChainNm = wps.length >= 2 ? chainLengthNm(wps, 0, wps.length - 1) : 0
 
   return {
-    ...leftResult,
+    status: teams.some((t) => t.sorties.length > 0) ? 'planned' : 'scaffold',
+    route: `${input.routeType ?? ''}${input.routeNumber ?? ''}`.trim(),
     assignmentModel: 'single-sequential',
+    sortieBudgetNm: budget,
+    ferryMode: input.ferryMode ?? 'return-home',
+    recoveryAirport: input.recoveryAirport ?? null,
+    trackPolicy: { ...DEFAULT_PARALLEL_TRACK_POLICY, ...policy },
+    totalCenterlineNm: Math.round(totalChainNm * 10) / 10,
+    legs,
     teams,
     totalSorties,
     totalWingNm,
-    status: teams.some((t) => t.sorties.length > 0) ? 'planned' : 'scaffold',
+    disclaimer:
+      'Wing planning aid only. Verify corridors and procedures in ForeFlight Military Flight Bag before flying.',
   }
 }
 
@@ -321,3 +487,4 @@ export function compareTwoVsThreeTeamStaffing(input, team2, team3, labels = {}) 
 }
 
 export { planThreeTeamGeographicScenario }
+export { packBothSidesForTeam }

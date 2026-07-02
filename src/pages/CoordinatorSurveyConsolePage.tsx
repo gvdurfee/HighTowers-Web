@@ -13,6 +13,7 @@ import {
   compareTwoVsThreeTeamStaffing,
 } from '@survey-planning/surveySortiePlanner.js'
 import {
+  GuidedHint,
   GuidedHintDismissActions,
   GuidedHintTriggerFace,
   guidedHintTriggerClassName,
@@ -25,8 +26,24 @@ import {
 } from '@/services/sortieFplExport'
 import { SortiePilotCard } from '@/components/SortiePilotCard'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
+import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
 
 const HINT_COORD_QUICK_REF = 'coordinatorSurvey.quickReference'
+const HINT_COORD_ENROUTE_RECOVERY = 'coordinatorSurvey.enrouteRecovery'
+
+const PILOT_REFUEL_GUIDANCE =
+  'Pilots should refuel to levels needed to return to home airports and have remaining fuel levels at regular operational levels on landing, if possible. This will avoid having to refuel at their home airports in many cases.'
+
+function PilotRefuelGuidanceBox({ className = '' }: { className?: string }) {
+  return (
+    <div
+      className={`rounded-lg border border-cap-ultramarine/25 bg-slate-50 px-4 py-3 text-sm text-gray-700 leading-relaxed ${className}`}
+    >
+      <p className="font-medium text-gray-900 mb-1">Return-to-home fuel (pilot responsibility)</p>
+      <p>{PILOT_REFUEL_GUIDANCE}</p>
+    </div>
+  )
+}
 
 /** Match NewFlightPlanPage airport identifier fields. */
 const AIRPORT_CODE_INPUT_CLASS =
@@ -68,6 +85,14 @@ function formatSurveySide(side: string) {
   return side
 }
 
+function formatWidthTextDisplay(text: string): string {
+  const trimmed = text.trim()
+  if (trimmed.toUpperCase().startsWith('CORRIDORS ARE')) return trimmed
+  return `CORRIDORS ARE ${trimmed}`
+}
+
+type FerryMode = 'return-home' | 'staged-refuel'
+
 type RunMode = 'single' | 'compare-1-2' | 'compare-2-3'
 
 type PlannerResult =
@@ -90,6 +115,7 @@ type SortieExportContext = {
   waypoints: WaypointRecord[]
   routeLabel: string
   resolveTeamAirport: (teamLabel: string) => AirportRecord | null
+  resolveAirportByIdent: (ident: string) => AirportRecord | null
 }
 
 type PlannerSortie = SortieFplSortie & {
@@ -98,6 +124,7 @@ type PlannerSortie = SortieFplSortie & {
   ferryOutNm: number
   totalNm: number
   overBudget?: boolean
+  returnHomeOnly?: boolean
 }
 
 function CoordinatorConsoleGuide() {
@@ -154,6 +181,38 @@ function CoordinatorConsoleGuide() {
               <strong>Compare 2 vs 3:</strong> opposite-side vs geographic split (both full corridor).
             </li>
           </ul>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-gray-900 mb-2">En-route recovery (staged refuel)</h3>
+          <p className="mb-2">
+            Use <strong>Staged refuel between sides</strong> and look up a <strong>shared refueling airport</strong>{' '}
+            near the MTR when home is far from the route. All aircraft use the same field — especially useful when
+            ferry dominates the sortie budget (e.g. IR107 from KABQ with recovery at KCAO).
+          </p>
+          <ul className="space-y-2 list-disc pl-5">
+            <li>
+              <strong>2 teams (opposite sides):</strong> sortie 1 — each aircraft surveys its assigned side and lands
+              at the shared refuel airport (survey complete for that crew); sortie 2 — return to each home airport
+              (pilots plan fuel; no survey .fpl).
+            </li>
+            <li>
+              <strong>1 team (both sides sequential):</strong> sortie 1 — first side → refuel; sortie 2 — opposite side
+              → home.
+            </li>
+            <li>
+              <strong>Multi-aircraft:</strong> deconfliction is <strong>pilot responsibility</strong> — maintain radio
+              contact and <strong>stagger takeoff times</strong>.
+            </li>
+            <li>
+              <strong>G1000 sortie 2:</strong> invert the active flight plan, or trim unused waypoints from the{' '}
+              <strong>active route only</strong> (user waypoints stay in G1000 memory).
+            </li>
+          </ul>
+          <p className="mt-2 text-xs text-gray-600">
+            Full spec:{' '}
+            <code className="bg-gray-100 px-1 rounded">docs/COORDINATOR_ENROUTE_RECOVERY_BRIEF.md</code>
+          </p>
         </div>
 
         <div>
@@ -227,11 +286,13 @@ function SurveyPlannerResults({
   result,
   exportCtx,
   onPilotBrief,
+  showRefuelGuidance = false,
 }: {
   title?: string
   result: PlannerResult
   exportCtx?: SortieExportContext | null
   onPilotBrief?: (brief: SortieFplPilotBrief) => void
+  showRefuelGuidance?: boolean
 }) {
   const [exportErr, setExportErr] = useState<string | null>(null)
 
@@ -242,17 +303,31 @@ function SurveyPlannerResults({
     if (!exportCtx) return
     setExportErr(null)
     try {
-      const dep = exportCtx.resolveTeamAirport(team.label)
+      if (sortie.returnHomeOnly) {
+        setExportErr('Return-home sorties are not exported — pilots plan fuel and route to their home airport.')
+        return
+      }
+      const depIdent =
+        sortie.ferryInLabel ?? team.label.replace(/ \((left|right)\)$/i, '').trim()
+      const destIdent = sortie.ferryOutLabel ?? depIdent
+      const dep =
+        exportCtx.resolveAirportByIdent(depIdent) ?? exportCtx.resolveTeamAirport(team.label)
+      const dest = exportCtx.resolveAirportByIdent(destIdent) ?? dep
       if (!dep) {
-        setExportErr(`No departure airport for team ${team.label}.`)
+        setExportErr(`No departure airport for sortie (${depIdent}).`)
+        return
+      }
+      if (!dest) {
+        setExportErr(`No destination airport for sortie (${destIdent}).`)
         return
       }
       const brief = exportSortieFplDownload({
         waypoints: exportCtx.waypoints,
         sortie,
         teamDeparture: dep,
+        destinationAirport: dest,
         routeLabel: exportCtx.routeLabel,
-        teamLabel: team.label,
+        teamLabel: depIdent,
         side: formatSurveySide(team.side),
       })
       onPilotBrief?.(brief)
@@ -279,6 +354,8 @@ function SurveyPlannerResults({
           </>
         )}
       </p>
+
+      {showRefuelGuidance && <PilotRefuelGuidanceBox className="mb-4" />}
 
       {result.teams.length > 1 && (
         <div className="mb-4 rounded-lg border border-cap-ultramarine/30 bg-slate-50 px-4 py-3 text-sm">
@@ -333,37 +410,61 @@ function SurveyPlannerResults({
                 </tr>
               </thead>
               <tbody>
-                {t.sorties.map((s) => (
+                {t.sorties.map((s) => {
+                  const sortie = s as PlannerSortie
+                  return (
                   <tr
-                    key={s.sortieNumber}
-                    className={`border-b border-gray-100 ${s.overBudget ? 'bg-amber-50' : ''}`}
+                    key={sortie.sortieNumber}
+                    className={`border-b border-gray-100 ${sortie.overBudget ? 'bg-amber-50' : ''}`}
                   >
-                    <td className="py-2 pr-3 tabular-nums">{s.sortieNumber}</td>
+                    <td className="py-2 pr-3 tabular-nums">{sortie.sortieNumber}</td>
                     <td className="py-2 pr-3 font-mono">
-                      {s.waypointFrom}→{s.waypointTo}
+                      {sortie.returnHomeOnly ? (
+                        <span className="text-gray-600 font-sans text-xs">Return home</span>
+                      ) : (
+                        <>
+                          {sortie.waypointFrom}→{sortie.waypointTo}
+                        </>
+                      )}
                     </td>
-                    <td className="py-2 pr-3 font-mono">{s.startAt}</td>
-                    <td className="py-2 pr-3 font-mono text-xs">{s.offsets.join(', ')}</td>
-                    <td className="py-2 pr-3 tabular-nums">{s.ferryInNm}</td>
-                    <td className="py-2 pr-3 tabular-nums">{s.alongRouteNm}</td>
-                    <td className="py-2 pr-3 tabular-nums">{s.ferryOutNm}</td>
+                    <td className="py-2 pr-3 font-mono">{sortie.returnHomeOnly ? '—' : sortie.startAt}</td>
+                    <td className="py-2 pr-3 font-mono text-xs">
+                      {sortie.returnHomeOnly ? '—' : sortie.offsets.join(', ')}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {sortie.ferryInNm}
+                      {sortie.ferryInLabel ? (
+                        <span className="block text-xs font-normal text-gray-500">{sortie.ferryInLabel}</span>
+                      ) : null}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">{sortie.alongRouteNm}</td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {sortie.ferryOutNm}
+                      {sortie.ferryOutLabel ? (
+                        <span className="block text-xs font-normal text-gray-500">{sortie.ferryOutLabel}</span>
+                      ) : null}
+                    </td>
                     <td className="py-2 pr-3 tabular-nums font-medium">
-                      {s.totalNm}
-                      {s.overBudget ? ' ⚠' : ''}
+                      {sortie.totalNm}
+                      {sortie.overBudget ? ' ⚠' : ''}
                     </td>
                     {exportCtx && (
                       <td className="py-2">
-                        <button
-                          type="button"
-                          onClick={() => handleExportSortie(t, s as PlannerSortie)}
-                          className="text-xs font-medium text-cap-ultramarine hover:underline whitespace-nowrap"
-                        >
-                          Export .fpl
-                        </button>
+                        {sortie.returnHomeOnly ? (
+                          <span className="text-xs text-gray-500">Pilot planned</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleExportSortie(t, sortie)}
+                            className="text-xs font-medium text-cap-ultramarine hover:underline whitespace-nowrap"
+                          >
+                            Export .fpl
+                          </button>
+                        )}
                       </td>
                     )}
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           )}
@@ -394,22 +495,35 @@ export function CoordinatorSurveyConsolePage() {
   const [team2Airport, setTeam2Airport] = useState<AirportResult | null>(null)
   const [team2Err, setTeam2Err] = useState<string | null>(null)
   const [team2Busy, setTeam2Busy] = useState(false)
+  const [team1Code, setTeam1Code] = useState('')
+  const [team1Airport, setTeam1Airport] = useState<AirportResult | null>(null)
+  const [team1Err, setTeam1Err] = useState<string | null>(null)
+  const [team1Busy, setTeam1Busy] = useState(false)
   const [team3Code, setTeam3Code] = useState('')
   const [team3Airport, setTeam3Airport] = useState<AirportResult | null>(null)
   const [team3Err, setTeam3Err] = useState<string | null>(null)
   const [team3Busy, setTeam3Busy] = useState(false)
 
   const team2LookupRef = useRef<HTMLButtonElement>(null)
+  const team1CodeInputRef = useRef<HTMLInputElement>(null)
+  const team1LookupRef = useRef<HTMLButtonElement>(null)
   const team3CodeInputRef = useRef<HTMLInputElement>(null)
   const team3LookupRef = useRef<HTMLButtonElement>(null)
 
   const [sortieBudgetNm, setSortieBudgetNm] = useState(500)
+  const [ferryMode, setFerryMode] = useState<FerryMode>('return-home')
+  const [refuelCode, setRefuelCode] = useState('')
+  const [refuelAirport, setRefuelAirport] = useState<AirportResult | null>(null)
+  const [refuelErr, setRefuelErr] = useState<string | null>(null)
+  const [refuelBusy, setRefuelBusy] = useState(false)
+  const refuelLookupRef = useRef<HTMLButtonElement>(null)
   const [widthTexts, setWidthTexts] = useState<string[]>([])
   const [widthErr, setWidthErr] = useState<string | null>(null)
   const [widthBusy, setWidthBusy] = useState(false)
   const [plannerResult, setPlannerResult] = useState<PlannerResult | null>(null)
   const [compareBundle, setCompareBundle] = useState<CompareBundle | null>(null)
   const [pilotBrief, setPilotBrief] = useState<SortieFplPilotBrief | null>(null)
+  const { isSeen, markSeen } = useHintsSeen()
 
   const planBundle = useLiveQuery(async () => {
     if (!planId) return null
@@ -440,20 +554,45 @@ export function CoordinatorSurveyConsolePage() {
     const routeLabel = routeMeta
       ? `${routeMeta.routeType}${routeMeta.routeNumber}`
       : planBundle.plan.name.replace(/\s+/g, '')
+    const resolveAirportByIdent = (ident: string): AirportRecord | null => {
+      const code = ident.trim().toUpperCase()
+      if (planBundle.departure?.identifier.toUpperCase() === code) return planBundle.departure
+      if (team1Airport?.identifier.toUpperCase() === code) return airportResultToRecord(team1Airport)
+      if (refuelAirport?.identifier.toUpperCase() === code) return airportResultToRecord(refuelAirport)
+      if (team2Airport?.identifier.toUpperCase() === code) return airportResultToRecord(team2Airport)
+      if (team3Airport?.identifier.toUpperCase() === code) return airportResultToRecord(team3Airport)
+      return null
+    }
     return {
       waypoints: planBundle.waypoints,
       routeLabel,
       resolveTeamAirport: (teamLabel: string) => {
-        if (planBundle.departure?.identifier === teamLabel) return planBundle.departure
-        if (team2Airport?.identifier === teamLabel) return airportResultToRecord(team2Airport)
-        if (team3Airport?.identifier === teamLabel) return airportResultToRecord(team3Airport)
-        return null
+        const base = teamLabel.replace(/ \((left|right)\)$/i, '').trim()
+        return resolveAirportByIdent(base)
       },
+      resolveAirportByIdent,
     }
-  }, [planBundle, routeMeta, team2Airport, team3Airport])
+  }, [planBundle, routeMeta, refuelAirport, team1Airport, team2Airport, team3Airport])
+
+  const isAnchorPlan = Boolean(planBundle && isCoordinatorSurveyAnchor(planBundle.plan))
 
   useEffect(() => {
-    if (!planBundle) return
+    setTeam1Code('')
+    setTeam1Airport(null)
+    setTeam1Err(null)
+    setTeam2Code('')
+    setTeam2Airport(null)
+    setTeam2Err(null)
+    setTeam3Code('')
+    setTeam3Airport(null)
+    setTeam3Err(null)
+    setRefuelCode('')
+    setRefuelAirport(null)
+    setRefuelErr(null)
+  }, [planId])
+
+  useEffect(() => {
+    if (!planBundle || isAnchorPlan) return
     const destId = planBundle.destination?.identifier ?? ''
     const depId = planBundle.departure?.identifier ?? ''
     if (destId && destId !== depId) {
@@ -466,8 +605,17 @@ export function CoordinatorSurveyConsolePage() {
         elevation: planBundle.destination!.elevation,
       })
       setTeam2Err(null)
+      setRefuelCode(destId)
+      setRefuelAirport({
+        identifier: planBundle.destination!.identifier,
+        name: planBundle.destination!.name,
+        latitude: planBundle.destination!.latitude,
+        longitude: planBundle.destination!.longitude,
+        elevation: planBundle.destination!.elevation,
+      })
+      setRefuelErr(null)
     }
-  }, [planBundle?.plan.id, planBundle?.destination?.identifier, planBundle?.departure?.identifier])
+  }, [planBundle?.plan.id, planBundle?.destination?.identifier, planBundle?.departure?.identifier, isAnchorPlan])
 
   const loadWidth = useCallback(async () => {
     if (!routeMeta || (routeMeta.routeType !== 'IR' && routeMeta.routeType !== 'VR')) {
@@ -520,6 +668,17 @@ export function CoordinatorSurveyConsolePage() {
     }
   }
 
+  const runTeam1Lookup = () => {
+    if (!team1CanLookup) return
+    void lookupTeamAirport(team1Code, setTeam1Airport, setTeam1Err, setTeam1Busy, () => {
+      queueMicrotask(() => {
+        if (needsTeam2) team2LookupRef.current?.focus()
+        else if (needsTeam3) team3CodeInputRef.current?.focus()
+      })
+    })
+  }
+
+  const team1CanLookup = Boolean(team1Code.trim()) && !team1Busy
   const team2CanLookup = Boolean(team2Code.trim()) && !team2Busy
   const team3CanLookup = Boolean(team3Code.trim()) && !team3Busy
 
@@ -536,7 +695,23 @@ export function CoordinatorSurveyConsolePage() {
     void lookupTeamAirport(team3Code, setTeam3Airport, setTeam3Err, setTeam3Busy)
   }
 
+  const refuelCanLookup = Boolean(refuelCode.trim()) && !refuelBusy
+
+  const runRefuelLookup = () => {
+    if (!refuelCanLookup) return
+    void lookupTeamAirport(refuelCode, setRefuelAirport, setRefuelErr, setRefuelBusy)
+  }
+
   const team1Input = () => {
+    if (isAnchorPlan) {
+      if (!team1Airport) return null
+      return {
+        label: team1Airport.identifier,
+        depLat: team1Airport.latitude,
+        depLon: team1Airport.longitude,
+        side: 'left' as const,
+      }
+    }
     const dep = planBundle?.departure
     if (!dep) return null
     return {
@@ -588,6 +763,15 @@ export function CoordinatorSurveyConsolePage() {
       })),
       widthTexts,
       sortieBudgetNm,
+      ferryMode,
+      recoveryAirport:
+        ferryMode === 'staged-refuel' && refuelAirport
+          ? {
+              lat: refuelAirport.latitude,
+              lon: refuelAirport.longitude,
+              label: refuelAirport.identifier,
+            }
+          : undefined,
     }
   }
 
@@ -606,7 +790,9 @@ export function CoordinatorSurveyConsolePage() {
           { ...base, teams: [t1] },
           t2,
           {
-            team1DepLabel: planBundle?.departure?.identifier ?? 'Team 1',
+            team1DepLabel: isAnchorPlan
+              ? team1Airport?.identifier ?? 'Team 1'
+              : planBundle?.departure?.identifier ?? 'Team 1',
             team2DepLabel: team2Airport?.identifier ?? 'Team 2',
           }
         ),
@@ -626,7 +812,9 @@ export function CoordinatorSurveyConsolePage() {
           t2,
           t3,
           {
-            team1DepLabel: planBundle?.departure?.identifier ?? 'Team 1',
+            team1DepLabel: isAnchorPlan
+              ? team1Airport?.identifier ?? 'Team 1'
+              : planBundle?.departure?.identifier ?? 'Team 1',
             team2DepLabel: team2Airport?.identifier ?? 'Team 2',
             team3DepLabel: team3Airport?.identifier ?? 'Team 3',
           }
@@ -663,11 +851,12 @@ export function CoordinatorSurveyConsolePage() {
   }
 
   const loading = planId && planBundle === undefined
-  const team1Ready = Boolean(planBundle?.departure)
+  const team1Ready = isAnchorPlan ? Boolean(team1Airport) : Boolean(planBundle?.departure)
   const needsTeam2 = runMode !== 'single' || teamCount >= 2
   const needsTeam3 = runMode === 'compare-2-3' || (runMode === 'single' && teamCount === 3)
   const team2Ready = !needsTeam2 || Boolean(team2Airport)
   const team3Ready = !needsTeam3 || Boolean(team3Airport)
+  const refuelReady = ferryMode !== 'staged-refuel' || Boolean(refuelAirport)
   const minWaypoints =
     runMode === 'compare-2-3' || (runMode === 'single' && teamCount === 3) ? 4 : 2
   const canRun =
@@ -677,7 +866,8 @@ export function CoordinatorSurveyConsolePage() {
     !widthBusy &&
     team1Ready &&
     team2Ready &&
-    team3Ready
+    team3Ready &&
+    refuelReady
 
   const legsResult =
     compareBundle?.kind === '1-2'
@@ -699,10 +889,36 @@ export function CoordinatorSurveyConsolePage() {
             </Link>
           </p>
           <h1 className="text-2xl font-bold text-gray-900">Coordinator Survey Console</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            What-if sortie planner for wing route surveys. See{' '}
-            <code className="text-xs bg-gray-100 px-1 rounded">docs/COORDINATOR_SURVEY_CONSOLE.md</code>.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-2 mt-1">
+            <p className="text-sm text-gray-600 flex-1 min-w-0">
+              What-if sortie planner for wing route surveys. See{' '}
+              <code className="text-xs bg-gray-100 px-1 rounded">docs/COORDINATOR_SURVEY_CONSOLE.md</code>.
+            </p>
+            <GuidedHint
+              hintId={HINT_COORD_ENROUTE_RECOVERY}
+              stepNumber={2}
+              title="En-route recovery & multi-aircraft"
+              body={
+                <>
+                  Coordinator picks <strong>one shared refuel airport</strong> near the MTR for all aircraft.{' '}
+                  <strong>2 teams:</strong> sortie 1 surveys one side and lands at refuel; sortie 2 returns home
+                  (pilots plan fuel). <strong>1 team both sides:</strong> sortie 1 → refuel; sortie 2 opposite side →
+                  home.
+                  <br />
+                  <br />
+                  <strong>Multi-aircraft:</strong> pilots deconflict — radio contact and <strong>staggered
+                  takeoffs</strong>.
+                  <br />
+                  <br />
+                  <strong>G1000 sortie 2:</strong> invert the active plan or trim unused waypoints from the{' '}
+                  <strong>active route only</strong> (user waypoints remain in memory).
+                </>
+              }
+              isSeen={isSeen(HINT_COORD_ENROUTE_RECOVERY)}
+              onDismiss={markSeen}
+              surface="light"
+            />
+          </div>
         </header>
 
         <CoordinatorConsoleGuide />
@@ -758,6 +974,12 @@ export function CoordinatorSurveyConsolePage() {
                   </dd>
                 </div>
               </dl>
+              {isAnchorPlan && (
+                <p className="mt-3 text-sm text-gray-700 rounded-lg border border-cap-ultramarine/25 bg-slate-50 px-3 py-2">
+                  <strong>Coordinator survey anchor</strong> — waypoints only on this flight plan. Look up all team
+                  departures and refuel below.
+                </p>
+              )}
               <ul className="mt-4 font-mono text-xs text-gray-700 space-y-0.5 max-h-32 overflow-auto">
                 {planBundle.waypoints.map((w) => (
                   <li key={w.id}>
@@ -871,14 +1093,72 @@ export function CoordinatorSurveyConsolePage() {
                         ? 'Team 1 — both sides, sequential'
                         : 'Team 1 — inner'}
                   </p>
-                  <p className="text-gray-600">
-                    Departure:{' '}
-                    <span className="font-medium text-gray-900">
-                      {planBundle.departure?.identifier ?? '— (set on flight plan)'}
-                    </span>
-                  </p>
-                  {!planBundle.departure && (
-                    <p className="text-cap-pimento text-xs mt-2">Set a departure airport on the flight plan.</p>
+                  {isAnchorPlan ? (
+                    <>
+                      <div className="flex gap-2">
+                        <input
+                          ref={team1CodeInputRef}
+                          type="text"
+                          value={team1Code}
+                          onChange={(e) => {
+                            setTeam1Code(e.target.value.toUpperCase())
+                            setTeam1Airport(null)
+                            setTeam1Err(null)
+                          }}
+                          onKeyDown={(e) =>
+                            onAirportCodeInputKeyDown(
+                              e,
+                              team1LookupRef.current,
+                              runTeam1Lookup,
+                              team1CanLookup
+                            )
+                          }
+                          placeholder="e.g. KABQ"
+                          className={AIRPORT_CODE_INPUT_CLASS}
+                          aria-label="Team 1 departure airport code"
+                        />
+                        <button
+                          ref={team1LookupRef}
+                          type="button"
+                          onClick={runTeam1Lookup}
+                          aria-disabled={!team1CanLookup}
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              if (team1CanLookup) runTeam1Lookup()
+                            }
+                          }}
+                          className={`${AIRPORT_LOOKUP_BTN_CLASS}${team1CanLookup ? '' : ` ${AIRPORT_LOOKUP_BTN_IDLE_CLASS}`}`}
+                        >
+                          {team1Busy ? '…' : 'Look up'}
+                        </button>
+                      </div>
+                      {team1Airport && (
+                        <p className={AIRPORT_LOOKUP_RESULT_CLASS}>
+                          {team1Airport.identifier} — {team1Airport.name}
+                        </p>
+                      )}
+                      {team1Err && (
+                        <p className="text-cap-pimento text-xs mt-2" role="alert">
+                          {team1Err}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-gray-600">
+                        Departure:{' '}
+                        <span className="font-medium text-gray-900">
+                          {planBundle.departure?.identifier ?? '— (set on flight plan)'}
+                        </span>
+                      </p>
+                      {!planBundle.departure && (
+                        <p className="text-cap-pimento text-xs mt-2">
+                          Set a departure airport on the flight plan.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -1022,6 +1302,95 @@ export function CoordinatorSurveyConsolePage() {
                 />
               </div>
 
+              <fieldset className="mt-5">
+                <legend className="text-sm font-medium text-gray-700 mb-2">Ferry / recovery model</legend>
+                <div className="flex flex-col gap-2 text-sm mb-4">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ferry-mode"
+                      checked={ferryMode === 'return-home'}
+                      onChange={() => setFerryMode('return-home')}
+                    />
+                    Return home after each sortie
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ferry-mode"
+                      checked={ferryMode === 'staged-refuel'}
+                      onChange={() => setFerryMode('staged-refuel')}
+                    />
+                    Staged refuel (finish survey before weather)
+                  </label>
+                </div>
+                {ferryMode === 'staged-refuel' && (
+                  <div className="space-y-4">
+                  <div className="rounded-lg border border-gray-200 bg-slate-50 p-4 max-w-2xl">
+                    <p className="font-medium text-gray-900 mb-2">Refueling airport (shared)</p>
+                    <p className="text-xs text-gray-600 mb-3">
+                      With <strong>2 teams (opposite sides)</strong>, each aircraft completes its corridor side on sortie
+                      1 and lands here; sortie 2 is return to that aircraft&apos;s home. With{' '}
+                      <strong>1 team (both sides)</strong>, sortie 1 ends here after the first side; sortie 2 flies the
+                      opposite side and returns home.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={refuelCode}
+                        onChange={(e) => {
+                          setRefuelCode(e.target.value.toUpperCase())
+                          setRefuelAirport(null)
+                          setRefuelErr(null)
+                        }}
+                        onKeyDown={(e) =>
+                          onAirportCodeInputKeyDown(
+                            e,
+                            refuelLookupRef.current,
+                            runRefuelLookup,
+                            refuelCanLookup
+                          )
+                        }
+                        placeholder="e.g. KCAO"
+                        className={AIRPORT_CODE_INPUT_CLASS}
+                        aria-label="Refueling airport code"
+                      />
+                      <button
+                        ref={refuelLookupRef}
+                        type="button"
+                        onClick={runRefuelLookup}
+                        aria-disabled={!refuelCanLookup}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            if (refuelCanLookup) runRefuelLookup()
+                          }
+                        }}
+                        className={`${AIRPORT_LOOKUP_BTN_CLASS}${refuelCanLookup ? '' : ` ${AIRPORT_LOOKUP_BTN_IDLE_CLASS}`}`}
+                      >
+                        {refuelBusy ? '…' : 'Look up'}
+                      </button>
+                    </div>
+                    {refuelAirport && (
+                      <p className={AIRPORT_LOOKUP_RESULT_CLASS}>
+                        {refuelAirport.identifier} — {refuelAirport.name}
+                      </p>
+                    )}
+                    {refuelErr && (
+                      <p className="text-cap-pimento text-xs mt-2" role="alert">
+                        {refuelErr}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      Pre-filled from flight plan destination when it differs from departure.
+                    </p>
+                  </div>
+                  <PilotRefuelGuidanceBox className="max-w-2xl" />
+                  </div>
+                )}
+              </fieldset>
+
               {widthBusy && <p className="text-sm text-gray-500 mt-3">Loading NASR width text…</p>}
               {widthErr && (
                 <p className="text-sm text-cap-pimento mt-3" role="alert">
@@ -1032,7 +1401,7 @@ export function CoordinatorSurveyConsolePage() {
                 <ul className="mt-3 text-xs text-gray-600 space-y-1">
                   {widthTexts.map((t, i) => (
                     <li key={i} className="font-mono">
-                      {t}
+                      {formatWidthTextDisplay(t)}
                     </li>
                   ))}
                 </ul>
@@ -1058,6 +1427,12 @@ export function CoordinatorSurveyConsolePage() {
                 <p className="text-sm text-gray-600 mt-3">
                   Three-team geographic split needs at least four waypoints on the flight plan.
                 </p>
+              )}
+              {ferryMode === 'staged-refuel' && !refuelAirport && (
+                <p className="text-sm text-gray-600 mt-3">Look up the shared refueling airport before running.</p>
+              )}
+              {isAnchorPlan && !team1Airport && (
+                <p className="text-sm text-gray-600 mt-3">Look up Team 1 departure airport before running.</p>
               )}
               {needsTeam2 && !team2Airport && (
                 <p className="text-sm text-gray-600 mt-3">Look up Team 2 departure airport before running.</p>
@@ -1086,6 +1461,12 @@ export function CoordinatorSurveyConsolePage() {
                 <h2 className="text-lg font-semibold text-gray-900 mb-2">Results</h2>
                 <p className="text-sm text-gray-600 mb-4">
                   Centerline {legsResult.totalCenterlineNm} NM · Budget {legsResult.sortieBudgetNm} NM
+                  {'ferryMode' in legsResult && legsResult.ferryMode === 'staged-refuel' && refuelAirport ? (
+                    <>
+                      {' '}
+                      · Staged refuel at <strong>{refuelAirport.identifier}</strong>
+                    </>
+                  ) : null}
                 </p>
 
                 {plannerResult &&
@@ -1320,12 +1701,14 @@ export function CoordinatorSurveyConsolePage() {
                       result={compareBundle.data.oneTeam}
                       exportCtx={sortieExportCtx}
                       onPilotBrief={setPilotBrief}
+                      showRefuelGuidance={ferryMode === 'staged-refuel'}
                     />
                     <SurveyPlannerResults
                       title={`2 teams — ${compareBundle.data.team1DepLabel} + ${compareBundle.data.team2DepLabel} (inner / outer)`}
                       result={compareBundle.data.twoTeams}
                       exportCtx={sortieExportCtx}
                       onPilotBrief={setPilotBrief}
+                      showRefuelGuidance={ferryMode === 'staged-refuel'}
                     />
                   </>
                 ) : compareBundle?.kind === '2-3' ? (
@@ -1335,12 +1718,14 @@ export function CoordinatorSurveyConsolePage() {
                       result={compareBundle.data.twoTeams}
                       exportCtx={sortieExportCtx}
                       onPilotBrief={setPilotBrief}
+                      showRefuelGuidance={ferryMode === 'staged-refuel'}
                     />
                     <SurveyPlannerResults
                       title={`3 teams — geographic (${compareBundle.data.team1DepLabel}, ${compareBundle.data.team2DepLabel}, ${compareBundle.data.team3DepLabel})`}
                       result={compareBundle.data.threeTeams}
                       exportCtx={sortieExportCtx}
                       onPilotBrief={setPilotBrief}
+                      showRefuelGuidance={ferryMode === 'staged-refuel'}
                     />
                   </>
                 ) : (
@@ -1349,6 +1734,7 @@ export function CoordinatorSurveyConsolePage() {
                       result={plannerResult}
                       exportCtx={sortieExportCtx}
                       onPilotBrief={setPilotBrief}
+                      showRefuelGuidance={ferryMode === 'staged-refuel'}
                     />
                   )
                 )}

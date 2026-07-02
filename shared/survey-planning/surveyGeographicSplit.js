@@ -7,8 +7,9 @@
 import {
   planSurveyScenario,
   buildLegWidthSummaries,
+  packBothSidesForTeam,
 } from './surveySortiePlanner.js'
-import { chainLengthNm, DEFAULT_PARALLEL_TRACK_POLICY } from './surveyGeometry.js'
+import { chainLengthNm, DEFAULT_PARALLEL_TRACK_POLICY, closestWaypointIndex } from './surveyGeometry.js'
 
 /** @typedef {import('./surveySortiePlanner.js').SurveyPlannerInput} SurveyPlannerInput */
 /** @typedef {import('./surveySortiePlanner.js').SurveyTeamInput} SurveyTeamInput */
@@ -100,17 +101,35 @@ function mergeBothSidesForSegment(left, right, label, waypointFrom, waypointTo) 
 function planChunkBothSides(input, team, chunkWps, fullRoutePtIdents) {
   if (chunkWps.length < 2) return null
   const chunkInput = { ...input, waypoints: chunkWps, fullRoutePtIdents }
-  const leftResult = planSurveyScenario({
-    ...chunkInput,
-    teams: [{ ...team, side: 'left' }],
-    assignmentModel: 'single',
-  })
-  const rightResult = planSurveyScenario({
-    ...chunkInput,
-    teams: [{ ...team, side: 'right' }],
-    assignmentModel: 'single',
-  })
-  return { leftTeam: leftResult.teams[0], rightTeam: rightResult.teams[0] }
+  const { leftSorties, rightSorties } = packBothSidesForTeam(chunkInput, team)
+
+  const entryIdx =
+    chunkWps.length > 0
+      ? closestWaypointIndex({ lat: team.depLat, lon: team.depLon }, chunkWps)
+      : null
+  const entryPt = entryIdx != null ? chunkWps[entryIdx]?.ptIdent ?? null : null
+
+  function stubTeam(side, sorties) {
+    const totalNm = sorties.reduce((sum, s) => sum + s.totalNm, 0)
+    const overBudgetCount = sorties.filter((s) => s.overBudget).length
+    let note = overBudgetCount > 0 ? `${overBudgetCount} sortie(s) exceed budget on this segment.` : null
+    return {
+      label: team.label,
+      side,
+      entryWaypoint: entryPt,
+      entryIndex: entryIdx,
+      ferryInNm: 0,
+      sorties,
+      sortieCount: sorties.length,
+      totalNm: Math.round(totalNm * 10) / 10,
+      note,
+    }
+  }
+
+  return {
+    leftTeam: stubTeam('left', leftSorties),
+    rightTeam: stubTeam('right', rightSorties),
+  }
 }
 
 /**

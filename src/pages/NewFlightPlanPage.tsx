@@ -28,7 +28,7 @@ type RoutePreview =
   | { count: number; routeId: string; resolvedCount?: number; totalListedWaypoints?: number }
   | { error: string }
 
-type LoadMethod = 'route' | 'sequence' | 'sequenceLibrary'
+type LoadMethod = 'route' | 'sequence' | 'sequenceLibrary' | 'coordinatorSurvey'
 
 export function NewFlightPlanPage() {
   const navigate = useNavigate()
@@ -285,7 +285,7 @@ export function NewFlightPlanPage() {
       let departureAirportId: string | undefined
       let destinationAirportId: string | undefined
 
-      if (data.departureCode.trim()) {
+      if (loadMethod !== 'coordinatorSurvey' && data.departureCode.trim()) {
         const dep =
           departureAirport?.identifier?.toUpperCase() === data.departureCode.trim().toUpperCase()
             ? departureAirport
@@ -303,7 +303,7 @@ export function NewFlightPlanPage() {
           departureAirportId = depId
         }
       }
-      if (data.destinationCode.trim()) {
+      if (loadMethod !== 'coordinatorSurvey' && data.destinationCode.trim()) {
         const dest =
           destinationAirport?.identifier?.toUpperCase() === data.destinationCode.trim().toUpperCase()
             ? destinationAirport
@@ -355,7 +355,9 @@ export function NewFlightPlanPage() {
           return
         }
       } else if (
-        (loadMethod === 'sequence' || loadMethod === 'sequenceLibrary') &&
+        (loadMethod === 'sequence' ||
+          loadMethod === 'sequenceLibrary' ||
+          loadMethod === 'coordinatorSurvey') &&
         data.waypointSequence.trim()
       ) {
         const routeId = data.routeIdentifier.trim()
@@ -460,7 +462,9 @@ export function NewFlightPlanPage() {
           ? 'route'
           : loadMethod === 'sequenceLibrary'
             ? 'sequenceLibrary'
-            : 'sequence'
+            : loadMethod === 'coordinatorSurvey'
+              ? 'coordinatorSurvey'
+              : 'sequence'
 
       await db.flightPlans.add({
         id: planId,
@@ -491,7 +495,9 @@ export function NewFlightPlanPage() {
       if (loadMethod === 'route' && waypoints.length === 0) {
         setError('No waypoints found for that route. Check the route ID (e.g. IR111, VR108).')
       } else if (
-        (loadMethod === 'sequence' || loadMethod === 'sequenceLibrary') &&
+        (loadMethod === 'sequence' ||
+          loadMethod === 'sequenceLibrary' ||
+          loadMethod === 'coordinatorSurvey') &&
         data.waypointSequence.trim() &&
         waypoints.length === 0
       ) {
@@ -506,15 +512,27 @@ export function NewFlightPlanPage() {
         const combinedMessage = [postCreateDuplicateMessage.trim(), skipMessage].filter(Boolean).join(' ')
         const showPostCreateInfo =
           postCreateDuplicateMessage.length > 0 || skippedWaypoints.length > 0
-        navigate(`/flight-plans/${planId}`, {
-          state: showPostCreateInfo
-            ? {
-                skippedWaypoints:
-                  skippedWaypoints.length > 0 ? skippedWaypoints : undefined,
-                message: combinedMessage || undefined,
-              }
-            : undefined,
-        })
+        if (loadMethod === 'coordinatorSurvey') {
+          navigate(`/coordinator/survey?plan=${planId}`, {
+            state: showPostCreateInfo
+              ? {
+                  skippedWaypoints:
+                    skippedWaypoints.length > 0 ? skippedWaypoints : undefined,
+                  message: combinedMessage || undefined,
+                }
+              : undefined,
+          })
+        } else {
+          navigate(`/flight-plans/${planId}`, {
+            state: showPostCreateInfo
+              ? {
+                  skippedWaypoints:
+                    skippedWaypoints.length > 0 ? skippedWaypoints : undefined,
+                  message: combinedMessage || undefined,
+                }
+              : undefined,
+          })
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create flight plan')
@@ -529,8 +547,12 @@ export function NewFlightPlanPage() {
     routePreview !== null &&
     'error' in routePreview
 
+  const isCoordinatorSurveyMode = loadMethod === 'coordinatorSurvey'
+
   const isSequencePreviewFailed =
-    (loadMethod === 'sequence' || loadMethod === 'sequenceLibrary') &&
+    (loadMethod === 'sequence' ||
+      loadMethod === 'sequenceLibrary' ||
+      loadMethod === 'coordinatorSurvey') &&
     !!waypointSequenceWatch?.trim() &&
     sequencePreview !== null &&
     'error' in sequencePreview
@@ -608,6 +630,7 @@ export function NewFlightPlanPage() {
           )}
         </div>
 
+        {!isCoordinatorSurveyMode && (
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">
             <span className="text-sm font-medium text-gray-700">Departure &amp; destination</span>
@@ -680,6 +703,14 @@ export function NewFlightPlanPage() {
           </div>
         </div>
         </div>
+        )}
+
+        {isCoordinatorSurveyMode && (
+          <p className="text-sm text-gray-600 rounded-lg border border-cap-ultramarine/25 bg-slate-50 px-4 py-3">
+            Departure, destination, and refuel airports are chosen in the{' '}
+            <strong>Coordinator Survey Console</strong> after you create this plan.
+          </p>
+        )}
 
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">
@@ -688,7 +719,7 @@ export function NewFlightPlanPage() {
               hintId={HINT_FP_LOAD}
               stepNumber={3}
               title="How waypoints are loaded"
-              body="Load full route: segment between entry and exit on one published route. Waypoint sequence: type waypoints (suffixes or full IDs) for one or blended routes. G1000 user waypoint library: import-focused list with unique G1000 names—requires two different airport identifiers (not round-robin). Use the ? help for full detail."
+              body="Load full route: segment between entry and exit on one published route. Waypoint sequence: type waypoints (suffixes or full IDs) for one or blended routes. G1000 user waypoint library: import-focused list with unique G1000 names—requires two different airport identifiers (not round-robin). Coordinator departure choices: waypoint sequence only for survey what-if—airports chosen in Survey Console. Use the ? help for full detail."
               isSeen={isSeen(HINT_FP_LOAD)}
               onDismiss={markSeen}
               surface="light"
@@ -700,6 +731,7 @@ export function NewFlightPlanPage() {
                 type="radio"
                 checked={loadMethod === 'route'}
                 onChange={() => setLoadMethod('route')}
+                disabled={isCoordinatorSurveyMode}
               />
               Load full route
             </label>
@@ -708,6 +740,7 @@ export function NewFlightPlanPage() {
                 type="radio"
                 checked={loadMethod === 'sequence'}
                 onChange={() => setLoadMethod('sequence')}
+                disabled={isCoordinatorSurveyMode}
               />
               Waypoint sequence
             </label>
@@ -717,6 +750,7 @@ export function NewFlightPlanPage() {
                 className="mt-1"
                 checked={loadMethod === 'sequenceLibrary'}
                 onChange={() => setLoadMethod('sequenceLibrary')}
+                disabled={isCoordinatorSurveyMode}
               />
               <span>
                 <span className="font-medium">G1000 user waypoint library</span>
@@ -724,6 +758,21 @@ export function NewFlightPlanPage() {
                   Unique G1000 names only—good for importing a clean waypoint list into the avionics.
                   Requires <strong>different</strong> departure and destination identifiers (ICAO
                   or FAA location ID / NASR—not round-robin).
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="radio"
+                className="mt-1"
+                checked={loadMethod === 'coordinatorSurvey'}
+                onChange={() => setLoadMethod('coordinatorSurvey')}
+              />
+              <span>
+                <span className="font-medium">Coordinator departure choices (survey planning)</span>
+                <span className="block text-xs text-gray-600 font-normal mt-0.5">
+                  Load route waypoints only via <strong>Waypoint sequence</strong>. Compare departure
+                  airports and teams in the Survey Console—no departure or destination on this form.
                 </span>
               </span>
             </label>
@@ -803,8 +852,19 @@ export function NewFlightPlanPage() {
               )}
             </div>
           )}
-          {(loadMethod === 'sequence' || loadMethod === 'sequenceLibrary') && (
+          {(loadMethod === 'sequence' ||
+            loadMethod === 'sequenceLibrary' ||
+            loadMethod === 'coordinatorSurvey') && (
             <div className="space-y-3">
+              {loadMethod === 'coordinatorSurvey' && (
+                <div className="p-3 rounded-lg bg-slate-50 border border-cap-ultramarine/25 text-sm text-gray-800">
+                  <p className="font-medium mb-1">Survey anchor plan</p>
+                  <p>
+                    After create, you&apos;ll open the Coordinator Survey Console to look up Team 1,
+                    Team 2, refuel, and other departure choices for what-if sortie planning.
+                  </p>
+                </div>
+              )}
               {loadMethod === 'sequenceLibrary' && (
                 <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-950">
                   <p className="font-medium mb-1">Import-focused list</p>
@@ -915,6 +975,13 @@ export function NewFlightPlanPage() {
                     destination differ. The exported <code className="bg-gray-100 px-0.5">.fpl</code>{' '}
                     deduplicates the waypoint <em>table</em> for the G1000 while keeping your full
                     route order.
+                  </p>
+                )}
+                {loadMethod === 'coordinatorSurvey' && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Use the same waypoint sequence entry as standard Waypoint sequence. This plan
+                    stores coordinates for survey planning only—export a pilot flight plan later with
+                    airports when crews are ready to fly.
                   </p>
                 )}
               </div>

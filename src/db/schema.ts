@@ -29,7 +29,11 @@ export interface PendingWaypoint {
 }
 
 /** How the plan was created (for reference; export behavior is unified). */
-export type FlightPlanCreationLoadMethod = 'route' | 'sequence' | 'sequenceLibrary'
+export type FlightPlanCreationLoadMethod =
+  | 'route'
+  | 'sequence'
+  | 'sequenceLibrary'
+  | 'coordinatorSurvey'
 
 /** Flight plan */
 export interface FlightPlanRecord {

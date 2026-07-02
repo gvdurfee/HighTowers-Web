@@ -14,6 +14,7 @@ import {
   compareOneVsTwoTeamStaffing,
   compareTwoVsThreeTeamStaffing,
   planThreeTeamGeographicScenario,
+  planSingleTeamBothSides,
 } from '../shared/survey-planning/surveySortiePlanner.js'
 import {
   buildUniformOffsetSegments,
@@ -56,6 +57,10 @@ describe('parallelOffsetsForHalfWidth', () => {
 
   it('uses fewer offsets for 10 NM half-width', () => {
     expect(parallelOffsetsForHalfWidth(10)).toEqual([3, 9])
+  })
+
+  it('uses single 3 NM offset for 5 NM half-width', () => {
+    expect(parallelOffsetsForHalfWidth(5)).toEqual([3])
   })
 })
 
@@ -372,5 +377,78 @@ describe('planSurveyScenario', () => {
     expect(compare.threeTeams.totalSorties).toBe(6)
     expect(compare.deltaSorties).toBe(-1)
     expect(compare.threeTeams.assignmentModel).toBe('geographic')
+  })
+})
+
+const IR107_WIDTH = ['7.5 NM EITHER SIDE OF CENTERLINE FOR ENTIRE ROUTE']
+const KCAO = { lat: 36.446111, lon: -103.154722, label: 'KCAO' }
+const IR107_WPS = ['N', 'M', 'L', 'K', 'J', 'I', 'H', 'G', 'F', 'E', 'D'].map((letter, i) => ({
+  ptIdent: `${letter}107`,
+  lat: 36.85 - i * 0.1,
+  lon: -104.0 + i * 0.2,
+}))
+
+describe('staged refuel between corridor sides', () => {
+  it('fits IR107-like distant home in two sorties when recovering at KCAO', () => {
+    const team1 = { label: 'KABQ', depLat: KABQ.lat, depLon: KABQ.lon, side: 'left' }
+    const base = {
+      routeType: 'IR',
+      routeNumber: '107',
+      waypoints: IR107_WPS,
+      widthTexts: IR107_WIDTH,
+      teams: [team1],
+      sortieBudgetNm: 500,
+    }
+
+    const returnHome = planSingleTeamBothSides(base)
+    const staged = planSingleTeamBothSides({
+      ...base,
+      ferryMode: 'staged-refuel',
+      recoveryAirport: KCAO,
+    })
+
+    expect(returnHome.totalSorties).toBe(4)
+    expect(staged.totalSorties).toBe(2)
+    expect(staged.ferryMode).toBe('staged-refuel')
+    expect(staged.teams[0].sorties).toHaveLength(1)
+    expect(staged.teams[1].sorties).toHaveLength(1)
+    expect(staged.teams[0].sorties[0].offsets).toEqual([3])
+    expect(staged.teams[0].sorties[0].ferryInLabel).toBe('KABQ')
+    expect(staged.teams[0].sorties[0].ferryOutLabel).toBe('KCAO')
+    expect(staged.teams[1].sorties[0].ferryInLabel).toBe('KCAO')
+    expect(staged.teams[1].sorties[0].ferryOutLabel).toBe('KABQ')
+    for (const s of [...staged.teams[0].sorties, ...staged.teams[1].sorties]) {
+      expect(s.totalNm).toBeLessThanOrEqual(500 + 1e-6)
+    }
+  })
+})
+
+describe('staged refuel opposite-side staffing', () => {
+  it('adds return-home sortie 2 per team after survey sortie 1', () => {
+    const team1 = { label: 'KABQ', depLat: KABQ.lat, depLon: KABQ.lon, side: 'left' }
+    const OE0 = { lat: 36.991944, lon: -106.911111 }
+    const team2 = { label: '0E0', depLat: OE0.lat, depLon: OE0.lon, side: 'right' }
+    const result = planSurveyScenario({
+      routeType: 'IR',
+      routeNumber: '107',
+      waypoints: IR107_WPS,
+      widthTexts: IR107_WIDTH,
+      teams: [team1, team2],
+      sortieBudgetNm: 500,
+      assignmentModel: 'opposite-side',
+      ferryMode: 'staged-refuel',
+      recoveryAirport: KCAO,
+    })
+
+    expect(result.totalSorties).toBe(4)
+    for (const team of result.teams) {
+      expect(team.sortieCount).toBe(2)
+      expect(team.sorties[0].returnHomeOnly).toBeFalsy()
+      expect(team.sorties[0].ferryOutLabel).toBe('KCAO')
+      expect(team.sorties[1].returnHomeOnly).toBe(true)
+      expect(team.sorties[1].ferryInLabel).toBe('KCAO')
+      expect(team.sorties[1].ferryOutLabel).toBe(team.label)
+      expect(team.sorties[1].offsets).toEqual([])
+    }
   })
 })

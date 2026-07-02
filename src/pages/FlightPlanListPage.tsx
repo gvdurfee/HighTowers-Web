@@ -4,6 +4,7 @@ import { FlightPlanLoadMethodHelpModal } from '@/components/FlightPlanLoadMethod
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/schema'
 import type { FlightPlanRecord } from '@/db/schema'
+import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
 
 type PlanWithCount = FlightPlanRecord & { waypointCount: number }
 
@@ -99,6 +100,9 @@ export function FlightPlanListPage() {
                   <h2 className="font-semibold text-gray-900">{plan.name}</h2>
                   <p className="text-sm text-gray-500 mt-0.5">
                     Modified {new Date(plan.dateModified).toLocaleDateString()}
+                    {isCoordinatorSurveyAnchor(plan) && (
+                      <span className="ml-2 text-xs font-medium text-cap-ultramarine">Survey anchor</span>
+                    )}
                   </p>
                 </Link>
                 <div className="flex items-center gap-2">

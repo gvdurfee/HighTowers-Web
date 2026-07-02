@@ -93,6 +93,8 @@ Entry waypoint per team: **closest** in the coordinator’s sequence to that tea
 
 Return: **same departure airport** unless a later version adds alternate recovery fields.
 
+**Phase B (planned):** one **shared en-route recovery / refuel airport** per scenario (closest practical field near the MTR); sortie 1 ferry out ends at recovery; sortie 2 returns home. See [COORDINATOR_ENROUTE_RECOVERY_BRIEF.md](./COORDINATOR_ENROUTE_RECOVERY_BRIEF.md).
+
 ---
 
 ## 6. Sortie budget and optimization
@@ -147,6 +149,7 @@ Per scenario:
 | **Phase 2** | Two-team opposite-side compare |
 | **Phase 3** | Third team + geographic split + scenario comparison UI |
 | **Phase 4** | Export / print coordinator brief; **sortie `.fpl` export + pilot card** |
+| **Phase B** | **En-route recovery airport** — staged refuel between sides, compare vs return-home; pilot deconfliction + G1000 second-sortie hints — [COORDINATOR_ENROUTE_RECOVERY_BRIEF.md](./COORDINATOR_ENROUTE_RECOVERY_BRIEF.md) |
 
 ---
 
@@ -165,6 +168,7 @@ Per scenario:
 - [COORDINATOR_SURVEY_CONSOLE_HANDOUT.md](./COORDINATOR_SURVEY_CONSOLE_HANDOUT.md) — wing communication (print/PDF)
 - [handouts/Coordinator-Survey-Console-Handout.pdf](./handouts/Coordinator-Survey-Console-Handout.pdf) — same content, ready to email or print
 - [PHASE_A_COORDINATOR_PERSISTENCE_BRIEF.md](./PHASE_A_COORDINATOR_PERSISTENCE_BRIEF.md) — Phase A persistence brief for wing leadership
+- [COORDINATOR_ENROUTE_RECOVERY_BRIEF.md](./COORDINATOR_ENROUTE_RECOVERY_BRIEF.md) — Phase B en-route refuel / recovery planning brief
 - [handouts/Phase-A-Coordinator-Persistence-Brief.pdf](./handouts/Phase-A-Coordinator-Persistence-Brief.pdf) — one-page PDF for Director of Operations
 - [handouts/README.md](./handouts/README.md) — all handouts and regenerate commands
 - [MTR_DATA_SOURCE_INVESTIGATION.md](./MTR_DATA_SOURCE_INVESTIGATION.md) — NASR vs ArcGIS
