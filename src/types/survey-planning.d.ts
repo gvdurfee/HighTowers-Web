@@ -1,3 +1,31 @@
+declare module '@survey-planning/corridorTrackPlan.js' {
+  export type SpanTrackPlanEntry = {
+    fromPt: string
+    toPt: string
+    leftNm: number
+    rightNm: number
+    leftOffsets: number[]
+    rightOffsets: number[]
+    rawText?: string
+  }
+
+  export function defaultSpanTrackPlanFromWidthTexts(
+    widthTexts: string[],
+    policy?: { firstOffsetNm?: number; stepNm?: number; outerMarginNm?: number }
+  ): SpanTrackPlanEntry[]
+
+  export function findSpanTrackEntryForLeg(
+    spanTrackPlan: SpanTrackPlanEntry[],
+    fromPt: string,
+    toPt: string,
+    orderedRoutePtIdents?: string[]
+  ): SpanTrackPlanEntry | null
+
+  export function parseOffsetsListInput(raw: string): number[]
+  export function formatOffsetsList(offsets: number[]): string
+  export function validateSpanTrackPlan(plan: SpanTrackPlanEntry[]): string | null
+}
+
 declare module '@survey-planning/mtrWidthParser.js' {
   export function parseWidthTexts(widthTexts: string[]): {
     fromPt: string
@@ -167,6 +195,7 @@ declare module '@survey-planning/surveySortiePlanner.js' {
     widthTexts: string[]
     teams: unknown[]
     sortieBudgetNm?: number
+    spanTrackPlan?: import('@survey-planning/corridorTrackPlan.js').SpanTrackPlanEntry[]
   }): {
     fromPt: string
     toPt: string

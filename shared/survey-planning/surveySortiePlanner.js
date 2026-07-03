@@ -11,7 +11,8 @@ import {
   nauticalMilesBetween,
   DEFAULT_PARALLEL_TRACK_POLICY,
 } from './surveyGeometry.js'
-import { packSortiesForTeam } from './surveySortiePacker.js'
+import { findSpanTrackEntryForLeg } from './corridorTrackPlan.js'
+import { packSortiesForTeam, bestSortiePlan } from './surveySortiePacker.js'
 
 export { DEFAULT_PARALLEL_TRACK_POLICY }
 
@@ -56,6 +57,7 @@ export { DEFAULT_PARALLEL_TRACK_POLICY }
  * @property {SurveyTeamInput[]} teams
  * @property {number} sortieBudgetNm - e.g. 400 or 500
  * @property {Partial<import('./surveyGeometry.js').ParallelTrackPolicy>} [trackPolicy]
+ * @property {import('./corridorTrackPlan.js').SpanTrackPlanEntry[]} [spanTrackPlan]
  * @property {TeamAssignmentModel} [assignmentModel]
  * @property {string[]} [fullRoutePtIdents] - full-route point order when `waypoints` is a slice
  * @property {FerryMode} [ferryMode] - return home after each sortie vs staged refuel between sides
@@ -81,6 +83,7 @@ export { DEFAULT_PARALLEL_TRACK_POLICY }
 export function buildLegWidthSummaries(input, options = {}) {
   const spans = parseWidthTexts(input.widthTexts ?? [])
   const policy = input.trackPolicy ?? {}
+  const spanTrackPlan = input.spanTrackPlan ?? []
   const wps = input.waypoints ?? []
   const routePtIdents =
     options.fullRoutePtIdents ??
@@ -93,15 +96,32 @@ export function buildLegWidthSummaries(input, options = {}) {
     const to = wps[i + 1]
     const fromPt = from.ptIdent ?? String(i)
     const toPt = to.ptIdent ?? String(i + 1)
-    const leftNm = halfWidthNmForLeg(spans, fromPt, toPt, 'left', routePtIdents)
-    const rightNm = halfWidthNmForLeg(spans, fromPt, toPt, 'right', routePtIdents)
+    const trackEntry = findSpanTrackEntryForLeg(spanTrackPlan, fromPt, toPt, routePtIdents)
+    const leftNm =
+      trackEntry?.leftNm ??
+      halfWidthNmForLeg(spans, fromPt, toPt, 'left', routePtIdents)
+    const rightNm =
+      trackEntry?.rightNm ??
+      halfWidthNmForLeg(spans, fromPt, toPt, 'right', routePtIdents)
+    const leftOffsets =
+      trackEntry?.leftOffsets?.length > 0
+        ? [...trackEntry.leftOffsets]
+        : leftNm != null
+          ? parallelOffsetsForHalfWidth(leftNm, policy)
+          : []
+    const rightOffsets =
+      trackEntry?.rightOffsets?.length > 0
+        ? [...trackEntry.rightOffsets]
+        : rightNm != null
+          ? parallelOffsetsForHalfWidth(rightNm, policy)
+          : []
     legs.push({
       fromPt,
       toPt,
       leftNm,
       rightNm,
-      leftOffsets: leftNm != null ? parallelOffsetsForHalfWidth(leftNm, policy) : [],
-      rightOffsets: rightNm != null ? parallelOffsetsForHalfWidth(rightNm, policy) : [],
+      leftOffsets,
+      rightOffsets,
       chainNm: chainLengthNm(wps, i, i + 1),
     })
   }
@@ -114,7 +134,7 @@ export function buildLegWidthSummaries(input, options = {}) {
  * @param {SurveyTeamInput} team
  * @returns {import('./surveySortiePacker.js').StagedRefuelContext | null}
  */
-function stagedRefuelContextForSide(input, team, sideRole, hasOppositeSideAfter) {
+export function stagedRefuelContextForSide(input, team, sideRole, hasOppositeSideAfter) {
   if (input.ferryMode !== 'staged-refuel' || !input.recoveryAirport) return null
   return {
     home: {
@@ -199,6 +219,89 @@ function buildReturnToHomeSortie(recoveryAirport, team, sortieNumber, budgetNm) 
 }
 
 /**
+ * Human-readable note for staged-refuel team sortie lists.
+ * @param {ReturnType<typeof buildReturnToHomeSortie>[]} sorties
+ */
+export function buildStagedRefuelTeamNote(sorties) {
+  if (!sorties?.length) return null
+  const returnOnly = sorties.find((s) => s.returnHomeOnly)
+  if (returnOnly) {
+    return `Survey sorties refuel at the shared airport; sortie ${returnOnly.sortieNumber} is return to home (pilots plan fuel and route).`
+  }
+  const last = sorties[sorties.length - 1]
+  const surveyCount = sorties.filter((s) => !s.returnHomeOnly).length
+  if (surveyCount >= 2 && last && !last.returnHomeOnly) {
+    return `Survey sorties refuel at the shared airport; sortie ${last.sortieNumber} completes remaining survey work and returns home (within NM budget).`
+  }
+  return null
+}
+
+/**
+ * When staged refuel applies: try merging return-home NM into the last survey sortie if it fits the budget
+ * (never into sortie 1 — crews refuel after the first sortie). Otherwise append a ferry-only return sortie.
+ * @param {SurveyWaypoint[]} wps
+ * @param {SurveyTeamInput} team
+ * @param {ReturnType<typeof buildReturnToHomeSortie>[]} sorties
+ * @param {import('./surveySortiePacker.js').StagedRefuelContext} stagedRefuel
+ * @param {number} budgetNm
+ * @param {{ appendReturnHomeIfNeeded?: boolean }} [options]
+ */
+export function finalizeStagedRefuelTeamSorties(wps, team, sorties, stagedRefuel, budgetNm, options = {}) {
+  const { appendReturnHomeIfNeeded = false } = options
+  if (!stagedRefuel || sorties.length === 0) {
+    return { sorties, merged: false, appendedReturn: false }
+  }
+
+  const { home, recovery } = stagedRefuel
+  const recoveryLabel = recovery.label ?? 'RECOVERY'
+  const homeLabel = home.label ?? team.label
+  /** @type {ReturnType<typeof buildReturnToHomeSortie>[]} */
+  let result = sorties.map((s) => ({ ...s }))
+  let merged = false
+
+  if (result.length >= 2) {
+    const lastIdx = result.length - 1
+    const last = result[lastIdx]
+    if (!last.returnHomeOnly && last.ferryOutLabel === recoveryLabel) {
+      const replanned = bestSortiePlan(wps, team, last.startIdx, last.endIdx, last.offsets, {
+        ferryInPt: recovery,
+        ferryOutPt: home,
+        ferryInLabel: recoveryLabel,
+        ferryOutLabel: homeLabel,
+      })
+      if (replanned.totalNm <= budgetNm + 1e-6) {
+        result[lastIdx] = { ...replanned, sortieNumber: last.sortieNumber }
+        merged = true
+      }
+    }
+  }
+
+  let appendedReturn = false
+  const last = result[result.length - 1]
+  const needsReturn =
+    appendReturnHomeIfNeeded &&
+    !merged &&
+    last &&
+    !last.returnHomeOnly &&
+    last.ferryOutLabel === recoveryLabel
+
+  if (needsReturn) {
+    result.push(
+      buildReturnToHomeSortie(
+        { lat: recovery.lat, lon: recovery.lon, label: recovery.label },
+        team,
+        result.length + 1,
+        budgetNm
+      )
+    )
+    appendedReturn = true
+  }
+
+  result = result.map((s, i) => ({ ...s, sortieNumber: i + 1 }))
+  return { sorties: result, merged, appendedReturn }
+}
+
+/**
  * @param {SurveyPlannerInput} input
  */
 export function planSurveyScenario(input) {
@@ -207,7 +310,7 @@ export function planSurveyScenario(input) {
   const budget = input.sortieBudgetNm ?? 500
   const policy = input.trackPolicy ?? DEFAULT_PARALLEL_TRACK_POLICY
   const assignmentModel = input.assignmentModel ?? 'opposite-side'
-  const appendReturnHome =
+  const useStagedFinalize =
     input.ferryMode === 'staged-refuel' &&
     input.recoveryAirport &&
     assignmentModel === 'opposite-side'
@@ -226,27 +329,19 @@ export function planSurveyScenario(input) {
           )
         : 0
 
-    const surveySorties =
+    const stagedCtx = stagedRefuelContextForSide(input, team, 'single-side', false)
+    const packedSurvey =
       wps.length >= 2 && legs.length > 0
-        ? packSortiesForTeam(
-            wps,
-            legs,
-            team,
-            budget,
-            stagedRefuelContextForSide(input, team, 'single-side', false)
-          )
+        ? packSortiesForTeam(wps, legs, team, budget, stagedCtx)
         : []
-    const sorties = appendReturnHome
-      ? [
-          ...surveySorties,
-          buildReturnToHomeSortie(
-            input.recoveryAirport,
-            team,
-            surveySorties.length + 1,
-            budget
-          ),
-        ]
-      : surveySorties
+
+    let sorties = packedSurvey
+    if (useStagedFinalize && stagedCtx && packedSurvey.length > 0) {
+      sorties = finalizeStagedRefuelTeamSorties(wps, team, packedSurvey, stagedCtx, budget, {
+        appendReturnHomeIfNeeded: true,
+      }).sorties
+    }
+
     const totalTeamNm = sorties.reduce((sum, s) => sum + s.totalNm, 0)
     const overBudgetCount = sorties.filter((s) => s.overBudget).length
 
@@ -254,10 +349,9 @@ export function planSurveyScenario(input) {
     if (overBudgetCount > 0) {
       note = `${overBudgetCount} sortie(s) exceed the ${budget} NM budget — consider a lower budget split or more teams.`
     }
-    if (appendReturnHome && surveySorties.length > 0) {
-      const returnNote =
-        'Sortie 1 completes survey work at the shared refuel airport; sortie 2 is return to home (pilots plan fuel and route).'
-      note = note ? `${note} ${returnNote}` : returnNote
+    if (useStagedFinalize && sorties.length > 0) {
+      const stagedNote = buildStagedRefuelTeamNote(sorties)
+      note = note && stagedNote ? `${note} ${stagedNote}` : stagedNote ?? note
     }
 
     return {
@@ -348,11 +442,34 @@ export function planSingleTeamBothSides(input) {
       : 0
 
   function teamFromSorties(label, side, sorties) {
-    const totalTeamNm = sorties.reduce((sum, s) => sum + s.totalNm, 0)
-    const overBudgetCount = sorties.filter((s) => s.overBudget).length
+    let finalSorties = sorties
+    if (input.ferryMode === 'staged-refuel' && input.recoveryAirport) {
+      const sideRole = side === 'left' ? 'left' : 'right'
+      const ctx = stagedRefuelContextForSide(
+        input,
+        team1,
+        sideRole,
+        side === 'left'
+      )
+      finalSorties = finalizeStagedRefuelTeamSorties(
+        wps,
+        { ...team1, side },
+        sorties,
+        ctx,
+        budget,
+        { appendReturnHomeIfNeeded: side === 'right' }
+      ).sorties
+    }
+
+    const totalTeamNm = finalSorties.reduce((sum, s) => sum + s.totalNm, 0)
+    const overBudgetCount = finalSorties.filter((s) => s.overBudget).length
     let note = null
     if (overBudgetCount > 0) {
       note = `${overBudgetCount} sortie(s) exceed the ${budget} NM budget — consider a lower budget split or more teams.`
+    }
+    if (input.ferryMode === 'staged-refuel' && finalSorties.length > 0) {
+      const stagedNote = buildStagedRefuelTeamNote(finalSorties)
+      note = note && stagedNote ? `${note} ${stagedNote}` : stagedNote ?? note
     }
     return {
       label,
@@ -360,8 +477,8 @@ export function planSingleTeamBothSides(input) {
       entryWaypoint: entryPt,
       entryIndex: entryIdx,
       ferryInNm: Math.round(ferryInNm * 10) / 10,
-      sorties,
-      sortieCount: sorties.length,
+      sorties: finalSorties,
+      sortieCount: finalSorties.length,
       totalNm: Math.round(totalTeamNm * 10) / 10,
       note,
     }

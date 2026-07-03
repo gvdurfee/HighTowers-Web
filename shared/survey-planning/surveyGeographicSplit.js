@@ -8,6 +8,9 @@ import {
   planSurveyScenario,
   buildLegWidthSummaries,
   packBothSidesForTeam,
+  stagedRefuelContextForSide,
+  finalizeStagedRefuelTeamSorties,
+  buildStagedRefuelTeamNote,
 } from './surveySortiePlanner.js'
 import { chainLengthNm, DEFAULT_PARALLEL_TRACK_POLICY, closestWaypointIndex } from './surveyGeometry.js'
 
@@ -59,13 +62,21 @@ function sliceWaypoints(wps, startIdx, endIdx) {
  * @param {string} waypointFrom
  * @param {string} waypointTo
  */
-function mergeBothSidesForSegment(left, right, label, waypointFrom, waypointTo) {
-  const sorties = [...left.sorties, ...right.sorties].map((s, i) => ({
+function mergeBothSidesForSegment(left, right, label, waypointFrom, waypointTo, finalizeOpts = null) {
+  let sorties = [...left.sorties, ...right.sorties].map((s, i) => ({
     ...s,
     sortieNumber: i + 1,
   }))
+
+  if (finalizeOpts) {
+    const { wps, team, stagedRefuel, budget } = finalizeOpts
+    sorties = finalizeStagedRefuelTeamSorties(wps, team, sorties, stagedRefuel, budget, {
+      appendReturnHomeIfNeeded: true,
+    }).sorties
+  }
+
   const overBudgetCount = sorties.filter((s) => s.overBudget).length
-  const totalNm = Math.round(((left.totalNm ?? 0) + (right.totalNm ?? 0)) * 10) / 10
+  const totalNm = Math.round(sorties.reduce((sum, s) => sum + s.totalNm, 0) * 10) / 10
 
   let note = null
   if (overBudgetCount > 0) {
@@ -74,6 +85,10 @@ function mergeBothSidesForSegment(left, right, label, waypointFrom, waypointTo) 
   if (left.note || right.note) {
     const parts = [left.note, right.note].filter(Boolean)
     note = note ? `${note} ${parts.join(' ')}` : parts.join(' ')
+  }
+  if (finalizeOpts) {
+    const stagedNote = buildStagedRefuelTeamNote(sorties)
+    note = note && stagedNote ? `${note} ${stagedNote}` : stagedNote ?? note
   }
 
   return {
@@ -168,6 +183,16 @@ function evaluateThreeWaySplit(input, teams, s1, s2, teamOrder) {
     const fromPt = chunks[i][0]?.ptIdent ?? '?'
     const toPt = chunks[i][chunks[i].length - 1]?.ptIdent ?? '?'
     const teamLabel = teams[teamOrder[i]].label ?? `Team ${teamOrder[i] + 1}`
+    const team = teams[teamOrder[i]]
+    const finalizeOpts =
+      input.ferryMode === 'staged-refuel' && input.recoveryAirport
+        ? {
+            wps: chunks[i],
+            team,
+            stagedRefuel: stagedRefuelContextForSide(input, team, 'single-side', false),
+            budget: input.sortieBudgetNm ?? 500,
+          }
+        : null
 
     segmentTeams.push(
       mergeBothSidesForSegment(
@@ -175,7 +200,8 @@ function evaluateThreeWaySplit(input, teams, s1, s2, teamOrder) {
         right,
         `${teamLabel} — ${fromPt}→${toPt}`,
         fromPt,
-        toPt
+        toPt,
+        finalizeOpts
       )
     )
     totalSorties += segmentTeams[i].sortieCount ?? 0
@@ -224,6 +250,8 @@ export function planThreeTeamGeographicScenario(input, teams) {
       route: `${input.routeType ?? ''}${input.routeNumber ?? ''}`.trim(),
       assignmentModel: 'geographic',
       sortieBudgetNm: budget,
+      ferryMode: input.ferryMode ?? 'return-home',
+      recoveryAirport: input.recoveryAirport ?? null,
       trackPolicy: { ...DEFAULT_PARALLEL_TRACK_POLICY, ...policy },
       totalCenterlineNm: Math.round(totalChainNm * 10) / 10,
       legs,
@@ -283,6 +311,8 @@ export function planThreeTeamGeographicScenario(input, teams) {
     route: `${input.routeType ?? ''}${input.routeNumber ?? ''}`.trim(),
     assignmentModel: 'geographic',
     sortieBudgetNm: budget,
+    ferryMode: input.ferryMode ?? 'return-home',
+    recoveryAirport: input.recoveryAirport ?? null,
     trackPolicy: { ...DEFAULT_PARALLEL_TRACK_POLICY, ...policy },
     totalCenterlineNm: Math.round(totalChainNm * 10) / 10,
     legs,

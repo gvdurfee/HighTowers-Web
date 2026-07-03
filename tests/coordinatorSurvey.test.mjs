@@ -15,7 +15,9 @@ import {
   compareTwoVsThreeTeamStaffing,
   planThreeTeamGeographicScenario,
   planSingleTeamBothSides,
+  buildStagedRefuelTeamNote,
 } from '../shared/survey-planning/surveySortiePlanner.js'
+import { defaultSpanTrackPlanFromWidthTexts } from '../shared/survey-planning/corridorTrackPlan.js'
 import {
   buildUniformOffsetSegments,
   packSortiesForTeam,
@@ -450,5 +452,43 @@ describe('staged refuel opposite-side staffing', () => {
       expect(team.sorties[1].ferryOutLabel).toBe(team.label)
       expect(team.sorties[1].offsets).toEqual([])
     }
+  })
+
+  it('merges return home into the last survey sortie when combined NM fits budget', () => {
+    const spanTrackPlan = defaultSpanTrackPlanFromWidthTexts(VR114_WIDTH)
+    spanTrackPlan[0].leftOffsets = [7, 14]
+    spanTrackPlan[0].rightOffsets = [7, 14]
+    spanTrackPlan[1].leftOffsets = [5]
+    spanTrackPlan[1].rightOffsets = [7, 14]
+
+    const team1 = { label: 'KABQ', depLat: KABQ.lat, depLon: KABQ.lon, side: 'left' }
+    const result = planSurveyScenario({
+      routeType: 'VR',
+      routeNumber: '114',
+      waypoints: VR114_FULL_WPS,
+      widthTexts: VR114_WIDTH,
+      spanTrackPlan,
+      teams: [team1],
+      sortieBudgetNm: 500,
+      assignmentModel: 'opposite-side',
+      ferryMode: 'staged-refuel',
+      recoveryAirport: KCAO,
+    })
+
+    const team = result.teams[0]
+    expect(team.sortieCount).toBe(2)
+    expect(team.sorties.some((s) => s.returnHomeOnly)).toBe(false)
+    expect(team.sorties[1].ferryOutLabel).toBe('KABQ')
+    expect(team.sorties[1].totalNm).toBeLessThanOrEqual(500)
+    expect(team.note).toMatch(/sortie 2 completes remaining survey work and returns home/)
+  })
+
+  it('buildStagedRefuelTeamNote uses correct return sortie number', () => {
+    const note = buildStagedRefuelTeamNote([
+      { sortieNumber: 1, returnHomeOnly: false },
+      { sortieNumber: 2, returnHomeOnly: false },
+      { sortieNumber: 3, returnHomeOnly: true },
+    ])
+    expect(note).toMatch(/sortie 3 is return to home/)
   })
 })

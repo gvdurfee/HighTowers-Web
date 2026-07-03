@@ -11,6 +11,7 @@ import {
   planThreeTeamGeographicScenario,
   compareOneVsTwoTeamStaffing,
   compareTwoVsThreeTeamStaffing,
+  buildLegWidthSummaries,
 } from '@survey-planning/surveySortiePlanner.js'
 import {
   GuidedHint,
@@ -27,9 +28,19 @@ import {
 import { SortiePilotCard } from '@/components/SortiePilotCard'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
+import {
+  CorridorTrackPlanEditor,
+} from '@/components/CorridorTrackPlanEditor'
+import {
+  spanTrackRowsFromWidthTexts,
+  spanTrackPlanFromRows,
+  validateSpanTrackRows,
+  type SpanTrackRowState,
+} from '@/utils/coordinatorSpanTrackPlan'
 
 const HINT_COORD_QUICK_REF = 'coordinatorSurvey.quickReference'
 const HINT_COORD_ENROUTE_RECOVERY = 'coordinatorSurvey.enrouteRecovery'
+const HINT_COORD_TEAMS_FLOW = 'coordinatorSurvey.teamsFlow'
 
 const PILOT_REFUEL_GUIDANCE =
   'Pilots should refuel to levels needed to return to home airports and have remaining fuel levels at regular operational levels on landing, if possible. This will avoid having to refuel at their home airports in many cases.'
@@ -83,12 +94,6 @@ function formatSurveySide(side: string) {
   if (side === 'left') return 'inner'
   if (side === 'right') return 'outer'
   return side
-}
-
-function formatWidthTextDisplay(text: string): string {
-  const trimmed = text.trim()
-  if (trimmed.toUpperCase().startsWith('CORRIDORS ARE')) return trimmed
-  return `CORRIDORS ARE ${trimmed}`
 }
 
 type FerryMode = 'return-home' | 'staged-refuel'
@@ -155,10 +160,30 @@ function CoordinatorConsoleGuide() {
         <div>
           <h3 className="font-semibold text-gray-900 mb-2">What this console does</h3>
           <p>
-            Wing-level <strong>what-if</strong> planning for Low Level Route tower surveys: given NASR corridor
-            width, waypoint geometry, departure airports, and a per-sortie NM budget, estimate sortie count and
-            waypoint ranges. Crews still fly corridors in ForeFlight Military Flight Bag.
+            Wing-level <strong>what-if</strong> planning for Low Level Route tower surveys: define corridor width and
+            parallel-track offsets in <strong>Scenario</strong>, then set team departures and sortie budget to estimate
+            sortie count and waypoint ranges. Crews still fly corridors in ForeFlight Military Flight Bag.
           </p>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-gray-900 mb-2">Corridor &amp; parallel tracks (Scenario)</h3>
+          <p className="mb-2">
+            NASR <strong>CORRIDORS ARE</strong> lines load automatically. The coordinator sets how many G1000 parallel
+            tracks and at what NM spacing each side needs — not every wing flies the full default 3 → 9 → 15 → 21 set.
+            Adjust offsets and re-run Compare or Run planner to see sortie impact.
+          </p>
+          <ul className="space-y-1 list-disc pl-5 text-xs text-gray-600">
+            <li>
+              <strong>Inner offsets</strong> — left of centerline (Team 1 / inner crew).
+            </li>
+            <li>
+              <strong>Outer offsets</strong> — right of centerline (Team 2 / outer crew).
+            </li>
+            <li>
+              <strong>Reset offsets</strong> — restore wing default spacing from the span&apos;s NM half-widths.
+            </li>
+          </ul>
         </div>
 
         <div>
@@ -193,12 +218,12 @@ function CoordinatorConsoleGuide() {
           <ul className="space-y-2 list-disc pl-5">
             <li>
               <strong>2 teams (opposite sides):</strong> sortie 1 — each aircraft surveys its assigned side and lands
-              at the shared refuel airport (survey complete for that crew); sortie 2 — return to each home airport
-              (pilots plan fuel; no survey .fpl).
+              at the shared refuel airport. The <strong>final sortie</strong> returns home — combined with remaining
+              survey work when it fits the NM budget, otherwise a separate ferry-only return sortie (pilots plan fuel).
             </li>
             <li>
-              <strong>1 team (both sides sequential):</strong> sortie 1 — first side → refuel; sortie 2 — opposite side
-              → home.
+              <strong>1 team (both sides sequential):</strong> sortie 1 — first side → refuel; final sortie — opposite
+              side → home (merged when within budget).
             </li>
             <li>
               <strong>Multi-aircraft:</strong> deconfliction is <strong>pilot responsibility</strong> — maintain radio
@@ -229,7 +254,8 @@ function CoordinatorConsoleGuide() {
               <tr className="border-b border-gray-200">
                 <th className="py-2 px-3 text-left font-semibold text-gray-700">Offsets (e.g. 3, 9)</th>
                 <td className="py-2 px-3 font-mono">
-                  G1000 parallel-track spacing (NM). Default wing policy: 3 → 9 → 15 → 21 for a 20 NM half-width.
+                  G1000 parallel-track spacing (NM), inner → outer. Set per NASR span in Scenario; default wing policy
+                  is 3 → 9 → 15 → 21 for a 20 NM half-width unless the coordinator changes it.
                 </td>
               </tr>
               <tr className="border-b border-gray-200 bg-white">
@@ -520,6 +546,7 @@ export function CoordinatorSurveyConsolePage() {
   const [widthTexts, setWidthTexts] = useState<string[]>([])
   const [widthErr, setWidthErr] = useState<string | null>(null)
   const [widthBusy, setWidthBusy] = useState(false)
+  const [spanTrackRows, setSpanTrackRows] = useState<SpanTrackRowState[]>([])
   const [plannerResult, setPlannerResult] = useState<PlannerResult | null>(null)
   const [compareBundle, setCompareBundle] = useState<CompareBundle | null>(null)
   const [pilotBrief, setPilotBrief] = useState<SortieFplPilotBrief | null>(null)
@@ -640,6 +667,45 @@ export function CoordinatorSurveyConsolePage() {
     void loadWidth()
   }, [loadWidth])
 
+  useEffect(() => {
+    if (widthTexts.length === 0) {
+      setSpanTrackRows([])
+      return
+    }
+    setSpanTrackRows(spanTrackRowsFromWidthTexts(widthTexts))
+    setPlannerResult(null)
+    setCompareBundle(null)
+  }, [widthTexts])
+
+  useEffect(() => {
+    setPlannerResult(null)
+    setCompareBundle(null)
+  }, [spanTrackRows, sortieBudgetNm, ferryMode])
+
+  const spanTrackErr = useMemo(() => validateSpanTrackRows(spanTrackRows), [spanTrackRows])
+
+  const legPreview = useMemo(() => {
+    if (!planBundle || !routeMeta || spanTrackRows.length === 0 || spanTrackErr) return null
+    try {
+      const spanTrackPlan = spanTrackPlanFromRows(spanTrackRows)
+      return buildLegWidthSummaries({
+        routeType: routeMeta.routeType,
+        routeNumber: routeMeta.routeNumber,
+        waypoints: planBundle.waypoints.map((w) => ({
+          ptIdent: waypointPtIdent(w.originalName),
+          lat: w.latitude,
+          lon: w.longitude,
+        })),
+        widthTexts,
+        teams: [],
+        sortieBudgetNm,
+        spanTrackPlan,
+      })
+    } catch {
+      return null
+    }
+  }, [planBundle, routeMeta, spanTrackRows, spanTrackErr, widthTexts, sortieBudgetNm])
+
   const lookupTeamAirport = async (
     code: string,
     setAirport: (a: AirportResult | null) => void,
@@ -752,7 +818,13 @@ export function CoordinatorSurveyConsolePage() {
   }
 
   const plannerBaseInput = () => {
-    if (!planBundle || !routeMeta) return null
+    if (!planBundle || !routeMeta || spanTrackErr) return null
+    let spanTrackPlan
+    try {
+      spanTrackPlan = spanTrackPlanFromRows(spanTrackRows)
+    } catch {
+      return null
+    }
     return {
       routeType: routeMeta.routeType,
       routeNumber: routeMeta.routeNumber,
@@ -763,6 +835,7 @@ export function CoordinatorSurveyConsolePage() {
       })),
       widthTexts,
       sortieBudgetNm,
+      spanTrackPlan,
       ferryMode,
       recoveryAirport:
         ferryMode === 'staged-refuel' && refuelAirport
@@ -863,6 +936,8 @@ export function CoordinatorSurveyConsolePage() {
     planBundle &&
     planBundle.waypoints.length >= minWaypoints &&
     widthTexts.length > 0 &&
+    spanTrackRows.length > 0 &&
+    !spanTrackErr &&
     !widthBusy &&
     team1Ready &&
     team2Ready &&
@@ -896,14 +971,15 @@ export function CoordinatorSurveyConsolePage() {
             </p>
             <GuidedHint
               hintId={HINT_COORD_ENROUTE_RECOVERY}
-              stepNumber={2}
+              stepNumber={3}
               title="En-route recovery & multi-aircraft"
               body={
                 <>
                   Coordinator picks <strong>one shared refuel airport</strong> near the MTR for all aircraft.{' '}
-                  <strong>2 teams:</strong> sortie 1 surveys one side and lands at refuel; sortie 2 returns home
-                  (pilots plan fuel). <strong>1 team both sides:</strong> sortie 1 → refuel; sortie 2 opposite side →
-                  home.
+                  <strong>2 teams:</strong> sortie 1 surveys one side and lands at refuel; the <strong>final sortie</strong>{' '}
+                  returns home — merged with remaining survey legs when within the NM budget.{' '}
+                  <strong>1 team both sides:</strong> sortie 1 → refuel; final sortie opposite side → home when budget
+                  allows.
                   <br />
                   <br />
                   <strong>Multi-aircraft:</strong> pilots deconflict — radio contact and <strong>staggered
@@ -987,10 +1063,42 @@ export function CoordinatorSurveyConsolePage() {
                   </li>
                 ))}
               </ul>
+
+              <CorridorTrackPlanEditor
+                spanTrackRows={spanTrackRows}
+                onSpanTrackRowsChange={setSpanTrackRows}
+                widthBusy={widthBusy}
+                widthErr={widthErr}
+                spanTrackErr={spanTrackErr}
+                isSeen={isSeen}
+                markSeen={markSeen}
+                legPreview={legPreview ?? undefined}
+              />
             </section>
 
             <section className="mb-8 rounded-xl border border-gray-200 bg-white p-5">
-              <h2 className="text-lg font-semibold text-gray-900 mb-3">Teams & parameters</h2>
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                <h2 className="text-lg font-semibold text-gray-900">Teams &amp; parameters</h2>
+                <GuidedHint
+                  hintId={HINT_COORD_TEAMS_FLOW}
+                  stepNumber={4}
+                  title="Staffing and run planner"
+                  body={
+                    <>
+                      After corridor tracks are set in <strong>Scenario</strong>, choose planner mode, team
+                      departures, sortie budget, and ferry policy here. Changing parallel tracks in Scenario clears
+                      results — run Compare or Run planner again to refresh sortie counts.
+                      <br />
+                      <br />
+                      All compare modes use the <strong>same</strong> track plan from Scenario so staffing comparisons
+                      stay fair.
+                    </>
+                  }
+                  isSeen={isSeen(HINT_COORD_TEAMS_FLOW)}
+                  onDismiss={markSeen}
+                  surface="light"
+                />
+              </div>
 
               <fieldset className="mb-5">
                 <legend className="text-sm font-medium text-gray-700 mb-2">Planner mode</legend>
@@ -1330,9 +1438,10 @@ export function CoordinatorSurveyConsolePage() {
                     <p className="font-medium text-gray-900 mb-2">Refueling airport (shared)</p>
                     <p className="text-xs text-gray-600 mb-3">
                       With <strong>2 teams (opposite sides)</strong>, each aircraft completes its corridor side on sortie
-                      1 and lands here; sortie 2 is return to that aircraft&apos;s home. With{' '}
-                      <strong>1 team (both sides)</strong>, sortie 1 ends here after the first side; sortie 2 flies the
-                      opposite side and returns home.
+                      1 and lands here. The <strong>final sortie</strong> returns home — combined with any remaining
+                      survey legs when total NM fits the budget, otherwise a separate return-only sortie. With{' '}
+                      <strong>1 team (both sides)</strong>, sortie 1 ends here after the first side; the final sortie
+                      flies the opposite side and returns home when budget allows.
                     </p>
                     <div className="flex gap-2">
                       <input
@@ -1391,28 +1500,20 @@ export function CoordinatorSurveyConsolePage() {
                 )}
               </fieldset>
 
-              {widthBusy && <p className="text-sm text-gray-500 mt-3">Loading NASR width text…</p>}
-              {widthErr && (
-                <p className="text-sm text-cap-pimento mt-3" role="alert">
-                  {widthErr}
-                </p>
-              )}
-              {!widthBusy && widthTexts.length > 0 && (
-                <ul className="mt-3 text-xs text-gray-600 space-y-1">
-                  {widthTexts.map((t, i) => (
-                    <li key={i} className="font-mono">
-                      {formatWidthTextDisplay(t)}
-                    </li>
-                  ))}
-                </ul>
-              )}
               {planBundle.waypoints.length < 2 && (
                 <p className="text-sm text-gray-600 mt-3">
                   Need at least two resolved waypoints in the flight plan before running the planner.
                 </p>
               )}
               {planBundle.waypoints.length >= 2 && !widthBusy && widthTexts.length === 0 && !widthErr && (
-                <p className="text-sm text-gray-600 mt-3">No NASR width lines returned for this route.</p>
+                <p className="text-sm text-gray-600 mt-3">
+                  Load NASR corridor width in Scenario before running the planner.
+                </p>
+              )}
+              {spanTrackErr && spanTrackRows.length > 0 && (
+                <p className="text-sm text-cap-pimento mt-3" role="alert">
+                  Fix corridor track plan in Scenario: {spanTrackErr}
+                </p>
               )}
               {planBundle.waypoints.length >= 2 && widthErr && (
                 <p className="text-sm text-gray-600 mt-3">
@@ -1448,7 +1549,9 @@ export function CoordinatorSurveyConsolePage() {
               >
                 {widthBusy
                   ? 'Loading width data…'
-                  : runMode === 'compare-1-2'
+                  : spanTrackErr
+                    ? 'Fix corridor tracks in Scenario'
+                    : runMode === 'compare-1-2'
                     ? 'Compare 1 vs 2 teams'
                     : runMode === 'compare-2-3'
                       ? 'Compare 2 vs 3 teams'
@@ -1460,7 +1563,8 @@ export function CoordinatorSurveyConsolePage() {
               <section className="rounded-xl border border-gray-200 bg-white p-5">
                 <h2 className="text-lg font-semibold text-gray-900 mb-2">Results</h2>
                 <p className="text-sm text-gray-600 mb-4">
-                  Centerline {legsResult.totalCenterlineNm} NM · Budget {legsResult.sortieBudgetNm} NM
+                  Sortie plan from Scenario corridor tracks and team parameters. Centerline{' '}
+                  {legsResult.totalCenterlineNm} NM · Budget {legsResult.sortieBudgetNm} NM
                   {'ferryMode' in legsResult && legsResult.ferryMode === 'staged-refuel' && refuelAirport ? (
                     <>
                       {' '}
@@ -1668,6 +1772,9 @@ export function CoordinatorSurveyConsolePage() {
                 )}
 
                 <table className="min-w-full text-sm mb-6">
+                  <caption className="text-left text-sm font-semibold text-gray-900 mb-2">
+                    Applied leg track plan
+                  </caption>
                   <thead>
                     <tr className="border-b border-gray-200 text-left text-gray-600">
                       <th className="py-2 pr-3">Leg</th>
