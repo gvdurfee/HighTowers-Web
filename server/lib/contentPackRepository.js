@@ -451,22 +451,91 @@ export function getPackExportDetail(packId) {
   return { pack, csvText, csvMemberPath: pack.csv_member_path, baselinePath: baselineZipPath(packId) }
 }
 
+/**
+ * Coerce and validate tower payloads before apply/preview.
+ * Rejects non-finite or out-of-range coordinates that would otherwise write NaN into CSV.
+ * @param {unknown} rawTowers
+ * @param {unknown} rawThresholdM
+ * @returns {{ ok: true, towers: { lat: number, lon: number, groundElevationFt?: number }[], thresholdM?: number } | { ok: false, error: string, message: string }}
+ */
+function normalizeApplyTowers(rawTowers, rawThresholdM) {
+  if (!Array.isArray(rawTowers)) {
+    return { ok: false, error: 'invalid_towers', message: 'towers must be an array' }
+  }
+  if (rawTowers.length > 200) {
+    return { ok: false, error: 'invalid_towers', message: 'Too many towers in one apply (max 200)' }
+  }
+  /** @type {{ lat: number, lon: number, groundElevationFt?: number }[]} */
+  const towers = []
+  for (let i = 0; i < rawTowers.length; i++) {
+    const t = rawTowers[i]
+    if (!t || typeof t !== 'object') {
+      return { ok: false, error: 'invalid_tower', message: `Tower ${i + 1} is not an object` }
+    }
+    const lat = Number(/** @type {{ lat?: unknown }} */ (t).lat)
+    const lon = Number(/** @type {{ lon?: unknown }} */ (t).lon)
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return {
+        ok: false,
+        error: 'invalid_tower',
+        message: `Tower ${i + 1} needs finite lat/lon`,
+      }
+    }
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      return {
+        ok: false,
+        error: 'invalid_tower',
+        message: `Tower ${i + 1} lat/lon out of range`,
+      }
+    }
+    const elevRaw = /** @type {{ groundElevationFt?: unknown }} */ (t).groundElevationFt
+    let groundElevationFt
+    if (elevRaw != null && elevRaw !== '') {
+      const elev = Number(elevRaw)
+      if (!Number.isFinite(elev)) {
+        return {
+          ok: false,
+          error: 'invalid_tower',
+          message: `Tower ${i + 1} groundElevationFt is not finite`,
+        }
+      }
+      groundElevationFt = elev
+    }
+    towers.push(
+      groundElevationFt != null ? { lat, lon, groundElevationFt } : { lat, lon }
+    )
+  }
+
+  let thresholdM
+  if (rawThresholdM != null && rawThresholdM !== '') {
+    thresholdM = Number(rawThresholdM)
+    if (!Number.isFinite(thresholdM) || thresholdM <= 0 || thresholdM > 50000) {
+      return {
+        ok: false,
+        error: 'invalid_threshold',
+        message: 'thresholdM must be a positive finite number (meters)',
+      }
+    }
+  }
+
+  return thresholdM != null ? { ok: true, towers, thresholdM } : { ok: true, towers }
+}
+
 export function previewApplyContentPack(packId, body) {
   const pack = getContentPackById(packId)
   if (!pack) return { error: 'not_found', message: 'Pack not found' }
   const wps = getWaypointRows(packId)
   const csvText = getCsvTextForPack(pack, wps)
   const routeNumber = body.routeNumber != null ? String(body.routeNumber).trim() || null : null
-  const towers = Array.isArray(body.towers) ? body.towers : []
+  const normalized = normalizeApplyTowers(body.towers, body.thresholdM)
+  if (!normalized.ok) {
+    return { error: normalized.error, message: normalized.message }
+  }
   const cum = applyAllMissionTowersToUserWaypointsCsvText({
     csvText,
-    towers: towers.map((t) => ({
-      lat: Number(t.lat),
-      lon: Number(t.lon),
-      groundElevationFt: t.groundElevationFt != null ? Number(t.groundElevationFt) : undefined,
-    })),
+    towers: normalized.towers,
     routeNumber,
-    thresholdM: body.thresholdM != null ? Number(body.thresholdM) : undefined,
+    thresholdM: normalized.thresholdM,
   })
   if (!cum.ok) {
     return { error: cum.reason, message: cum.message }
@@ -497,16 +566,15 @@ export function commitApplyContentPack(packId, body) {
   const wps = getWaypointRows(packId)
   const csvText = getCsvTextForPack(pack, wps)
   const routeNumber = body.routeNumber != null ? String(body.routeNumber).trim() || null : null
-  const towers = Array.isArray(body.towers) ? body.towers : []
+  const normalized = normalizeApplyTowers(body.towers, body.thresholdM)
+  if (!normalized.ok) {
+    return { error: normalized.error, message: normalized.message }
+  }
   const cum = applyAllMissionTowersToUserWaypointsCsvText({
     csvText,
-    towers: towers.map((t) => ({
-      lat: Number(t.lat),
-      lon: Number(t.lon),
-      groundElevationFt: t.groundElevationFt != null ? Number(t.groundElevationFt) : undefined,
-    })),
+    towers: normalized.towers,
     routeNumber,
-    thresholdM: body.thresholdM != null ? Number(body.thresholdM) : undefined,
+    thresholdM: normalized.thresholdM,
   })
   if (!cum.ok) {
     return { error: cum.reason, message: cum.message }

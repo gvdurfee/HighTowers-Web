@@ -355,6 +355,21 @@ describe('planSurveyScenario', () => {
         expect(s.totalNm).toBeLessThanOrEqual(500 + 1e-6)
       }
     }
+
+    // Sortie indices must be absolute against the full route (export uses full waypoint list).
+    const lastIdx = VR114_FULL_WPS.length - 1
+    const surveySorties = result.teams.flatMap((t) => t.sorties).filter((s) => !s.returnHomeOnly)
+    expect(surveySorties.length).toBeGreaterThan(0)
+    for (const s of surveySorties) {
+      expect(s.startIdx).toBeGreaterThanOrEqual(0)
+      expect(s.endIdx).toBeLessThanOrEqual(lastIdx)
+      expect(s.endIdx).toBeGreaterThan(s.startIdx)
+      expect(VR114_FULL_WPS[s.startIdx]?.ptIdent).toBe(s.waypointFrom)
+      expect(VR114_FULL_WPS[s.endIdx]?.ptIdent).toBe(s.waypointTo)
+    }
+    // At least one sortie must lie past the first geographic boundary (Team 2/3 chunks).
+    const pastFirstSplit = surveySorties.some((s) => s.startIdx >= result.geographicSplits[0].boundaryIdx)
+    expect(pastFirstSplit).toBe(true)
   })
 
   it('compareTwoVsThreeTeamStaffing contrasts VR114 opposite-side vs geographic split', () => {

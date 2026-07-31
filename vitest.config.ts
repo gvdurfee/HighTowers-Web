@@ -8,6 +8,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@': path.resolve(__dirname, 'src'),
       '@content-pack/core': path.resolve(__dirname, 'shared/content-pack-core'),
       '@survey-planning': path.resolve(__dirname, 'shared/survey-planning'),
     },

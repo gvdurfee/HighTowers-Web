@@ -24,11 +24,17 @@ import {
 import { createContentPacksRouter } from './routes/contentPacks.js'
 import { createAdminRouter } from './routes/admin.js'
 import { logAdminConfigStatus } from './lib/adminAuth.js'
+import { contentPackAuth, logContentPackAuthStatus } from './lib/contentPackAuth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '..', '.env') })
 
 const app = express()
+
+/** Only honor X-Forwarded-For / req.ip hops when explicitly enabled (hosted reverse proxy). */
+if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1)
+}
 
 /** Comma-separated browser origins allowed to call this API (required for GitHub Pages + wing sites). */
 function corsAllowedOrigins() {
@@ -231,7 +237,7 @@ async function getWaypointsFromCsv(csvPath, routeType, routeNumber, entryLetter,
   for await (const row of parser) {
     const rtc = (row.ROUTE_TYPE_CODE ?? '').replace(/"/g, '').trim()
     const rid = (row.ROUTE_ID ?? '').replace(/"/g, '').trim()
-    if (rtc !== rt || rid !== routeId) continue
+    if (rtc !== rt || !routeIdsMatch(rid, routeId)) continue
 
     const lat = parseFloat(row.LAT_DECIMAL)
     const lon = parseFloat(row.LONG_DECIMAL)
@@ -321,9 +327,41 @@ function toG1000Name(original) {
   return upper.replace(/[^A-Z0-9]/gi, '').slice(0, G1000_USER_WAYPOINT_ID_MAX_LEN)
 }
 
-// In-memory cache: { effectiveDate, csvPath, widthCsvPath } to avoid re-downloading within same cycle
-/** @type {{ effectiveDate: string, csvPath: string, widthCsvPath: string } | null} */
+// In-memory cache of resolved NASR cycle files. Re-checked on a TTL so long-running
+// hosts pick up the next 28-day cycle without a process restart.
+/** @type {{ effectiveDate: string, csvPath: string, widthCsvPath: string, resolvedAt: number } | null} */
 let cycleCache = null
+const CYCLE_CACHE_TTL_MS = 12 * 60 * 60 * 1000 // 12 hours
+
+async function resolveCycleFiles() {
+  const now = Date.now()
+  if (
+    cycleCache?.csvPath &&
+    cycleCache?.widthCsvPath &&
+    now - (cycleCache.resolvedAt ?? 0) < CYCLE_CACHE_TTL_MS
+  ) {
+    return cycleCache
+  }
+
+  const currentDate = await getCurrentCycleDate()
+  if (
+    cycleCache?.effectiveDate === currentDate &&
+    cycleCache?.csvPath &&
+    cycleCache?.widthCsvPath
+  ) {
+    cycleCache = { ...cycleCache, resolvedAt: now }
+    return cycleCache
+  }
+
+  const result = await downloadMtrCsv(currentDate)
+  cycleCache = {
+    effectiveDate: result.effectiveDate,
+    csvPath: result.csvPath,
+    widthCsvPath: result.widthCsvPath,
+    resolvedAt: now,
+  }
+  return cycleCache
+}
 
 app.get('/api/mtr/waypoints', async (req, res) => {
   const routeType = (req.query.routeType ?? 'IR').toUpperCase()
@@ -342,19 +380,7 @@ app.get('/api/mtr/waypoints', async (req, res) => {
   }
 
   try {
-    let effectiveDate = cycleCache?.effectiveDate
-    let csvPath = cycleCache?.csvPath
-    let widthCsvPath = cycleCache?.widthCsvPath
-
-    if (!csvPath || !widthCsvPath) {
-      effectiveDate = await getCurrentCycleDate()
-      const result = await downloadMtrCsv(effectiveDate)
-      csvPath = result.csvPath
-      widthCsvPath = result.widthCsvPath
-      effectiveDate = result.effectiveDate
-      cycleCache = { effectiveDate, csvPath, widthCsvPath }
-    }
-
+    const { effectiveDate, csvPath } = await resolveCycleFiles()
     const waypoints = await getWaypointsFromCsv(
       csvPath,
       routeType,
@@ -390,21 +416,7 @@ app.get('/api/mtr/width', async (req, res) => {
   }
 
   try {
-    let effectiveDate = cycleCache?.effectiveDate
-    let widthCsvPath = cycleCache?.widthCsvPath
-
-    if (!widthCsvPath) {
-      effectiveDate = await getCurrentCycleDate()
-      const result = await downloadMtrCsv(effectiveDate)
-      effectiveDate = result.effectiveDate
-      cycleCache = {
-        effectiveDate,
-        csvPath: result.csvPath,
-        widthCsvPath: result.widthCsvPath,
-      }
-      widthCsvPath = result.widthCsvPath
-    }
-
+    const { effectiveDate, widthCsvPath } = await resolveCycleFiles()
     const widthTexts = await getWidthTextsFromCsv(widthCsvPath, routeType, routeNumber)
     res.json({ effectiveDate, widthTexts })
   } catch (err) {
@@ -424,17 +436,53 @@ app.get('/api/mtr/cycle', async (_req, res) => {
   }
 })
 
+const MAPBOX_STATIC_STYLE_ALLOWLIST = new Set([
+  'mapbox/satellite-streets-v12',
+  'mapbox/satellite-v9',
+  'mapbox/streets-v12',
+  'mapbox/outdoors-v12',
+  'mapbox/light-v11',
+  'mapbox/dark-v11',
+])
+
+/** Simple per-IP rate limit for the paid Mapbox proxy (in-memory; resets on restart). */
+const mapboxStaticRate = new Map()
+const MAPBOX_STATIC_RATE_WINDOW_MS = 60 * 1000
+const MAPBOX_STATIC_RATE_MAX = 30
+
+function mapboxStaticClientIp(req) {
+  return req.ip || req.socket?.remoteAddress || 'unknown'
+}
+
+function allowMapboxStaticRequest(ip) {
+  const now = Date.now()
+  let rec = mapboxStaticRate.get(ip)
+  if (!rec || now - rec.windowStart >= MAPBOX_STATIC_RATE_WINDOW_MS) {
+    rec = { windowStart: now, count: 0 }
+    mapboxStaticRate.set(ip, rec)
+  }
+  rec.count += 1
+  return rec.count <= MAPBOX_STATIC_RATE_MAX
+}
+
 /**
  * Proxy Mapbox Static Images API — browser fetch() to api.mapbox.com is often blocked by CORS;
  * PDF export uses this route when the dev server (or any host that mounts this API) is running.
  * Uses the same token as the Vite app: VITE_MAPBOX_ACCESS_TOKEN or MAPBOX_ACCESS_TOKEN in .env.
+ * When CONTENT_PACK_API_KEY is set (or production fail-closed), uses the same auth gate.
  */
-app.post('/api/mapbox-static', async (req, res) => {
+app.post('/api/mapbox-static', contentPackAuth, async (req, res) => {
   const token =
     process.env.VITE_MAPBOX_ACCESS_TOKEN || process.env.MAPBOX_ACCESS_TOKEN || ''
   const placeholder = 'your_mapbox_token_here'
   if (!token || token === placeholder) {
     res.status(503).json({ error: 'Mapbox token not configured on server (.env)' })
+    return
+  }
+  const ip = mapboxStaticClientIp(req)
+  if (!allowMapboxStaticRequest(ip)) {
+    res.setHeader('Retry-After', '60')
+    res.status(429).json({ error: 'Too many Mapbox static requests; try again shortly.' })
     return
   }
   try {
@@ -454,6 +502,27 @@ app.post('/api/mapbox-static', async (req, res) => {
       res.status(400).json({ error: 'overlayPath too long' })
       return
     }
+    let decodedOverlay = overlayPath
+    try {
+      decodedOverlay = decodeURIComponent(overlayPath)
+    } catch {
+      /* keep raw */
+    }
+    // Reject path traversal / query injection that could reach other Mapbox APIs with the server token.
+    if (
+      decodedOverlay.includes('..') ||
+      overlayPath.includes('?') ||
+      overlayPath.includes('#') ||
+      overlayPath.includes('\\')
+    ) {
+      res.status(400).json({ error: 'overlayPath contains invalid characters' })
+      return
+    }
+    const styleId = typeof style === 'string' ? style.trim() : ''
+    if (!MAPBOX_STATIC_STYLE_ALLOWLIST.has(styleId)) {
+      res.status(400).json({ error: 'style is not allowlisted' })
+      return
+    }
     const w = Math.min(1280, Math.max(200, Number(width) || 1280))
     const h = Math.min(1280, Math.max(200, Number(height) || 720))
     const r5 = (n) => Number(n).toFixed(5)
@@ -466,8 +535,18 @@ app.post('/api/mapbox-static', async (req, res) => {
       position = `[${r5(bbox.west)},${r5(bbox.south)},${r5(bbox.east)},${r5(bbox.north)}]`
     }
     // Keep padding in sync with MAPBOX_STATIC_IMAGE_PADDING_PX in src/utils/missionMapStaticImage.ts
-    const url = `https://api.mapbox.com/styles/v1/${style}/static/${overlayPath}/${position}/${w}x${h}?padding=80&attribution=false&logo=false&access_token=${token}`
-    const mapRes = await fetch(url)
+    // Build path by concatenation (Mapbox overlays use commas/parens); token only in query string.
+    const staticPath = `/styles/v1/${styleId}/static/${overlayPath}/${position}/${w}x${h}`
+    const url = new URL(staticPath, 'https://api.mapbox.com')
+    url.searchParams.set('padding', '80')
+    url.searchParams.set('attribution', 'false')
+    url.searchParams.set('logo', 'false')
+    url.searchParams.set('access_token', token)
+    if (!url.pathname.startsWith(`/styles/v1/${styleId}/static/`)) {
+      res.status(400).json({ error: 'overlayPath resolved outside static image path' })
+      return
+    }
+    const mapRes = await fetch(url.toString())
     if (!mapRes.ok) {
       const snippet = (await mapRes.text()).slice(0, 300)
       console.error('Mapbox static failed:', mapRes.status, snippet)
@@ -532,4 +611,5 @@ app.get('/api/recent-imagery', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`FAA MTR backend listening on port ${PORT}`)
   logAdminConfigStatus()
+  logContentPackAuthStatus()
 })

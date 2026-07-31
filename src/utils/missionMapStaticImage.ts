@@ -8,6 +8,7 @@
 import { db } from '@/db/schema'
 import type { AirportRecord, FlightPlanRecord, WaypointRecord } from '@/db/schema'
 import { apiConfig, apiUrl, isMapboxConfigured } from '@/config/apiConfig'
+import { getContentPackApiKey } from '@/services/contentPackApi'
 import { parseWaypointCode } from '@/utils/mtrWaypointCode'
 
 const STYLE = 'mapbox/satellite-streets-v12'
@@ -285,9 +286,12 @@ async function fetchMapboxStaticPng(
   }
 
   try {
+    const apiKey = getContentPackApiKey()
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (apiKey) headers['X-API-Key'] = apiKey
     const res = await fetch(apiUrl('/api/mapbox-static'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         overlayPath,
         width,

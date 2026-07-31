@@ -62,7 +62,33 @@ function sliceWaypoints(wps, startIdx, endIdx) {
  * @param {string} waypointFrom
  * @param {string} waypointTo
  */
-function mergeBothSidesForSegment(left, right, label, waypointFrom, waypointTo, finalizeOpts = null) {
+/**
+ * Packing runs on a chunk slice, so sortie indices are chunk-local. Export slices the
+ * full flight-plan list — rebase after finalize so Team 2/3 .fpl files match the segment.
+ * @param {Array<{ startIdx: number, endIdx: number, returnHomeOnly?: boolean }>} sorties
+ * @param {number} chunkStartIdx
+ */
+function rebaseSortiesToFullRoute(sorties, chunkStartIdx) {
+  if (!chunkStartIdx) return sorties
+  return sorties.map((s) => {
+    if (s.returnHomeOnly || s.startIdx < 0 || s.endIdx < 0) return s
+    return {
+      ...s,
+      startIdx: s.startIdx + chunkStartIdx,
+      endIdx: s.endIdx + chunkStartIdx,
+    }
+  })
+}
+
+function mergeBothSidesForSegment(
+  left,
+  right,
+  label,
+  waypointFrom,
+  waypointTo,
+  finalizeOpts = null,
+  chunkStartIdx = 0
+) {
   let sorties = [...left.sorties, ...right.sorties].map((s, i) => ({
     ...s,
     sortieNumber: i + 1,
@@ -74,6 +100,12 @@ function mergeBothSidesForSegment(left, right, label, waypointFrom, waypointTo, 
       appendReturnHomeIfNeeded: true,
     }).sorties
   }
+
+  sorties = rebaseSortiesToFullRoute(sorties, chunkStartIdx)
+  const entryIndex =
+    left.entryIndex != null && left.entryIndex >= 0
+      ? left.entryIndex + chunkStartIdx
+      : left.entryIndex
 
   const overBudgetCount = sorties.filter((s) => s.overBudget).length
   const totalNm = Math.round(sorties.reduce((sum, s) => sum + s.totalNm, 0) * 10) / 10
@@ -97,7 +129,7 @@ function mergeBothSidesForSegment(left, right, label, waypointFrom, waypointTo, 
     waypointFrom,
     waypointTo,
     entryWaypoint: left.entryWaypoint,
-    entryIndex: left.entryIndex,
+    entryIndex,
     ferryInNm: left.ferryInNm,
     sorties,
     sortieCount: sorties.length,
@@ -169,6 +201,7 @@ function evaluateThreeWaySplit(input, teams, s1, s2, teamOrder) {
   let totalWingNm = 0
   let overBudget = 0
 
+  const chunkStarts = [0, s1, s2]
   for (let i = 0; i < 3; i++) {
     const chunkResult = planChunkBothSides(
       input,
@@ -201,7 +234,8 @@ function evaluateThreeWaySplit(input, teams, s1, s2, teamOrder) {
         `${teamLabel} — ${fromPt}→${toPt}`,
         fromPt,
         toPt,
-        finalizeOpts
+        finalizeOpts,
+        chunkStarts[i]
       )
     )
     totalSorties += segmentTeams[i].sortieCount ?? 0

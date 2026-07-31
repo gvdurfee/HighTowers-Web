@@ -238,10 +238,13 @@ export function verifyAdminToken(token) {
   return payload
 }
 
+/**
+ * Client IP for PIN rate limiting.
+ * Do not trust X-Forwarded-For unless Express `trust proxy` is enabled
+ * (set TRUST_PROXY=1 on the server when behind a known reverse proxy).
+ */
 function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for']
-  const firstFwd = typeof fwd === 'string' ? fwd.split(',')[0]?.trim() : null
-  return firstFwd || req.socket?.remoteAddress || req.ip || 'unknown'
+  return req.ip || req.socket?.remoteAddress || 'unknown'
 }
 
 function extractToken(req) {
