@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The current ArcGIS MTR data (services3.arcgis.com) is **incomplete** compared to FAA/AP-1B. SR213 has waypoints A–G but **SR213H is missing**. ForeFlight and the FAA use the **28-Day NASR Subscription** as the authoritative source. Migrating to FAA NASR MTR data would require a **backend service** to download, parse, and serve the data.
+FAA NASR `MTR_PT.csv` covers **IR/VR only** (served by this app’s backend). **SR** waypoints are loaded from DISDI’s public ArcGIS `MTRs_and_SUAs` FeatureServer (the older NIFC `services3…/Military_Training_Routes` service now returns **Token Required**). DISDI SR213 has A–G but **SR213H is still missing**; use a blended full ID such as `SR214H` when that point is on the adjacent route.
 
 ---
 
@@ -22,11 +22,11 @@ Same source as AP/1B and the FAA Enroute charts.
 
 | Property        | Value |
 |-----------------|-------|
-| **Service**     | `https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/Military_Training_Routes/` |
-| **Provider**    | Esri / NIFC (National Interagency Fire Center) Hub |
-| **Format**      | ArcGIS FeatureServer, point-based (PT_IDENT, WGS_DLAT, WGS_DLONG) |
-| **Layers**      | IR=3, SR=4, VR=5 |
-| **Limitation**  | SR213 has A–G only; SR213H not present. Likely older or derived from a different source than NASR. |
+| **Service (current)** | `https://services7.arcgis.com/n1YM8pTrFmm7L4hs/ArcGIS/rest/services/MTRs_and_SUAs/` (DISDI public) |
+| **Provider**    | DISDI / DoD (public FeatureServer; no token) |
+| **Format**      | ArcGIS FeatureServer with PT_IDENT, WGS_DLAT, WGS_DLONG on route features |
+| **Layers**      | IR=0, SR=1, VR=2 |
+| **Limitation**  | SR213 has A–G only; SR213H not present. Former NIFC services3 URL now requires a token. |
 
 ---
 

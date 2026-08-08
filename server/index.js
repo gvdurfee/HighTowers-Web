@@ -1,7 +1,7 @@
 /**
  * FAA NASR MTR Backend
  * Downloads MTR_PT.csv from the current 28-day NASR cycle and returns waypoints for IR/VR routes.
- * SR routes fall back to ArcGIS (not in FAA MTR CSV).
+ * SR routes are not in FAA MTR CSV; the web client loads them from DISDI’s public ArcGIS MTRs_and_SUAs service.
  */
 
 import cors from 'cors'

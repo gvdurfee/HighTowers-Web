@@ -6,6 +6,14 @@ import { fetchRecentImageryOverlay } from '@/services/recentImageryOverlay'
 import type { RecentImageryOverlay } from '@/services/recentImageryOverlay'
 import { GuidedHint } from '@/components/GuidedHint'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
+import {
+  dmsFieldSignature,
+  formatMinutesDisplay,
+  formatMinutesFromMap,
+  fromDms,
+  shouldSkipDmsToMapSync,
+  toDms,
+} from '@/utils/surveyMapCoordinates'
 
 const HINT_SURVEY_G1000 = 'surveyMap.g1000Context'
 const HINT_SURVEY_COORDS = 'surveyMap.coordinates'
@@ -23,34 +31,6 @@ function clampPanelPosition(x: number, y: number, panelWidth: number, panelHeigh
     x: Math.min(Math.max(PANEL_MARGIN_PX, x), maxX),
     y: Math.min(Math.max(PANEL_MARGIN_PX, y), maxY),
   }
-}
-
-/** Convert decimal degrees to DMS components (DD, MM.mm, N/S or E/W) */
-function toDms(decimal: number, isLat: boolean): { deg: number; min: number; hem: 'N' | 'S' | 'E' | 'W' } {
-  const abs = Math.abs(decimal)
-  const deg = Math.floor(abs)
-  const min = (abs - deg) * 60
-  const hem = isLat ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W')
-  return { deg, min, hem }
-}
-
-/** Convert DMS to decimal degrees */
-function fromDms(deg: number, min: number, hem: 'N' | 'S' | 'E' | 'W'): number {
-  const abs = deg + min / 60
-  return (hem === 'S' || hem === 'W') ? -abs : abs
-}
-
-/** Minutes for display: always two digits after the decimal (MM.mm) */
-function formatMinutesDisplay(minStr: string): string {
-  if (!minStr.trim()) return '—'
-  const n = Number(minStr)
-  if (!Number.isFinite(n)) return minStr
-  return n.toFixed(2)
-}
-
-/** Minutes when syncing from map center (avoid long float strings in inputs) */
-function formatMinutesFromMap(minutes: number): string {
-  return minutes.toFixed(2)
 }
 
 export interface SurveyMapRecordOptions {
@@ -112,6 +92,11 @@ export function SurveyMapModal({
   const overlayBlobRef = useRef<string | null>(null)
   /** When true, next map moveend came from coordinate fields / programatic fly — do not overwrite inputs */
   const skipNextMapCenterSyncRef = useRef(false)
+  /**
+   * Signature of DMS fields last filled from the map center.
+   * While fields still match, do not rewrite viewState from DMS (avoids ~10–20 m MM.mm snap).
+   */
+  const mapSyncedDmsSignatureRef = useRef<string | null>(null)
 
   const [imageryOverlay, setImageryOverlay] = useState<RecentImageryOverlay | null>(null)
   const [overlayLoading, setOverlayLoading] = useState(false)
@@ -223,6 +208,7 @@ export function SurveyMapModal({
       setMapError(null)
       setTowerNotVisibleOnMap(false)
       setCoordVerifyDismissed(false)
+      mapSyncedDmsSignatureRef.current = null
       setViewState({
         longitude: initialLon || -106.6504,
         latitude: initialLat || 35.0844,
@@ -296,6 +282,9 @@ export function SurveyMapModal({
     const latM = Number(latMin)
     const lonM = Number(lonMin)
     if ((latMin && (latM < 0 || latM >= 60)) || (lonMin && (lonM < 0 || lonM >= 60))) return
+    const currentSig = dmsFieldSignature(latDeg, latMin, latHem, lonDeg, lonMin, lonHem)
+    // Map→form sync only updates the inputs for display; keep full-precision map center.
+    if (shouldSkipDmsToMapSync(mapSyncedDmsSignatureRef.current, currentSig)) return
     const nextLat = fromDms(Number(latDeg) || 0, Number(latMin) || 0, latHem)
     const nextLon = fromDms(Number(lonDeg) || 0, Number(lonMin) || 0, lonHem)
     skipNextMapCenterSyncRef.current = true
@@ -305,12 +294,26 @@ export function SurveyMapModal({
   const syncCenterToCoords = (lng: number, latVal: number) => {
     const dLat = toDms(latVal, true)
     const dLon = toDms(lng, false)
-    setLatDeg(String(dLat.deg))
-    setLatMin(formatMinutesFromMap(dLat.min))
-    setLatHem(dLat.hem as 'N' | 'S')
-    setLonDeg(String(dLon.deg))
-    setLonMin(formatMinutesFromMap(dLon.min))
-    setLonHem(dLon.hem as 'E' | 'W')
+    const latDegStr = String(dLat.deg)
+    const latMinStr = formatMinutesFromMap(dLat.min)
+    const latHemStr = dLat.hem as 'N' | 'S'
+    const lonDegStr = String(dLon.deg)
+    const lonMinStr = formatMinutesFromMap(dLon.min)
+    const lonHemStr = dLon.hem as 'E' | 'W'
+    mapSyncedDmsSignatureRef.current = dmsFieldSignature(
+      latDegStr,
+      latMinStr,
+      latHemStr,
+      lonDegStr,
+      lonMinStr,
+      lonHemStr
+    )
+    setLatDeg(latDegStr)
+    setLatMin(latMinStr)
+    setLatHem(latHemStr)
+    setLonDeg(lonDegStr)
+    setLonMin(lonMinStr)
+    setLonHem(lonHemStr)
   }
 
   const validateAndWarn = (): boolean => {
@@ -362,8 +365,10 @@ export function SurveyMapModal({
     if (!validateAndWarn()) return
     setLoading(true)
     setError(null)
-    const recordLat = viewState.latitude
-    const recordLon = viewState.longitude
+    // Prefer live map center so recorded coords match the crosshair (full precision).
+    const mapCenter = mapRef.current?.getMap()?.getCenter()
+    const recordLat = mapCenter?.lat ?? viewState.latitude
+    const recordLon = mapCenter?.lng ?? viewState.longitude
     try {
       const elev = await fetchElevation(recordLat, recordLon)
       onRecord(recordLat, recordLon, elev, {

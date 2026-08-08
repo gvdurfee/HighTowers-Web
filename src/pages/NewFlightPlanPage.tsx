@@ -258,7 +258,7 @@ export function NewFlightPlanPage() {
       if (found === 0) {
         setSequencePreview({
           error:
-            'No waypoints found. Check route identifier and suffixes (e.g. IR109 + AM, P1, AQ), or use full IDs like IR109-AM.',
+            'No waypoints found. For IR/VR: check the route ID and that the local FAA server is running. For SR: confirm the sequence/route identifier (e.g. SR213 + G, or SR214H). Suffix-only entries need a route identifier.',
         })
       } else {
         setSequencePreview({

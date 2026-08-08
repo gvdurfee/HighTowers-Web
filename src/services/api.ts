@@ -1,19 +1,26 @@
 /**
- * API service for MTR waypoints (FAA NASR for IR/VR, ArcGIS fallback for SR),
+ * API service for MTR waypoints (FAA NASR for IR/VR, public DISDI ArcGIS for SR + fallback),
  * FAA airports, and elevation.
  * Ports logic from HighTowers-2025 APIService.swift
+ *
+ * Note: the former NIFC `services3…/Military_Training_Routes` service now returns
+ * HTTP 499 "Token Required". SR (and ArcGIS fallback for IR/VR) use DISDI's public
+ * MTRs_and_SUAs FeatureServer instead.
  */
 
 import { apiUrl } from '@/config/apiConfig'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
+import { findRouteWaypoint } from '@/utils/mtrWaypointLookup'
 
 const FAA_URL =
   'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/US_Airport/FeatureServer/0/query'
 
-const ARCGIS_BASE = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/Military_Training_Routes/FeatureServer'
-const IR_LAYER = 3
-const SR_LAYER = 4
-const VR_LAYER = 5
+/** DISDI public MTR points/corridors (no token). Layers: IR=0, SR=1, VR=2. */
+const ARCGIS_BASE =
+  'https://services7.arcgis.com/n1YM8pTrFmm7L4hs/ArcGIS/rest/services/MTRs_and_SUAs/FeatureServer'
+const IR_LAYER = 0
+const SR_LAYER = 1
+const VR_LAYER = 2
 
 // CORS-enabled; OpenTopoData disables CORS for browser requests
 const ELEVATION_URL = 'https://www.elevation-api.eu/v1/elevation'
@@ -36,7 +43,8 @@ interface ArcGisFeature {
 }
 
 interface ArcGisResponse {
-  features: ArcGisFeature[]
+  features?: ArcGisFeature[]
+  error?: { code?: number; message?: string }
 }
 
 function parseDms(dms: string): number | null {
@@ -167,16 +175,23 @@ export const apiService = {
     const res = await fetch(`${ARCGIS_BASE}/${layer}/query?${params}`)
     if (!res.ok) throw new Error(`ARCGIS API error: ${res.status}`)
     const data: ArcGisResponse = await res.json()
+    if (data.error) {
+      throw new Error(
+        `ARCGIS API error: ${data.error.message ?? 'unknown'}${
+          data.error.code != null ? ` (${data.error.code})` : ''
+        }`
+      )
+    }
 
     const results: { originalName: string; g1000Name: string; latitude: number; longitude: number; ptIdent?: string; nxPoint?: string }[] = []
     for (let i = 0; i < (data.features?.length ?? 0); i++) {
-      const f = data.features[i]
+      const f = data.features![i]
       const attrs = f.attributes
-      const lat = getNum(attrs, 'WGS_DLAT', 'wgsDlat')
-      const lon = getNum(attrs, 'WGS_DLONG', 'WGS_DLON', 'wgsDlong')
-      const ptIdent = getStr(attrs, 'PT_IDENT', 'ptIdent') ?? ''
-      const nxPoint = getStr(attrs, 'NX_POINT', 'nxPoint') ?? ''
-      if (lat != null && lon != null) {
+      const lat = getNum(attrs, 'WGS_DLAT', 'wgsDlat', 'wgs_dlat')
+      const lon = getNum(attrs, 'WGS_DLONG', 'WGS_DLON', 'wgsDlong', 'wgs_dlong')
+      const ptIdent = (getStr(attrs, 'PT_IDENT', 'ptIdent', 'pt_ident') ?? '').trim()
+      const nxPoint = (getStr(attrs, 'NX_POINT', 'nxPoint', 'nx_point') ?? '').trim()
+      if (lat != null && lon != null && ptIdent) {
         const originalName = `${routeType}${num}-${ptIdent}`
         results.push({
           originalName,
@@ -243,11 +258,7 @@ export const apiService = {
     waypointLetter: string
   ): Promise<{ latitude: number; longitude: number } | null> {
     const waypoints = await this.fetchRouteData(routeType, routeNumber)
-    const letter = waypointLetter.toUpperCase()
-    const match = waypoints.find((w) => {
-      const prefix = w.g1000Name.replace(/\d/g, '')
-      return prefix === letter || w.g1000Name.startsWith(letter)
-    })
+    const match = findRouteWaypoint(waypoints, waypointLetter)
     return match ? { latitude: match.latitude, longitude: match.longitude } : null
   },
 

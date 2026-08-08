@@ -9,7 +9,7 @@ Provides MTR waypoint data from the official FAA 28-Day NASR dataset (same sourc
   2. Downloads `{date}_MTR_CSV.zip` from nfdc.faa.gov if not cached
   3. Parses `MTR_PT.csv` and `MTR_WDTH.csv` (cached together) and returns waypoints or width text for the requested route
 
-- **Routes**: Only IR and VR routes are in FAA MTR CSV. SR routes fall back to ArcGIS in the frontend.
+- **Routes**: Only IR and VR routes are in FAA MTR CSV. SR routes are loaded in the frontend from DISDI’s public `MTRs_and_SUAs` ArcGIS FeatureServer (the older NIFC MTR service now requires a token).
 
 - **Cache**: Extracted CSVs are cached under `server/.mtr-cache` by effective date to avoid repeated downloads.
 
