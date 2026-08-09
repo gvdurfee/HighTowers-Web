@@ -516,6 +516,14 @@ export function TowerAnalysisPage() {
         initialLon={towerLon}
         onRecord={handleSurveyRecord}
         fetchElevation={apiService.fetchElevation}
+        towerPhoto={selectedImage}
+        evalTowerLabel={
+          imageMeta?.cameraModel
+            ? `photo:${imageMeta.cameraModel}`
+            : selectedImage
+              ? 'tower-photo'
+              : ''
+        }
       />
 
       {showHelp && (

@@ -14,6 +14,12 @@ import {
   shouldSkipDmsToMapSync,
   toDms,
 } from '@/utils/surveyMapCoordinates'
+import {
+  imageElementToJpegDataUrl,
+  suggestTowerLocation,
+  type TowerLocateSuggestion,
+  type TowerLocateEvalRow,
+} from '@/services/towerLocateApi'
 
 const HINT_SURVEY_G1000 = 'surveyMap.g1000Context'
 const HINT_SURVEY_COORDS = 'surveyMap.coordinates'
@@ -45,6 +51,10 @@ interface SurveyMapModalProps {
   initialLon: number
   onRecord: (lat: number, lon: number, elevationFt: number, options?: SurveyMapRecordOptions) => void
   fetchElevation: (lat: number, lon: number) => Promise<number>
+  /** Tower photo for Gemini locate experiment (optional). */
+  towerPhoto?: HTMLImageElement | null
+  /** Optional label stored with eval rows. */
+  evalTowerLabel?: string
 }
 
 export function SurveyMapModal({
@@ -54,6 +64,8 @@ export function SurveyMapModal({
   initialLon,
   onRecord,
   fetchElevation,
+  towerPhoto = null,
+  evalTowerLabel = '',
 }: SurveyMapModalProps) {
   const defLat = initialLat || 35.0844
   const defLon = initialLon || -106.6504
@@ -104,6 +116,11 @@ export function SurveyMapModal({
   const [mapError, setMapError] = useState<string | null>(null)
   const [towerNotVisibleOnMap, setTowerNotVisibleOnMap] = useState(false)
   const [coordVerifyDismissed, setCoordVerifyDismissed] = useState(false)
+  const [geminiLoading, setGeminiLoading] = useState(false)
+  const [geminiError, setGeminiError] = useState<string | null>(null)
+  const [geminiSuggestion, setGeminiSuggestion] = useState<TowerLocateSuggestion | null>(null)
+  const [geminiEvalRow, setGeminiEvalRow] = useState<TowerLocateEvalRow | null>(null)
+  const [logGeminiEval, setLogGeminiEval] = useState(true)
   const { isSeen, markSeen } = useHintsSeen()
 
   const overlayLoadRef = useRef<HTMLButtonElement>(null)
@@ -208,6 +225,10 @@ export function SurveyMapModal({
       setMapError(null)
       setTowerNotVisibleOnMap(false)
       setCoordVerifyDismissed(false)
+      setGeminiLoading(false)
+      setGeminiError(null)
+      setGeminiSuggestion(null)
+      setGeminiEvalRow(null)
       mapSyncedDmsSignatureRef.current = null
       setViewState({
         longitude: initialLon || -106.6504,
@@ -379,6 +400,55 @@ export function SurveyMapModal({
       setError(e instanceof Error ? e.message : 'Failed to fetch elevation')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const flyTo = (lat: number, lon: number) => {
+    skipNextMapCenterSyncRef.current = true
+    setViewState((prev) => ({ ...prev, latitude: lat, longitude: lon, zoom: Math.max(prev.zoom, 17) }))
+    mapRef.current?.getMap()?.flyTo({ center: [lon, lat], zoom: Math.max(viewState.zoom, 17) })
+  }
+
+  /**
+   * Gemini experiment: prior = photo/G1000 seed (initialLat/Lon); human reference = current crosshair
+   * when logging eval (do not send human coords to the model — only to the server for error math).
+   */
+  const handleGeminiSuggest = async () => {
+    if (!towerPhoto) {
+      setGeminiError('Load a tower photo on Tower Data Analysis before using Gemini suggest.')
+      return
+    }
+    setGeminiLoading(true)
+    setGeminiError(null)
+    setGeminiSuggestion(null)
+    setGeminiEvalRow(null)
+    try {
+      const photoDataUrl = imageElementToJpegDataUrl(towerPhoto)
+      const mapCenter = mapRef.current?.getMap()?.getCenter()
+      const humanLat = mapCenter?.lat ?? viewState.latitude
+      const humanLon = mapCenter?.lng ?? viewState.longitude
+      const priorLat = initialLat || humanLat
+      const priorLon = initialLon || humanLon
+      const result = await suggestTowerLocation({
+        towerPhotoBase64: photoDataUrl,
+        priorLat,
+        priorLon,
+        halfSideNm: 0.25,
+        humanLat,
+        humanLon,
+        towerLabel: evalTowerLabel || undefined,
+        logEval: logGeminiEval,
+        notes: logGeminiEval
+          ? 'Human reference = map crosshair at suggest time; prior = photo/G1000 seed'
+          : undefined,
+      })
+      setGeminiSuggestion(result.suggestion)
+      setGeminiEvalRow(result.evalRow)
+      flyTo(result.suggestion.lat, result.suggestion.lon)
+    } catch (e) {
+      setGeminiError(e instanceof Error ? e.message : 'Gemini suggest failed')
+    } finally {
+      setGeminiLoading(false)
     }
   }
 
@@ -815,6 +885,68 @@ export function SurveyMapModal({
               </span>
             </span>
           </label>
+
+          <div className="rounded-lg border border-dashed border-cap-ultramarine/40 bg-cap-ultramarine/5 p-3 space-y-2">
+            <p className="text-sm font-medium text-gray-900">Gemini locate (experiment)</p>
+            <p className="text-xs text-gray-600">
+              Uses the tower photo plus a Mapbox satellite tile around the photo/G1000 seed (
+              {initialLat.toFixed(5)}, {initialLon.toFixed(5)}). For eval, place the crosshair on the true
+              pad first, then run suggest — human coords are used only for the comparison table, not shown
+              to the model.
+            </p>
+            <label className="flex items-center gap-2 text-xs text-gray-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={logGeminiEval}
+                onChange={(e) => setLogGeminiEval(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Log comparison row (crosshair = human reference)
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleGeminiSuggest}
+                disabled={geminiLoading || !towerPhoto}
+                className="text-sm px-3 py-1.5 bg-cap-ultramarine text-white rounded-lg disabled:opacity-50"
+              >
+                {geminiLoading ? 'Asking Gemini…' : 'Suggest with Gemini'}
+              </button>
+              {geminiSuggestion && (
+                <button
+                  type="button"
+                  onClick={() => flyTo(geminiSuggestion.lat, geminiSuggestion.lon)}
+                  className="text-sm px-3 py-1.5 border border-cap-ultramarine text-cap-ultramarine rounded-lg"
+                >
+                  Re-center on suggestion
+                </button>
+              )}
+            </div>
+            {!towerPhoto && (
+              <p className="text-xs text-amber-800">Select a tower photo on the analysis page first.</p>
+            )}
+            {geminiError && <p className="text-xs text-cap-pimento">{geminiError}</p>}
+            {geminiSuggestion && (
+              <p className="text-xs text-gray-700">
+                Suggestion {geminiSuggestion.lat.toFixed(6)}, {geminiSuggestion.lon.toFixed(6)}
+                {geminiSuggestion.confidence != null
+                  ? ` · confidence ${Math.round(geminiSuggestion.confidence)}`
+                  : ''}
+                {geminiSuggestion.padVisibleOnMap ? '' : ' · model unsure pad is on map'}
+                {geminiSuggestion.reason ? ` — ${geminiSuggestion.reason}` : ''}
+              </p>
+            )}
+            {geminiEvalRow && (
+              <p className="text-xs font-medium text-gray-900">
+                Eval error vs crosshair:{' '}
+                {geminiEvalRow.errorMeters != null
+                  ? `${geminiEvalRow.errorMeters} m (${geminiEvalRow.errorNm} NM)`
+                  : 'n/a'}
+                . Saved to server eval table.
+              </p>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="text-sm text-gray-500">
               {latDeg || lonDeg

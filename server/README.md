@@ -43,3 +43,4 @@ Requires outbound HTTPS from the Node server to `naip.imagery1.arcgis.com` and/o
 - `GET /api/mtr/waypoints?routeType=IR&routeNumber=111&entry=A&exit=Q` — Waypoints for a route segment
 - `GET /api/mtr/width?routeType=VR&routeNumber=114` — `WIDTH_TEXT` lines from NASR for coordinator survey planning (see `docs/COORDINATOR_SURVEY_CONSOLE.md`)
 - `GET /api/recent-imagery?lat=&lon=&halfMiles=0.5` — NAIP ortho patch (~1 mi square by default). Optional: `w`, `h` (256–1024, default **1024**). Response headers: `X-Imagery-Attribution`, optional `X-Imagery-Vintage`.
+- `GET /api/tower-locate/status` · `POST /api/tower-locate/suggest` · `GET /api/tower-locate/eval` — Gemini tower-base locate experiment (requires `GEMINI_API_KEY`; see `docs/GEMINI_TOWER_LOCATE_EXPERIMENT.md`).

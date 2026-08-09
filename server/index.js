@@ -23,8 +23,10 @@ import {
 } from './naipImagery.js'
 import { createContentPacksRouter } from './routes/contentPacks.js'
 import { createAdminRouter } from './routes/admin.js'
+import { createTowerLocateRouter } from './routes/towerLocate.js'
 import { logAdminConfigStatus } from './lib/adminAuth.js'
 import { contentPackAuth, logContentPackAuthStatus } from './lib/contentPackAuth.js'
+import { geminiConfigured, geminiModel } from './lib/geminiTowerLocate.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '..', '.env') })
@@ -69,13 +71,16 @@ app.use(
   })
 )
 
-app.use(express.json({ limit: '5mb' }))
+app.use(express.json({ limit: '15mb' }))
 
 /** Wing Administrator PIN auth (independent of Content Pack API key). */
 app.use('/api/admin', createAdminRouter())
 
 /** ForeFlight Content Pack library (hybrid SQLite + baseline ZIP on disk). */
 app.use('/api/content-packs', createContentPacksRouter())
+
+/** Gemini tower-base locate experiment (Phase A). */
+app.use('/api/tower-locate', createTowerLocateRouter())
 const PORT = process.env.PORT ?? 3001
 
 const NASR_INDEX_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
@@ -612,4 +617,9 @@ app.listen(PORT, () => {
   console.log(`FAA MTR backend listening on port ${PORT}`)
   logAdminConfigStatus()
   logContentPackAuthStatus()
+  if (geminiConfigured()) {
+    console.log(`[tower-locate] Gemini configured (model ${geminiModel()}).`)
+  } else {
+    console.log('[tower-locate] GEMINI_API_KEY unset — /api/tower-locate/suggest returns 503.')
+  }
 })
