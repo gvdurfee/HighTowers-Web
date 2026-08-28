@@ -34,12 +34,12 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ---
 
-## Chapter 0 — Cold open (optional, 30–45 s)
+## Chapter 0 — Introduction (optional, 30–45 s)
 
 **ON-SCREEN** — Workflow Guide; slow pan down the numbered steps.
 
 **NARRATION**  
-“This app walks a Civil Air Patrol crew through an Air Force route survey: flight planning that lines up with ForeFlight and the G1000, wing-level sortie planning when you staff one to three teams, documenting towers on the Air Force report form, measuring them in Tower Data Analysis, exporting the customer PDF, and refreshing ForeFlight content packs for the next season. I’ll follow the same order the Workflow Guide uses, with an extra stop for coordinators comparing team staffing.”
+“This application walks a Civil Air Patrol crew through an Air Force route survey: flight planning that converts a ForeFlight flight plan to a format the G1000 can use, starting the Air Force report form so that any new towers discovered can be added to the form automatically, measuring them in Tower Data Analysis so coordinates and heights can be added, providing a Map View for the pilot to check against the ForeFlight map, and to zoom to points for map tower marker checks after analysis is complete, to  exporting the customer report in PDF form for emailing, and refreshing ForeFlight content packs for the next season, to include any new tower discovery coordinates. There is an extra survey planning section for coordinators who will need to make team assignments to cover routes with wide corridors; these may need additional passes.”
 
 **PAUSE**
 
