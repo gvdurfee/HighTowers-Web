@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Map, MapRef, Source, Layer, Marker, NavigationControl } from 'react-map-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -62,6 +63,7 @@ function computeBounds(coords: [number, number][]): [[number, number], [number, 
 }
 
 export function MissionMapPage() {
+  const navigate = useNavigate()
   const mapRef = useRef<MapRef>(null)
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null)
@@ -316,6 +318,17 @@ export function MissionMapPage() {
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedPlanId) navigate(`/flight-plans/${selectedPlanId}`)
+            else navigate('/flight-plans')
+          }}
+          disabled={!selectedPlanId}
+          className="px-3 py-2 text-sm font-medium rounded-lg bg-cap-yellow text-cap-ultramarine hover:bg-cap-yellow/90 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Return to Flight Plan
+        </button>
         {(missionsForPlan ?? []).length > 0 && (
           <select
             value={selectedMissionId ?? ''}

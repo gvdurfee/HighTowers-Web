@@ -4,7 +4,7 @@ type FlightPlanLoadMethodHelpModalProps = {
 }
 
 /**
- * Explains Load full route, Waypoint sequence, and G1000 user waypoint library.
+ * Explains Load full route and Waypoint sequence for solo aircrew flight plans.
  */
 export function FlightPlanLoadMethodHelpModal({
   isOpen,
@@ -26,9 +26,16 @@ export function FlightPlanLoadMethodHelpModal({
         <div className="space-y-4 text-sm text-gray-700 leading-relaxed">
           <p>
             When you create a flight plan, you choose how to pull <strong>MTR</strong> (military
-            training route) points from the database. All options produce coordinates and
+            training route) points from the database. Both options produce coordinates and
             G1000-style names for export—the difference is <em>which</em> points you pull and{' '}
             <em>how you pick them</em>.
+          </p>
+          <p className="text-xs text-gray-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+            <strong>Wing coordinators:</strong> load the published route in{' '}
+            <strong>Coordinator Console</strong> (Mission Planning in the sidebar), then email each
+            sortie <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> to that
+            aircraft&apos;s Mission Pilot. This form is for aircrew flight plans with departure and
+            destination.
           </p>
           <p className="text-xs text-gray-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
             <strong>Departure / destination:</strong> Use <strong>ICAO</strong> (e.g. KABQ){' '}
@@ -72,53 +79,14 @@ export function FlightPlanLoadMethodHelpModal({
             </p>
           </section>
 
-          <section>
-            <h3 className="font-semibold text-gray-900 mb-1">G1000 user waypoint library</h3>
-            <p>
-              Same entry style as Waypoint sequence, but each <strong>G1000 waypoint name</strong>{' '}
-              may appear <strong>only once</strong>. If you list a waypoint that resolves to the same
-              name as an earlier one, it is <strong>skipped</strong> and you are told after create.
-            </p>
-            <p>
-              <strong>Requires two different airports</strong> (ICAO or FAA location ID / NASR
-              identifier—not round-robin). For same airport both ends, use{' '}
-              <strong>Waypoint sequence</strong> or <strong>Load full route</strong>.
-            </p>
-            <p>
-              Goal: import a <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> into
-              the G1000 so <strong>user waypoints</strong> load into the system; you can then delete
-              this flight plan from the catalog on the avionics while keeping those waypoints for
-              building shorter plans. Behavior can vary slightly by software version—confirm in your
-              POH or supplement.
-            </p>
-            <p className="text-gray-600 text-xs border-l-2 border-amber-300 pl-3">
-              <strong>Pilot responsibility:</strong> Remove or update survey-specific user
-              waypoints when the season ends. Published routes and fixes are not guaranteed to match
-              the following year.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="font-semibold text-gray-900 mb-1">
-              Coordinator departure choices (survey planning)
-            </h3>
-            <p>
-              Loads route waypoints using the same <strong>Waypoint sequence</strong> entry as above, but{' '}
-              <strong>without</strong> departure or destination on the New Flight Plan form. After create, the app
-              opens the <strong>Coordinator Survey Console</strong> where you look up Team 1, Team 2, refuel, and
-              other airports to compare what-if sortie staffing.
-            </p>
-            <p className="text-gray-600">
-              <strong>Use this</strong> when the coordinator needs to weigh departure and team options before crews
-              build pilot-ready flight plans with airports set.
-            </p>
-          </section>
-
           <p className="text-xs text-gray-500 border-t border-gray-100 pt-3">
             Use <strong>Fetch</strong> before creating the plan to confirm the database has your
             points. If you see missing points, still press <strong>Create Flight Plan</strong>—then
             <strong>scroll</strong> on the next page to enter coordinates for each missing waypoint
-            before exporting. You can find coordinates in the <strong>AP/1B</strong>, or in{' '}
+            before exporting. If the waypoint list itself is wrong, use{' '}
+            <strong>Correct waypoint sequence</strong> on the detail page; that returns you here with
+            your entries so you can fix them without starting over. You can find coordinates in the{' '}
+            <strong>AP/1B</strong>, or in{' '}
             <strong>ForeFlight</strong> by tapping a waypoint in the flight plan and copying the
             lat/long from the popup. Put{' '}
             <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> files in the{' '}

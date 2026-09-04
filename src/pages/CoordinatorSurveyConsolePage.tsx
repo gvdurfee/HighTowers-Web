@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/schema'
 import { parseWaypointCode } from '@/utils/mtrWaypointCode'
@@ -26,6 +26,9 @@ import {
   type SortieFplSortie,
 } from '@/services/sortieFplExport'
 import { SortiePilotCard } from '@/components/SortiePilotCard'
+import { FlightPlanContentPackCard } from '@/components/FlightPlanContentPackCard'
+import { SortieFragmentExportCard } from '@/components/SortieFragmentExportCard'
+import { CoordinatorRouteLoadForm } from '@/components/CoordinatorRouteLoadForm'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
 import {
@@ -58,7 +61,7 @@ function PilotRefuelGuidanceBox({ className = '' }: { className?: string }) {
 
 /** Match NewFlightPlanPage airport identifier fields. */
 const AIRPORT_CODE_INPUT_CLASS =
-  'flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent'
+  'min-w-0 flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase focus:ring-2 focus:ring-cap-ultramarine focus:border-transparent'
 const AIRPORT_LOOKUP_BTN_CLASS =
   'px-4 py-2 bg-cap-ultramarine text-white rounded-lg text-sm font-medium hover:bg-cap-ultramarine/90 whitespace-nowrap shrink-0 focus:outline-none focus:ring-2 focus:ring-cap-ultramarine focus:ring-offset-2'
 const AIRPORT_LOOKUP_BTN_IDLE_CLASS = 'opacity-50 cursor-not-allowed'
@@ -150,7 +153,7 @@ function CoordinatorConsoleGuide() {
         <span>Coordinator quick reference &amp; symbology</span>
         <span className={guidedHintTriggerClassName('light', false)}>
           <GuidedHintTriggerFace
-            stepNumber={1}
+            stepNumber={2}
             isSeen={seen}
             title="Coordinator quick reference and symbology"
           />
@@ -160,9 +163,23 @@ function CoordinatorConsoleGuide() {
         <div>
           <h3 className="font-semibold text-gray-900 mb-2">What this console does</h3>
           <p>
-            Wing-level <strong>what-if</strong> planning for Low Level Route tower surveys: define corridor width and
-            parallel-track offsets in <strong>Scenario</strong>, then set team departures and sortie budget to estimate
-            sortie count and waypoint ranges. Crews still fly corridors in ForeFlight Military Flight Bag.
+            Complete the <strong>published MTR</strong> in this console, then assign aircraft and Mission
+            Pilots when they are available. Use corridor tracks and team what-if planning to staff the
+            survey. Crews still fly corridors in ForeFlight Military Flight Bag.
+          </p>
+          <p className="mt-2">
+            When the team design is set, export each sortie <strong>.fpl</strong> and{' '}
+            <strong>email it to that aircraft&apos;s Mission Pilot</strong> (or copy it to an SD card for
+            G1000 import).
+          </p>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-gray-900 mb-2">Issue files to crews</h3>
+          <p>
+            After staffing Teams, export one <strong>.fpl</strong> per sortie (results row or fragment card).
+            Email that file to the Mission Pilot of the aircraft assigned to the sortie. They import it on
+            the G1000 from an SD card if you did not attach the file in a way they can load directly.
           </p>
         </div>
 
@@ -397,6 +414,13 @@ function SurveyPlannerResults({
         </div>
       )}
 
+      {exportCtx && (
+        <p className="text-sm text-gray-600 mb-3">
+          Email each exported sortie <strong>.fpl</strong> to that aircraft&apos;s Mission Pilot (or copy it
+          to an SD card for G1000 import).
+        </p>
+      )}
+
       {exportErr && (
         <p className="text-sm text-red-700 mb-3" role="alert">
           {exportErr}
@@ -512,8 +536,18 @@ function airportResultToRecord(a: AirportResult): AirportRecord {
 }
 
 export function CoordinatorSurveyConsolePage() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const planId = searchParams.get('plan') ?? ''
+
+  const savedPlans = useLiveQuery(
+    async () => {
+      const all = await db.flightPlans.toArray()
+      return all
+        .sort((a, b) => b.dateModified.localeCompare(a.dateModified))
+        .map((p) => ({ id: p.id, name: p.name }))
+    },
+    []
+  )
 
   const [runMode, setRunMode] = useState<RunMode>('single')
   const [teamCount, setTeamCount] = useState<TeamCount>(1)
@@ -956,22 +990,23 @@ export function CoordinatorSurveyConsolePage() {
       {pilotBrief && (
         <SortiePilotCard brief={pilotBrief} isOpen onClose={() => setPilotBrief(null)} />
       )}
-      <div className="app-panel max-w-4xl mx-auto p-6 md:p-8">
+      <div className="app-panel w-full p-6 md:p-8">
         <header className="mb-6">
-          <p className="text-sm text-gray-500 mb-1">
-            <Link to="/flight-plans" className="text-cap-ultramarine hover:underline">
-              ← Flight Plans
-            </Link>
-          </p>
           <h1 className="text-2xl font-bold text-gray-900">Coordinator Survey Console</h1>
-          <div className="flex flex-wrap items-start justify-between gap-2 mt-1">
+          <p className="text-sm text-gray-700 mt-2 max-w-4xl">
+            Complete the <strong>published MTR</strong> here, then assign aircraft and Mission Pilots when
+            they are available. After you design the team effort, export each sortie{' '}
+            <strong>.fpl</strong> and <strong>email it to that aircraft&apos;s Mission Pilot</strong> (or
+            copy it to an SD card).
+          </p>
+          <div className="flex flex-wrap items-start justify-between gap-2 mt-2">
             <p className="text-sm text-gray-600 flex-1 min-w-0">
               What-if sortie planner for wing route surveys. See{' '}
               <code className="text-xs bg-gray-100 px-1 rounded">docs/COORDINATOR_SURVEY_CONSOLE.md</code>.
             </p>
             <GuidedHint
               hintId={HINT_COORD_ENROUTE_RECOVERY}
-              stepNumber={3}
+              stepNumber={1}
               title="En-route recovery & multi-aircraft"
               body={
                 <>
@@ -1000,12 +1035,10 @@ export function CoordinatorSurveyConsolePage() {
         <CoordinatorConsoleGuide />
 
         {!planId && (
-          <div className="rounded-xl border border-dashed border-gray-300 bg-slate-50 p-8 text-center text-gray-600">
-            <p className="mb-3">Open this console from a flight plan to load waypoint sequence and departure airport.</p>
-            <Link to="/flight-plans" className="text-cap-ultramarine font-medium hover:underline">
-              Choose a flight plan →
-            </Link>
-          </div>
+          <CoordinatorRouteLoadForm
+            savedPlans={savedPlans ?? []}
+            onLoaded={(id) => setSearchParams({ plan: id })}
+          />
         )}
 
         {loading && <p className="text-gray-600 text-sm">Loading flight plan…</p>}
@@ -1017,9 +1050,19 @@ export function CoordinatorSurveyConsolePage() {
         )}
 
         {planBundle && (
-          <>
-            <section className="mb-8 rounded-xl border border-gray-200 bg-white p-5">
-              <h2 className="text-lg font-semibold text-gray-900 mb-3">Scenario</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(32rem,1fr)] gap-6 items-start">
+            <div className="space-y-6 min-w-0">
+            <section className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                <h2 className="text-lg font-semibold text-gray-900">Scenario</h2>
+                <button
+                  type="button"
+                  onClick={() => setSearchParams({})}
+                  className="text-sm font-medium text-cap-ultramarine hover:underline"
+                >
+                  Load a different route
+                </button>
+              </div>
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div>
                   <dt className="text-gray-500">Flight plan</dt>
@@ -1075,19 +1118,27 @@ export function CoordinatorSurveyConsolePage() {
                 legPreview={legPreview ?? undefined}
               />
             </section>
+            </div>
 
-            <section className="mb-8 rounded-xl border border-gray-200 bg-white p-5">
+            <div className="space-y-6 min-w-0">
+            <FlightPlanContentPackCard waypoints={planBundle.waypoints} />
+
+            <section className="rounded-xl border border-gray-200 bg-white p-5">
               <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                 <h2 className="text-lg font-semibold text-gray-900">Teams &amp; parameters</h2>
                 <GuidedHint
                   hintId={HINT_COORD_TEAMS_FLOW}
-                  stepNumber={4}
+                  stepNumber={5}
                   title="Staffing and run planner"
                   body={
                     <>
                       After corridor tracks are set in <strong>Scenario</strong>, choose planner mode, team
                       departures, sortie budget, and ferry policy here. Changing parallel tracks in Scenario clears
                       results — run Compare or Run planner again to refresh sortie counts.
+                      <br />
+                      <br />
+                      When the effort is designed, email each sortie <strong>.fpl</strong> to that aircraft&apos;s
+                      Mission Pilot.
                       <br />
                       <br />
                       All compare modes use the <strong>same</strong> track plan from Scenario so staffing comparisons
@@ -1136,7 +1187,7 @@ export function CoordinatorSurveyConsolePage() {
               {runMode === 'single' && (
                 <fieldset className="mb-5">
                   <legend className="text-sm font-medium text-gray-700 mb-2">Aircraft count</legend>
-                  <div className="flex flex-col sm:flex-row gap-3 text-sm">
+                  <div className="flex flex-col gap-3 text-sm">
                     <label className="inline-flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
@@ -1192,7 +1243,7 @@ export function CoordinatorSurveyConsolePage() {
                 </p>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5 text-sm">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5 text-sm">
                 <div className="rounded-lg border border-gray-200 bg-slate-50 p-4">
                   <p className="font-medium text-gray-900 mb-1">
                     {runMode === 'compare-2-3' || teamCount === 3
@@ -1203,7 +1254,7 @@ export function CoordinatorSurveyConsolePage() {
                   </p>
                   {isAnchorPlan ? (
                     <>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 min-w-0">
                         <input
                           ref={team1CodeInputRef}
                           type="text"
@@ -1277,7 +1328,7 @@ export function CoordinatorSurveyConsolePage() {
                         ? 'Team 2 — departure'
                         : 'Team 2 — outer'}
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 min-w-0">
                       <input
                         type="text"
                         value={team2Code}
@@ -1339,9 +1390,9 @@ export function CoordinatorSurveyConsolePage() {
                 )}
 
                 {needsTeam3 && (
-                  <div className="rounded-lg border border-gray-200 bg-slate-50 p-4 sm:col-span-2">
+                  <div className="rounded-lg border border-gray-200 bg-slate-50 p-4 xl:col-span-2">
                     <p className="font-medium text-gray-900 mb-2">Team 3 — departure</p>
-                    <div className="flex gap-2 max-w-md">
+                    <div className="flex gap-2 min-w-0">
                       <input
                         ref={team3CodeInputRef}
                         type="text"
@@ -1443,7 +1494,7 @@ export function CoordinatorSurveyConsolePage() {
                       <strong>1 team (both sides)</strong>, sortie 1 ends here after the first side; the final sortie
                       flies the opposite side and returns home when budget allows.
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 min-w-0">
                       <input
                         type="text"
                         value={refuelCode}
@@ -1559,8 +1610,29 @@ export function CoordinatorSurveyConsolePage() {
               </button>
             </section>
 
+            <SortieFragmentExportCard
+              waypoints={planBundle.waypoints}
+              teamDeparture={
+                team1Airport ? airportResultToRecord(team1Airport) : planBundle.departure ?? null
+              }
+              routeLabel={
+                routeMeta
+                  ? `${routeMeta.routeType}${routeMeta.routeNumber}`
+                  : planBundle.plan.name.replace(/\s+/g, '')
+              }
+              routeMeta={routeMeta}
+              widthTexts={widthTexts}
+              departureMissingMessage={
+                isAnchorPlan
+                  ? 'Look up Team 1 departure airport above before exporting a sortie fragment.'
+                  : 'Set a departure airport on this flight plan, or look up Team 1, before exporting a sortie fragment.'
+              }
+              onPilotBrief={setPilotBrief}
+            />
+            </div>
+
             {(compareBundle || plannerResult) && legsResult && (
-              <section className="rounded-xl border border-gray-200 bg-white p-5">
+              <section className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-5">
                 <h2 className="text-lg font-semibold text-gray-900 mb-2">Results</h2>
                 <p className="text-sm text-gray-600 mb-4">
                   Sortie plan from Scenario corridor tracks and team parameters. Centerline{' '}
@@ -1851,7 +1923,7 @@ export function CoordinatorSurveyConsolePage() {
                 </p>
               </section>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

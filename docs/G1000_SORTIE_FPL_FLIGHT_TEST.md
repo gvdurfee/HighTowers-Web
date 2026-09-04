@@ -1,6 +1,6 @@
 # G1000 sortie `.fpl` — flight test checklist
 
-Manual validation for **Coordinator Survey Console → Export .fpl** (or **Flight Plan detail → Export sortie fragment**).
+Manual validation for **Coordinator Survey Console → Export .fpl** (planner results) or **Export sortie fragment (.fpl)** (manual From/To).
 
 Use one real sortie before wing-wide rollout — VR114 **C→M1** with four offsets (3, 9, 15, 21 NM) from **KABQ** is a good first case.
 

@@ -121,11 +121,11 @@ This slide is your “elevator + training spine.” Crew training should always 
 **Flight Plans module**
 
 - **New Flight Plan:** Departure/destination from **FAA data** (ICAO **or** FAA location ID / NASR identifier, e.g. `KABQ` or `0E0`).
-- **Load full route** vs **Waypoint sequence** vs **G1000 user waypoint library** (optional mode for clean avionics import lists).
+- **Load full route** vs **Waypoint sequence** (aircrew). Wing coordinators load the published MTR in **Coordinator Console**, then email each sortie `.fpl` to that aircraft’s Mission Pilot.
 - **Export `.fpl`** for **G1000** import; **Map View** supports visual validation.
 
 **Speaker notes:**  
-Management angle: **standardization** with ForeFlight Military Flight Bag for full-route loads; **flexibility** for complex corridors via waypoint sequence. Library mode is a **special case** for bulk user-waypoint loading—different dep/dest required.
+Management angle: **standardization** with ForeFlight Military Flight Bag for full-route loads; **flexibility** for complex corridors via waypoint sequence. **Coordinator Console** is for **survey what-if** staffing before crews receive emailed sortie `.fpl` files.
 
 ---
 
@@ -342,13 +342,10 @@ Offer to send this markdown file or a PDF export of it to attendees. Close the l
 
 ## Appendix A — Optional deep-dive slides (if Q&A runs long)
 
-**A1 — G1000 library mode (one slide)**  
-Unique waypoint names only; **different** departure/destination required; for bulk user-waypoint load; seasonal cleanup of user waypoints on the panel.
-
-**A2 — MTR database caveats**  
+**A1 — MTR database caveats**  
 Database may lag **AP/1B**; pending waypoints can be filled manually on the flight plan detail page.
 
-**A3 — Imagery / map stack**  
+**A2 — Imagery / map stack**  
 Briefly name your map provider and any **API keys** or **network** requirements if your deployment uses overlays—only if relevant to your hosting story.
 
 ---

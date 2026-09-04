@@ -49,6 +49,11 @@ export function WorkflowGuidePage() {
           <p className="text-gray-600 max-w-2xl mx-auto">
             Follow these steps in order to complete an Air Force Route Survey.
           </p>
+          <p className="text-sm text-gray-600 max-w-2xl mx-auto mt-2">
+            Wing coordinators: open <strong>Coordinator Console</strong> under Mission Planning to load the
+            published MTR, staff teams, and email each sortie <code className="text-xs bg-gray-100 px-0.5 rounded">.fpl</code> to
+            that aircraft&apos;s Mission Pilot.
+          </p>
         </header>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 items-start">
           <section

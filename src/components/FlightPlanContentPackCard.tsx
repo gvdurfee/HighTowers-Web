@@ -10,7 +10,7 @@ type Props = {
 }
 
 /**
- * Flight planning guidance for ForeFlight content packs (Wing folder workflow).
+ * Coordinator guidance for ForeFlight content packs (Wing folder workflow).
  * Pack updates after a survey happen on Export Reported Data, not here.
  */
 export function FlightPlanContentPackCard({ waypoints }: Props) {
@@ -18,20 +18,20 @@ export function FlightPlanContentPackCard({ waypoints }: Props) {
   const { isSeen, markSeen } = useHintsSeen()
 
   return (
-    <section className="p-4 bg-white rounded-lg border border-gray-200">
+    <section className="rounded-xl border border-gray-200 bg-white p-5">
       <div className="flex items-start justify-between gap-2 mb-3">
         <h2 className="font-semibold text-gray-900">ForeFlight content pack</h2>
         <GuidedHint
           hintId="flightPlan.contentPackCard"
-          stepNumber={1}
+          stepNumber={4}
           title="Baseline pack for this route"
           body={
             <>
-              Before the survey, import the route&apos;s pack from your Wing{' '}
-              <strong>Content Packs for Flight Planning</strong> folder (location from your
-              coordinator each season). After mission close-out, if you added towers or refined
-              coordinates, update the pack on <strong>Export Reported Data</strong> and send the
-              updated ZIP to your Wing maintainer.
+              Before the survey, issue the route&apos;s pack from the Wing{' '}
+              <strong>Content Packs for Flight Planning</strong> folder so crews import the same
+              towers in ForeFlight. After mission close-out, if crews added towers or refined
+              coordinates, update the pack on <strong>Export Reported Data</strong> and file the
+              ZIP for next season.
             </>
           }
           isSeen={isSeen('flightPlan.contentPackCard')}
@@ -42,8 +42,8 @@ export function FlightPlanContentPackCard({ waypoints }: Props) {
 
       {routeNumber ? (
         <p className="text-sm text-gray-700">
-          Route <strong>{routeNumber}</strong>. Use the baseline pack for this MTR from Wing
-          storage when you build the matching flight plan in ForeFlight.
+          Route <strong>{routeNumber}</strong>. Issue the baseline pack for this MTR from Wing
+          storage when crews build the matching flight plan in ForeFlight.
         </p>
       ) : (
         <p className="text-sm text-gray-600">

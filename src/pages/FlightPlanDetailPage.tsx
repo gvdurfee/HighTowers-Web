@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams, useLocation } from 'react-router-dom'
 import { db } from '@/db/schema'
 import { generateId } from '@/utils/id'
@@ -17,43 +17,21 @@ function creationLoadMethodLabel(m: FlightPlanCreationLoadMethod): string {
     case 'sequenceLibrary':
       return 'G1000 user waypoint library'
     case 'coordinatorSurvey':
-      return 'Coordinator departure choices'
+      return 'Coordinator Console'
     default:
       return 'Waypoint sequence'
   }
 }
 import { G1000Service } from '@/services/g1000'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
-import { parseWaypointCode } from '@/utils/mtrWaypointCode'
-import {
-  buildManualSortieFromPtIdents,
-  exportSortieFplDownload,
-  parseOffsetsInput,
-  type SortieFplPilotBrief,
-} from '@/services/sortieFplExport'
-import {
-  defaultSortieOffsetsForFragment,
-  defaultSortieOffsetsLabelFromWidthTexts,
-} from '@/services/sortieOffsetDefaults'
-import { fetchMtrWidthTexts } from '@/services/surveyPlanningApi'
-import { SortiePilotCard } from '@/components/SortiePilotCard'
-import { FlightPlanContentPackCard } from '@/components/FlightPlanContentPackCard'
-import { GuidedHint } from '@/components/GuidedHint'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
-
-const HINT_FP_SORTIE_EXPORT = 'flightPlan.sortieExport'
 
 type LocationState = { skippedWaypoints?: string[]; message?: string } | null
 
 type DisplayItem =
   | { type: 'waypoint'; sequence: number; waypoint: WaypointRecord }
   | { type: 'pending'; sequence: number; pending: PendingWaypoint }
-
-function waypointPtIdent(originalName: string): string {
-  const parsed = parseWaypointCode(originalName)
-  return parsed?.waypointLetter ?? originalName
-}
 
 export function FlightPlanDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -66,21 +44,11 @@ export function FlightPlanDetailPage() {
   const [destination, setDestination] = useState<AirportRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [showExport, setShowExport] = useState(false)
-  const [showSortieExport, setShowSortieExport] = useState(false)
-  const [sortieFromPt, setSortieFromPt] = useState('')
-  const [sortieToPt, setSortieToPt] = useState('')
-  const [sortieStartAt, setSortieStartAt] = useState('')
-  const [sortieOffsets, setSortieOffsets] = useState('3, 9, 15, 21')
-  const [sortieOffsetsHint, setSortieOffsetsHint] = useState<string | null>(null)
-  const [widthTexts, setWidthTexts] = useState<string[]>([])
-  const sortieOffsetsUserEditedRef = useRef(false)
-  const [sortieExportErr, setSortieExportErr] = useState<string | null>(null)
-  const [pilotBrief, setPilotBrief] = useState<SortieFplPilotBrief | null>(null)
   const [coordsByPending, setCoordsByPending] = useState<
     Record<string, { latDeg: string; latMin: string; lonDeg: string; lonMin: string }>
   >({})
   const [supplyingCode, setSupplyingCode] = useState<string | null>(null)
-  const { isSeen, markSeen, resetAll: resetAllHints } = useHintsSeen()
+  const { resetAll: resetAllHints } = useHintsSeen()
 
   useEffect(() => {
     if (!id) return
@@ -109,72 +77,6 @@ export function FlightPlanDetailPage() {
     }
     load()
   }, [id])
-
-  const routeMeta = useMemo(() => {
-    const first = waypoints[0]
-    if (!first) return null
-    const parsed = parseWaypointCode(first.originalName)
-    if (!parsed || (parsed.routeType !== 'IR' && parsed.routeType !== 'VR')) return null
-    return {
-      routeType: parsed.routeType as 'IR' | 'VR',
-      routeNumber: parsed.routeNumber,
-    }
-  }, [waypoints])
-
-  const surveyWaypoints = useMemo(
-    () =>
-      waypoints.map((w) => ({
-        ptIdent: waypointPtIdent(w.originalName),
-        lat: w.latitude,
-        lon: w.longitude,
-      })),
-    [waypoints]
-  )
-
-  useEffect(() => {
-    sortieOffsetsUserEditedRef.current = false
-    setWidthTexts([])
-    setSortieOffsetsHint(null)
-  }, [id])
-
-  useEffect(() => {
-    if (!routeMeta) {
-      setWidthTexts([])
-      return
-    }
-    let cancelled = false
-    fetchMtrWidthTexts(routeMeta.routeType, routeMeta.routeNumber)
-      .then((data) => {
-        if (!cancelled) setWidthTexts(data.widthTexts)
-      })
-      .catch(() => {
-        if (!cancelled) setWidthTexts([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [routeMeta])
-
-  useEffect(() => {
-    if (sortieOffsetsUserEditedRef.current || widthTexts.length === 0 || !routeMeta) return
-
-    const label =
-      sortieFromPt && sortieToPt
-        ? defaultSortieOffsetsForFragment({
-            routeType: routeMeta.routeType,
-            routeNumber: routeMeta.routeNumber,
-            widthTexts,
-            waypoints: surveyWaypoints,
-            fromPt: sortieFromPt,
-            toPt: sortieToPt,
-          })
-        : defaultSortieOffsetsLabelFromWidthTexts(widthTexts)
-
-    setSortieOffsets(label)
-    setSortieOffsetsHint(
-      `From NASR corridor width for this route (${label} NM parallel-track spacing). Edit if your wing SOP differs.`
-    )
-  }, [widthTexts, routeMeta, surveyWaypoints, sortieFromPt, sortieToPt])
 
   const handleExport = async () => {
     if (!plan) return
@@ -308,67 +210,10 @@ export function FlightPlanDetailPage() {
     }
   }
 
-  const waypointPtIdents = waypoints.map((w) => waypointPtIdent(w.originalName))
-
-  const sortieEndpointOptions = (() => {
-    if (!sortieFromPt || !sortieToPt) return [] as string[]
-    const lo = waypointPtIdents.indexOf(sortieFromPt)
-    const hi = waypointPtIdents.indexOf(sortieToPt)
-    if (lo < 0 || hi < 0 || lo === hi) return []
-    const a = waypointPtIdents[Math.min(lo, hi)]
-    const b = waypointPtIdents[Math.max(lo, hi)]
-    return [a, b]
-  })()
-
-  const handleSortieExport = () => {
-    if (!departure) {
-      setSortieExportErr('Set a departure airport on this flight plan first.')
-      return
-    }
-    setSortieExportErr(null)
-    try {
-      const offsets = parseOffsetsInput(sortieOffsets)
-      const sortie = buildManualSortieFromPtIdents({
-        waypoints,
-        fromPt: sortieFromPt,
-        toPt: sortieToPt,
-        startAt: sortieStartAt,
-        offsets,
-        teamDeparture: departure,
-        routeLabel: plan.name.replace(/\s+/g, ''),
-      })
-      const brief = exportSortieFplDownload({
-        waypoints,
-        sortie,
-        teamDeparture: departure,
-        routeLabel: plan.name.replace(/\s+/g, ''),
-        teamLabel: departure.identifier,
-        side: 'manual fragment',
-      })
-      setPilotBrief(brief)
-      setShowSortieExport(false)
-    } catch (e) {
-      setSortieExportErr(e instanceof Error ? e.message : 'Failed to export sortie .fpl')
-    }
-  }
-
-  const toggleSortieExport = () => {
-    setShowSortieExport((v) => !v)
-    setSortieExportErr(null)
-    if (!sortieFromPt && waypointPtIdents.length >= 2) {
-      setSortieFromPt(waypointPtIdents[0])
-      setSortieToPt(waypointPtIdents[waypointPtIdents.length - 1])
-      setSortieStartAt(waypointPtIdents[0])
-    }
-  }
-
   const isAnchorPlan = isCoordinatorSurveyAnchor(plan)
 
   return (
     <div className="app-page-shell overflow-auto">
-      {pilotBrief && (
-        <SortiePilotCard brief={pilotBrief} isOpen onClose={() => setPilotBrief(null)} />
-      )}
       <div className="app-panel max-w-3xl mx-auto p-6 md:p-8">
       {showPostCreateBanner && (
         <div className="mb-4 p-4 bg-cap-yellow/20 border border-cap-yellow rounded-lg flex items-start justify-between gap-3">
@@ -380,6 +225,16 @@ export function FlightPlanDetailPage() {
                 {pendingWaypoints.map((p) => p.code).join(', ')} (e.g. from ForeFlight or AP/1B).
               </p>
             ) : null}
+            <p>
+              If the waypoint list itself is wrong, use{' '}
+              <Link
+                to={`/flight-plans/new?edit=${plan.id}`}
+                className="text-cap-ultramarine font-medium hover:underline"
+              >
+                Correct waypoint sequence
+              </Link>{' '}
+              to edit this plan instead of starting over.
+            </p>
           </div>
           <button
             type="button"
@@ -392,15 +247,10 @@ export function FlightPlanDetailPage() {
         </div>
       )}
       {isAnchorPlan && (
-        <div className="mb-4 p-4 rounded-lg border border-cap-ultramarine/30 bg-slate-50 text-sm text-gray-800">
-          <p className="font-medium text-gray-900 mb-1">Coordinator survey anchor</p>
+        <div className="mb-4 p-4 rounded-lg border border-gray-200 bg-slate-50 text-sm text-gray-800">
           <p>
-            This plan holds route waypoints for what-if survey planning. Choose departure airports, teams, and refuel
-            in the{' '}
-            <Link to={`/coordinator/survey?plan=${plan.id}`} className="text-cap-ultramarine font-medium hover:underline">
-              Survey Console
-            </Link>
-            .
+            This route was loaded for coordinator survey planning. Continue staffing from{' '}
+            <strong>Coordinator Console</strong> in the sidebar (Mission Planning).
           </p>
         </div>
       )}
@@ -412,12 +262,6 @@ export function FlightPlanDetailPage() {
           ← Back
         </Link>
         <h1 className="text-2xl font-bold text-gray-900 flex-1 min-w-0">{plan.name}</h1>
-        <Link
-          to={`/coordinator/survey?plan=${plan.id}`}
-          className="px-3 py-1.5 text-sm font-medium text-cap-ultramarine border border-cap-ultramarine/40 rounded-lg hover:bg-cap-ultramarine/5 flex-shrink-0"
-        >
-          Survey planner
-        </Link>
         <button
           type="button"
           onClick={resetAllHints}
@@ -463,7 +307,7 @@ export function FlightPlanDetailPage() {
             {!departure && !destination && (
               <p className="text-gray-600">
                 {isAnchorPlan
-                  ? 'Not set — choose departures in Survey Console.'
+                  ? 'Not set — choose departures in Coordinator Console.'
                   : 'No airports set'}
               </p>
             )}
@@ -471,9 +315,17 @@ export function FlightPlanDetailPage() {
         </section>
 
         <section className="p-4 bg-white rounded-lg border border-gray-200">
-          <h2 className="font-semibold text-gray-900 mb-3">
-            Waypoints ({displayList.length})
-          </h2>
+          <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+            <h2 className="font-semibold text-gray-900">
+              Waypoints ({displayList.length})
+            </h2>
+            <Link
+              to={`/flight-plans/new?edit=${plan.id}`}
+              className="px-3 py-1.5 text-sm font-medium text-cap-ultramarine border border-cap-ultramarine/40 rounded-lg hover:bg-cap-ultramarine/5"
+            >
+              Correct waypoint sequence
+            </Link>
+          </div>
           {displayList.length === 0 ? (
             <p className="text-gray-500 text-sm">No waypoints</p>
           ) : (
@@ -587,153 +439,6 @@ export function FlightPlanDetailPage() {
           )}
         </section>
 
-        <FlightPlanContentPackCard waypoints={waypoints} />
-
-        {waypoints.length >= 2 && (
-          <section className="p-4 bg-white rounded-lg border border-gray-200">
-            <div className="flex items-start justify-between gap-2">
-              <button
-                type="button"
-                onClick={toggleSortieExport}
-                className="flex-1 min-w-0 text-left"
-                aria-expanded={showSortieExport}
-              >
-                <span className="font-semibold text-gray-900 block">Export sortie fragment (.fpl)</span>
-                {!showSortieExport && (
-                  <span className="text-gray-500 text-sm font-normal mt-0.5 block">
-                    One sortie&apos;s serpentine legs — not the full plan
-                  </span>
-                )}
-              </button>
-              <GuidedHint
-                hintId={HINT_FP_SORTIE_EXPORT}
-                stepNumber={2}
-                title="Sortie fragment vs full route"
-                body={
-                  <>
-                    Use <strong>Export sortie .fpl</strong> here for one coordinator sortie: a serpentine
-                    sub-route between your From/To waypoints with parallel-track offsets. Use{' '}
-                    <strong>Export full route (.fpl)</strong> below when you need every waypoint in this
-                    plan. Copy the file to the SD card root, eject before removing the card, then import on
-                    the G1000.
-                    <br />
-                    <br />
-                    <strong>Multi-aircraft:</strong> pilots deconflict with radio contact and staggered
-                    takeoffs. On recovery days, all aircraft use the same refuel airport; sortie 1 ferry out ends
-                    there; sortie 2 returns home. Trim unused waypoints from the <strong>active route only</strong>{' '}
-                    (user waypoints remain in G1000 memory).
-                  </>
-                }
-                isSeen={isSeen(HINT_FP_SORTIE_EXPORT)}
-                onDismiss={markSeen}
-                surface="light"
-              />
-              <button
-                type="button"
-                onClick={toggleSortieExport}
-                className="text-gray-500 text-sm font-normal shrink-0 px-1 py-0.5 hover:bg-gray-100 rounded"
-                aria-label={showSortieExport ? 'Collapse sortie export' : 'Expand sortie export'}
-              >
-                {showSortieExport ? '−' : '+'}
-              </button>
-            </div>
-            {showSortieExport && (
-              <div className="mt-4 space-y-3 text-sm">
-                <p className="text-gray-600">
-                  Build a serpentine G1000 route for one coordinator sortie: team departure, waypoint
-                  sub-range, and parallel-track offsets. Uses plan departure (
-                  {departure?.identifier ?? 'not set'}) for ferry legs.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="text-gray-700 font-medium">From</span>
-                    <select
-                      value={sortieFromPt}
-                      onChange={(e) => {
-                        setSortieFromPt(e.target.value)
-                        setSortieStartAt(e.target.value)
-                      }}
-                      className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"
-                    >
-                      <option value="">Select…</option>
-                      {waypointPtIdents.map((pt) => (
-                        <option key={`from-${pt}`} value={pt}>
-                          {pt}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="text-gray-700 font-medium">To</span>
-                    <select
-                      value={sortieToPt}
-                      onChange={(e) => setSortieToPt(e.target.value)}
-                      className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"
-                    >
-                      <option value="">Select…</option>
-                      {waypointPtIdents.map((pt) => (
-                        <option key={`to-${pt}`} value={pt}>
-                          {pt}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <label className="block">
-                  <span className="text-gray-700 font-medium">Start at (first leg)</span>
-                  <select
-                    value={sortieStartAt}
-                    onChange={(e) => setSortieStartAt(e.target.value)}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="">Select…</option>
-                    {sortieEndpointOptions.map((pt) => (
-                      <option key={`start-${pt}`} value={pt}>
-                        {pt}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-gray-700 font-medium">Offsets (NM)</span>
-                  <input
-                    type="text"
-                    value={sortieOffsets}
-                    onChange={(e) => {
-                      sortieOffsetsUserEditedRef.current = true
-                      setSortieOffsets(e.target.value)
-                      setSortieOffsetsHint(null)
-                    }}
-                    placeholder="3, 9, 15, 21"
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg font-mono"
-                  />
-                  {sortieOffsetsHint && (
-                    <p className="text-xs text-gray-500 mt-1">{sortieOffsetsHint}</p>
-                  )}
-                </label>
-                {sortieExportErr && (
-                  <p className="text-red-700" role="alert">
-                    {sortieExportErr}
-                  </p>
-                )}
-                <p className="text-xs text-gray-500 border-t border-gray-100 pt-3">
-                  <strong className="font-medium text-gray-700">Sortie only</strong> — serpentine sub-route
-                  for the From/To range above. For{' '}
-                  <strong className="font-medium text-gray-700">every waypoint in this plan</strong>, use{' '}
-                  <strong className="font-medium text-gray-700">Export full route (.fpl)</strong> below.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleSortieExport}
-                  className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90"
-                >
-                  Export sortie .fpl
-                </button>
-              </div>
-            )}
-          </section>
-        )}
-
         <section className="p-4 bg-white rounded-lg border border-gray-200">
           <h3 className="font-semibold text-gray-900">Full flight plan</h3>
           <p className="text-sm text-gray-600 mt-1 mb-3">
@@ -741,7 +446,7 @@ export function FlightPlanDetailPage() {
             {!departure && isAnchorPlan && (
               <>
                 {' '}
-                Set departure on a pilot flight plan when crews are ready; anchor plans use Survey Console for airports.
+                Set departure on a pilot flight plan when crews are ready; coordinator routes use Coordinator Console for airports.
               </>
             )}
           </p>
@@ -755,10 +460,16 @@ export function FlightPlanDetailPage() {
           </button>
           {!departure && isAnchorPlan && (
             <p className="text-xs text-gray-500 mt-2">
-              Full-route export needs a departure airport. Use Survey Console sortie exports after choosing teams, or
+              Full-route export needs a departure airport. Use Coordinator Console sortie exports after choosing teams, or
               create a separate pilot flight plan with airports.
             </p>
           )}
+          <p className="text-xs text-gray-500 mt-2">
+            Sortie fragments and ForeFlight content packs are issued from the{' '}
+            <strong>Coordinator Console</strong> (Mission Planning in the sidebar). After staffing, email each
+            sortie <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> to that aircraft&apos;s
+            Mission Pilot.
+          </p>
         </section>
       </div>
 

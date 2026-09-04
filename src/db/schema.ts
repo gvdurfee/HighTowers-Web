@@ -32,6 +32,7 @@ export interface PendingWaypoint {
 export type FlightPlanCreationLoadMethod =
   | 'route'
   | 'sequence'
+  /** Legacy: no longer offered on New Flight Plan; kept so older saved plans still display. */
   | 'sequenceLibrary'
   | 'coordinatorSurvey'
 
@@ -48,6 +49,12 @@ export interface FlightPlanRecord {
   pendingWaypoints?: PendingWaypoint[]
   /** Set when created from New Flight Plan (optional on older records). */
   creationLoadMethod?: FlightPlanCreationLoadMethod
+  /** Snapshot of the New Flight Plan form so a sequence error can be corrected without starting over. */
+  creationRouteIdentifier?: string
+  creationWaypointSequence?: string
+  creationRouteInput?: string
+  creationEntryWaypoint?: string
+  creationExitWaypoint?: string
 }
 
 /** Tower base location */

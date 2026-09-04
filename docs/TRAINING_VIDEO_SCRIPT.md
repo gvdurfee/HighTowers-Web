@@ -9,8 +9,8 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 - Host: `http://localhost:5173` for local training, or your deployed Wing URL for production-style video.
 - For **Coordinator Survey Console** width data locally, run **`npm run dev:all`** (Vite + Node API on port 3001). Deployed Wings use the same API on Railway.
 - Use a **demo mission** and route (e.g. **VR114** or IR112) with non-sensitive coordinates if the video will be shared outside the Wing.
-- Sidebar labels match the app: **Workflow Guide**, **Flight Plans**, **Tower Data Analysis**, **Map View**, **Air Force Report Form**, **Export Reported Data**, **ForeFlight Content Pack Update**.
-- **Coordinator Survey Console** is not in the sidebar — open from **Flight Plans** (**Coordinator Console** header link, **Survey plan** on a row, or **Survey planner** on Flight Plan detail). Bookmark: `/coordinator/survey?plan=<flightPlanId>`.
+- Sidebar labels match the app: **Workflow Guide**, **Flight Plans**, **Coordinator Console**, **Tower Data Analysis**, **Map View**, **Air Force Report Form**, **Export Reported Data**, **ForeFlight Content Pack Update**.
+- **Coordinator Console** is under **Mission Planning** in the sidebar (`/coordinator/survey`). Load the published MTR there; after staffing, email each sortie `.fpl` to that aircraft’s Mission Pilot.
 - For **Chapter 3**, have a **printed** copy of [`docs/handouts/Coordinator-Survey-Console-Handout.pdf`](./handouts/Coordinator-Survey-Console-Handout.pdf) on desk (or open the PDF on a second monitor) to show wing crews the same symbology and staffing models off-screen.
 - Optional on-screen subtitle in corner: “HighTowers — Air Force Route Survey workflow”.
 
@@ -29,7 +29,8 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 |--------|------------------|
 | Corridor width + custom offsets | **VR114** or **IR107** |
 | Staged refuel (distant home → shared recovery) | **IR107** with KABQ / second base + recovery field (e.g. KCAO or KTCC) |
-| Coordinator anchor plan (airports in console only) | New plan → **Coordinator departure choices (survey planning)** |
+| Coordinator survey (airports in console only) | Sidebar **Coordinator Console** → load full route (e.g. VR114 A–Q) |
+| Waypoint sequence + blend-in + pending Hotel coords | **SR213** (KABQ → KAEG); first list `A–H`, then correct with `G, SR214H, G` at the start; **SR213H** often needs manual coordinates |
 | Tower not on map + height fields | Any mission; **SR213** or similar if available |
 
 ---
@@ -50,163 +51,75 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 **ON-SCREEN** — Left sidebar fully expanded; point at **Getting Started** → **Workflow Guide**.
 
 **NARRATION**  
-“Everything runs in the left sidebar. **Workflow Guide** is your checklist. Under **Mission Planning** you’ll use **Flight Plans** — and from there, wing coordinators open the **Coordinator Survey Console** for sortie what-if planning. **Mission Execution** is **Tower Data Analysis** and **Map View**. Under **Reporting** you’ll use the **Air Force Report Form**, **Export Reported Data**, and when it’s time to update ForeFlight packs, **ForeFlight Content Pack Update**. Tips appear as numbered lightbulbs — optional help; you can reset them from individual pages if you want them back.”
+“With the Workflow Guide, every function can be branched to in the left sidebar. **Workflow Guide** is your checklist. Under **Mission Planning** you’ll use **Flight Plans** — and from there, pilots will create the flight plan for the sortie. If sortie teams are required, wing coordinators open **Coordinator Console** from the same sidebar section for sortie what-if planning; this may be needed if the training route has very wide cooridors. **Mission Execution** is **Tower Data Analysis** and **Map View**. Under **Reporting** you’ll use the **Air Force Report Form**, **Export Reported Data**, and when it’s time to update ForeFlight packs, **ForeFlight Content Pack Update**. Hints appear as numbered lightbulbs — optional help; you can reset them from individual pages if you want them back. But reading hints first are not a limitation if you already know how to use the tools in any section; you can just go forward and use the functionality”
 
-**ON-SCREEN** — **Flight Plans** list; briefly highlight **Coordinator Console** (top right) and **Survey plan** on one row.
+**ON-SCREEN** — Sidebar **Mission Planning**: point at **Flight Plans**, then **Coordinator Console**.
 
 **NARRATION**  
-“The coordinator console loads a flight plan you already built — waypoint sequence from the plan; team and refuel airports are chosen in the console when the plan is a **Coordinator survey anchor**.”
+“Coordinators load the published MTR in the console, assign aircraft and Mission Pilots when they are available, then email each sortie **.fpl** to that aircraft’s Mission Pilot.”
+
+**NARRATION**  
+“You can collapse the sidebar for more section space; expand it when you need to move between sections.”
 
 **ON-SCREEN** — Briefly collapse and expand sidebar using the arrow control.
 
-**NARRATION**  
-“You can collapse the sidebar for more map space; expand it when you need to jump sections.”
-
 **PAUSE**
 
 ---
 
-## Chapter 2 — Flight planning and G1000 export (4–6 min)
+## Chapter 2 — Flight planning and G1000 export (5–8 min)
 
-**ON-SCREEN** — Click **Flight Plans** → **New Flight Plan** (or use Workflow Guide → Flight Planning → Go).
+Demo route: **SR213** with **Waypoint sequence** (the most detailed of the three load methods). Use **KABQ** departure and **KAEG** destination. **SR213 Hotel** is usually missing from the public waypoint source, so the detail page will ask for coordinates.
 
-**NARRATION**  
-“We start with a flight plan that matches what you’ll fly in ForeFlight and program in the G1000. Enter your route type and number, entry and exit letters if the MTR uses them, and build the waypoint list the way your Wing SOP describes.”
-
-**ON-SCREEN** — Complete minimal fields needed for a credible demo row; show waypoint list with **ForeFlight** / **G1000** naming if visible. Optionally select **Coordinator departure choices (survey planning)** — waypoint sequence only; no departure or destination on create.
+**ON-SCREEN** — **Flight Plans** → **New Flight Plan**. Work top to bottom on this form. Do not skip fields.
 
 **NARRATION**  
-“The app shows both ForeFlight-style and G1000-style waypoint names so you can cross-check against the chart and the navigator. For wing what-if planning, choose **Coordinator departure choices** when the coordinator will pick all team airports and refuel in the **Survey Console** — the plan stores the MTR sequence only and opens the console after save.”
+“We start with a flight plan that matches what you will fly in ForeFlight and program in the G1000. This chapter uses Waypoint sequence, the most detailed of the three load methods, on route Sierra Romeo 213. Work from the top of this page to the bottom.”
 
-**ON-SCREEN** — Save or continue until the plan exists; open **Flight Plans** list and click the plan to open **Flight Plan detail**.
-
-**NARRATION**  
-“After you save, open the plan from **Flight Plans** to review waypoints and export G1000 files. Use **Survey planner** here when you’re ready to run the coordinator console for this route.”
-
-**ON-SCREEN** — Scroll to **Full flight plan** → **Export full route (.fpl)**; click export; show file in downloads bar if the browser shows it.
+**ON-SCREEN** — Name: `SR213 Training Demo`.
 
 **NARRATION**  
-“**Export full route** downloads the complete **.fpl** — every waypoint in the plan — for G1000 import per your aircraft procedures.”
+“Name the plan the way you name it in ForeFlight, so the saved plan and the exported file stay easy to recognize.”
 
-**ON-SCREEN** — Expand **Export sortie fragment (.fpl)**; point at the numbered lightbulb tip; show From/To, offsets, and **Export sortie .fpl** briefly without a full export unless you want a second file in the demo.
-
-**NARRATION**  
-“**Export sortie fragment** is for one survey sortie only — a serpentine sub-route with parallel-track offsets, not the whole MTR. Coordinators usually export from the Survey Console; pilots can use this section when a last-minute assignment change doesn’t match the coordinator brief. The lightbulb tip explains the difference between the two export buttons.”
-
-**PAUSE**
-
----
-
-## Chapter 3 — Coordinator Survey Console (1–3 teams) (7–10 min)
-
-**Audience note** — Wing coordinators, ops staff, and pilots who want to see how sortie assignments are derived. Can be a separate video.
-
-**ON-SCREEN** — Hold up or fan open the printed **Coordinator Survey Console** handout (`docs/handouts/Coordinator-Survey-Console-Handout.pdf`); show cover/title briefly, then switch to the app.
+**ON-SCREEN** — Departure `KABQ` → Fetch (Albuquerque). Destination `KAEG` → Fetch (Double Eagle).
 
 **NARRATION**  
-“Your Wing should have this one-page handout in the ops room and in each survey aircraft kit. It mirrors what you’ll see on screen — inner and outer passes, one- versus two- versus three-team staffing, and how to read a sortie row — so coordinators and crews stay aligned when you’re not both looking at the same laptop.”
+“Enter departure and destination as ICAO or FAA location identifiers, then Fetch each field until the airport name appears in green. The G1000 file uses these airports in the header.”
 
-**ON-SCREEN** — From **Flight Plan detail**, click **Survey planner** (or **Flight Plans** → **Survey plan** on the same route). URL shows `/coordinator/survey?plan=…`.
-
-**NARRATION**  
-“The **Coordinator Survey Console** is a wing planning aid — not a replacement for ForeFlight corridor display or ATP routing. Given your flight plan’s waypoint chain, NASR corridor width, team departure airports, and a per-sortie distance budget, it estimates how many sorties each team needs and which waypoint ranges to assign.”
-
-**ON-SCREEN** — Expand **Coordinator quick reference & symbology**; open the lightbulb tip if unseen.
+**ON-SCREEN** — Select **Waypoint sequence**. Route identifier: `SR213`. Waypoint sequence (intentional miss at the start): `A, B, C, D, E, F, G, H`. Fetch.
 
 **NARRATION**  
-“The in-app quick reference and the printed handout use the same symbology — inner versus outer passes, G1000 parallel-track spacing, and what the sortie budget means for a four-and-a-half to five-hour sortie with reserve. Default wing spacing is three, nine, fifteen, twenty-one nautical miles for a twenty-NM half-width, but your Wing may fly fewer tracks — you set that in **Scenario**, not hard-coded in the planner. Keep the PDF on the Wing share or regenerate it with `npm run handout:coordinator-pdf` when the console changes.”
+“Choose Waypoint sequence. Put the route identifier once, then list the suffixes from your ForeFlight expanded plan. Fetch confirms which points the database already knows. For this demo we enter only the Sierra Romeo 213 suffixes, and leave off the blend-in at the start. Sierra Romeo 213 Hotel is often missing from the public source, so you will add those coordinates on the next page.”
 
-**ON-SCREEN** — **Scenario** card: flight plan name, route ID, waypoint list; scroll to **Corridor & parallel tracks**.
-
-**NARRATION**  
-“The scenario loads from the linked flight plan. NASR **CORRIDORS ARE** width lines appear here — one block per width span. Edit **Inner** and **Outer NM** if the cycle wording is wrong, then set **Inner offsets** and **Outer offsets** as comma-separated nautical miles — inner is left of centerline, outer is right. Use **Reset offsets to wing default** on a span to restore three-six-one spacing from the NM values. The **Leg preview** table updates before you run the planner so you can see what each leg will use.”
-
-**ON-SCREEN** — Open lightbulb tip **Corridor width and parallel tracks** (Scenario); briefly change one offset list and show leg preview refresh.
+**ON-SCREEN** — Scroll to **Create Flight Plan** and click it.
 
 **NARRATION**  
-“All compare modes and single scenarios share this one track plan — change offsets here and re-run to see sortie impact. The lightbulb tip explains inner versus outer columns and when to reduce track count for a real-world wing plan.”
+“You must press Create Flight Plan to save before you leave this page. Otherwise you will have to start again.”
 
-**ON-SCREEN** — **Teams & parameters** → lightbulb **Staffing and run planner**; **Planner mode**.
-
-**NARRATION**  
-“Three planner modes: **Single scenario** for one staffing model at a time; **Compare 1 vs 2 teams** for one aircraft doing both sides sequentially versus two aircraft on opposite sides; **Compare 2 vs 3 teams** for opposite-side parallel staffing versus a geographic split across three bases.”
-
-**ON-SCREEN** — Select **Single scenario** → **Aircraft count** → click **1 team**, then **2 teams**, then **3 teams** (briefly show each radio option).
+**ON-SCREEN** — Flight plan detail: ForeFlight vs G1000 columns. The list starts at Alpha; Hotel is pending. Point out that ForeFlight actually begins with Golf, SR214H, Golf.
 
 **NARRATION**  
-“Under single scenario, pick **one team** for both corridor sides flown sequentially from one departure; **two teams** for inner and outer in parallel from two airports; or **three teams** for a geographic split — each team owns a route segment and flies both sides from its own base. Three-team mode needs at least four waypoints on the plan.”
+“The next page lists ForeFlight-style names beside G1000 names so you can cross-check the chart and the navigator. If the ForeFlight plan starts with Golf, Sierra Romeo 214 Hotel, Golf, those points are missing here. Do not delete the plan and start over. Use Correct waypoint sequence.”
 
-**ON-SCREEN** — Select **Compare 1 vs 2 teams**; show Team 1 departure from the flight plan **or** Team 1 lookup when the plan is a **Coordinator survey anchor** (waypoints only). **Look up** Team 2 airport (e.g. a second base near the route).
-
-**NARRATION**  
-“Comparison modes run two full what-if scenarios with the same sortie budget and the same corridor track plan from **Scenario**. Look up departure airports for Teams 1–3 before you run — same FAA identifier lookup as elsewhere in the app. Anchor plans have no departure on the flight plan record; the coordinator looks up every team base in the console.”
-
-**ON-SCREEN** — **Ferry / recovery model** → select **Staged refuel (finish survey before weather)**; **Look up** shared refueling airport (e.g. near the MTR). Show **Return-to-home fuel** guidance box and en-route recovery lightbulb tip.
+**ON-SCREEN** — Click **Correct waypoint sequence**. Form returns with the saved entries. Change the sequence to `G, SR214H, G, A, B, C, D, E, F, G, H`. Fetch. Click **Update Flight Plan**.
 
 **NARRATION**  
-“For long ferries — typical on routes like **IR107** from Albuquerque — choose **Staged refuel**. Pick one **shared refuel airport** for all aircraft. Sortie one ends at that field after survey work; the **final sortie** returns home. When the last survey leg plus return fits your NM budget, the planner merges them into one sortie so crews are home sooner for weather recovery. Return-home-only rows show **Return home** in the table — pilots plan fuel; no survey **.fpl** for those legs. Multi-aircraft: stagger takeoffs and deconflict on the radio.”
+“The form comes back with your entries. Add Golf, Sierra Romeo 214 Hotel, and Golf at the beginning of the sequence, then press Update Flight Plan. You return to this same plan to finish.”
 
-**ON-SCREEN** — **Sortie distance budget (NM)** — show 400–500.
-
-**NARRATION**  
-“Set the sortie budget your Wing uses — typically four hundred to five hundred nautical miles. Corridor width and offsets come from **Scenario** above, not from fixed VR114 defaults.”
-
-**ON-SCREEN** — Click **Compare 1 vs 2 teams** (or **Run planner** for single mode). Wait for **Results**.
+**ON-SCREEN** — Detail again: blend-in points converted; H still pending with degree and minute fields. Do not open ForeFlight on camera; fill example coordinates from the AP/1B or ForeFlight popup and click **Supply Coordinates**. Example: 34 degrees 49.30 minutes North, 106 degrees 58.60 minutes West.
 
 **NARRATION**  
-“Results show centerline length, the applied leg track plan, total wing sorties, and NM breakdown per sortie — ferry in, along the route, ferry out. Staged refuel shows the recovery airport in the results header.”
+“Hotel still needs coordinates. In ForeFlight, tap that waypoint in your flight plan and copy latitude and longitude from the popup, in degrees and minutes. You can also take them from the AP/1B. Enter them here, then press Supply Coordinates.”
 
-**ON-SCREEN** — **Staffing comparison** table (1 vs 2) or **Geographic assignment** table (3 teams); scroll sortie rows.
-
-**NARRATION**  
-“In compare mode, read the summary row first — wing sorties, wing NM, and any over-budget warning. Then drill into each team’s sortie table: waypoint range, which side, start direction, and offsets. Geographic split shows boundary waypoints and segment ownership per team.”
-
-**ON-SCREEN** — Click **Export .fpl** on one sortie row; show **Sortie pilot brief** modal (offsets, Heading-mode SOP); dismiss or complete download.
+**ON-SCREEN** — Sidebar **Map View**. Select **SR213 Training Demo** if it is not already selected. Hold on the route line. Point at **Return to Flight Plan** without using it for a second correction.
 
 **NARRATION**  
-“Each sortie row can export a G1000 **.fpl** with the serpentine route for that assignment. The pilot brief lists parallel-track offsets and heading-mode reminders — offsets are set on the G1000, not in the file. Copy to the SD card root, eject before removing the card, then import on the panel. Rename to your Wing’s dep-to-dep filename if the G1000 catalog expects it.”
+“Before you export, open Map View and compare this graphical flight plan with your ForeFlight map. If the two pictures match, you have a visual confirmation that the waypoint list is right. If you see a mistake, press Return to Flight Plan and use Correct waypoint sequence on that page, otherwise press Return to Flight Plan in order to load the SD card.”
 
-**ON-SCREEN** — Red **Wing planning aid only** disclaimer at bottom of results; cut back to printed handout, point at crew-communication section if present.
-
-**NARRATION**  
-“Treat every number as a planning aid — crews still fly corridors in ForeFlight Military Flight Bag and follow Wing SOP for MOA, scheduling, and safety. After you run a scenario, use the printed handout to brief each crew: team, segment, sortie number, offsets, and side — the same fields in the sortie table and pilot brief modal.”
-
-**PAUSE**
-
----
-
-## Chapter 4 — Content pack for mission prep (ForeFlight) (3–5 min)
-
-**ON-SCREEN** — Return to **Flight Plan detail** for the same route; scroll to **ForeFlight content pack** card.
+**ON-SCREEN** — Click **Return to Flight Plan**. Scroll to **Full flight plan** → **Export full route (.fpl)** → Export. Show the download if the browser shows it.
 
 **NARRATION**  
-“Before the flight, crews pull the latest tower waypoints from the Wing server as a ForeFlight **content pack**. The app matches your flight plan’s route number to the right pack when one exists.”
-
-**ON-SCREEN** — If the card shows “No pack on server,” narrate that the Wing must publish one; otherwise show **Download for ForeFlight (.zip)**.
-
-**NARRATION**  
-“If a pack matches your route, click **Download for ForeFlight**. You need the Wing **Content Pack API key** in this browser once — same as elsewhere in the app — usually saved under **ForeFlight Content Pack Update** → Settings → Server connection.”
-
-**ON-SCREEN** — Click download; show success toast or confirmation if present.
-
-**NARRATION**  
-“Import the ZIP in ForeFlight on your iPad or iPhone the way your Wing briefs — typically Files → share sheet → Open in ForeFlight. After import, tower waypoints appear on the map for that route.”
-
-**PAUSE**
-
----
-
-## Chapter 5 — Map View (2–3 min)
-
-**ON-SCREEN** — Sidebar → **Map View** (`/map`).
-
-**NARRATION**  
-“**Map View** is the big-picture check: your mission geometry against satellite context. Use it to brief the route and to sanity-check segments before you fly.”
-
-**ON-SCREEN** — Pan/zoom; if mission selector exists, switch missions to show the plan you built.
-
-**NARRATION**  
-“Pick the mission or plan your Wing uses for this sortie so the overlay matches the cockpit.”
+“Export full route downloads the complete FPL, every waypoint in the plan. Copy that file to the root of a FAT32 SD card, then eject the card before you remove it from the reader, so the file is not corrupted. Insert the card in the top slot of the MFD before you power up the MFD. Otherwise the panel may say there is no flight plan to import.”
 
 **PAUSE**
 
@@ -303,13 +216,13 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ## Chapter 10 — Wrap-up and recurring operations (1–2 min)
 
-**ON-SCREEN** — Return to **Workflow Guide**; highlight crew steps; optionally flash **Coordinator Survey Console** from **Flight Plans**.
+**ON-SCREEN** — Return to **Workflow Guide**; highlight crew steps; optionally flash **Coordinator Console** in the sidebar.
 
 **NARRATION**  
 “For aircrew: plan and export the G1000 file — full route or sortie fragment when needed — prep ForeFlight from the server pack, execute towers in **Tower Data Analysis** with **Map View** support, finish the **Air Force Report Form**, export the PDF, then apply towers to the content pack so the next crew inherits your work.”
 
 **NARRATION**  
-“For wing coordinators: build the flight plan — or a **Coordinator departure choices** anchor — then set corridor tracks in **Scenario**, compare one, two, or three teams with optional **staged refuel**, export sortie **.fpl** files and pilot briefs, and communicate assignments before the sortie.”
+“For wing coordinators: open **Coordinator Console** from the sidebar, load the published route, set corridor tracks in **Scenario**, compare one, two, or three teams with optional **staged refuel**, export sortie **.fpl** files, and **email each file to that aircraft’s Mission Pilot** before the sortie.”
 
 **NARRATION**  
 “Questions go to your Wing’s training officer or whoever owns the ForeFlight API key and admin PIN.”
@@ -318,7 +231,85 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ---
 
-## Appendix A — Wing Administrator (optional separate video, 3–5 min)
+## Appendix A — Coordinator Survey Console (1–3 teams) (7–10 min)
+
+**Audience note** — Wing coordinators, ops staff, and pilots who want to see how sortie assignments are derived. Can be a separate video.
+
+**ON-SCREEN** — Hold up or fan open the printed **Coordinator Survey Console** handout (`docs/handouts/Coordinator-Survey-Console-Handout.pdf`); show cover/title briefly, then switch to the app.
+
+**NARRATION**  
+“Your Wing should have this one-page handout in the ops room and in each survey aircraft kit. It mirrors what you’ll see on screen — inner and outer passes, one- versus two- versus three-team staffing, and how to read a sortie row — so coordinators and crews stay aligned when you’re not both looking at the same laptop.”
+
+**ON-SCREEN** — Sidebar **Mission Planning** → **Coordinator Console**. Empty console shows **Load the published route**. Fetch VR114 A–Q (or your demo), **Load route into console**. URL shows `/coordinator/survey?plan=…`.
+
+**NARRATION**  
+“The **Coordinator Survey Console** is a wing planning aid — not a replacement for ForeFlight corridor display or ATP routing. Given your flight plan’s waypoint chain, NASR corridor width, team departure airports, and a per-sortie distance budget, it estimates how many sorties each team needs and which waypoint ranges to assign.”
+
+**ON-SCREEN** — Expand **Coordinator quick reference & symbology**; open the lightbulb tip if unseen.
+
+**NARRATION**  
+“The in-app quick reference and the printed handout use the same symbology — inner versus outer passes, G1000 parallel-track spacing, and what the sortie budget means for a four-and-a-half to five-hour sortie with reserve. Default wing spacing is three, nine, fifteen, twenty-one nautical miles for a twenty-NM half-width, but your Wing may fly fewer tracks — you set that in **Scenario**, not hard-coded in the planner. Keep the PDF on the Wing share or regenerate it with `npm run handout:coordinator-pdf` when the console changes.”
+
+**ON-SCREEN** — **Scenario** card: flight plan name, route ID, waypoint list; scroll to **Corridor & parallel tracks**.
+
+**NARRATION**  
+“The scenario uses the route you loaded. NASR **CORRIDORS ARE** width lines appear here — one block per width span. Edit **Inner** and **Outer NM** if the cycle wording is wrong, then set **Inner offsets** and **Outer offsets** as comma-separated nautical miles — inner is left of centerline, outer is right. Use **Reset offsets to wing default** on a span to restore three-six-one spacing from the NM values. The **Leg preview** table updates before you run the planner so you can see what each leg will use.”
+
+**ON-SCREEN** — Open lightbulb tip **Corridor width and parallel tracks** (Scenario); briefly change one offset list and show leg preview refresh.
+
+**NARRATION**  
+“All compare modes and single scenarios share this one track plan — change offsets here and re-run to see sortie impact. The lightbulb tip explains inner versus outer columns and when to reduce track count for a real-world wing plan.”
+
+**ON-SCREEN** — **Teams & parameters** → lightbulb **Staffing and run planner**; **Planner mode**.
+
+**NARRATION**  
+“Three planner modes: **Single scenario** for one staffing model at a time; **Compare 1 vs 2 teams** for one aircraft doing both sides sequentially versus two aircraft on opposite sides; **Compare 2 vs 3 teams** for opposite-side parallel staffing versus a geographic split across three bases.”
+
+**ON-SCREEN** — Select **Single scenario** → **Aircraft count** → click **1 team**, then **2 teams**, then **3 teams** (briefly show each radio option).
+
+**NARRATION**  
+“Under single scenario, pick **one team** for both corridor sides flown sequentially from one departure; **two teams** for inner and outer in parallel from two airports; or **three teams** for a geographic split — each team owns a route segment and flies both sides from its own base. Three-team mode needs at least four waypoints on the plan.”
+
+**ON-SCREEN** — Select **Compare 1 vs 2 teams**; show Team 1 departure from the flight plan **or** Team 1 lookup when the plan is a **Coordinator survey anchor** (waypoints only). **Look up** Team 2 airport (e.g. a second base near the route).
+
+**NARRATION**  
+“Comparison modes run two full what-if scenarios with the same sortie budget and the same corridor track plan from **Scenario**. Look up departure airports for Teams 1–3 before you run — same FAA identifier lookup as elsewhere in the app. Anchor plans have no departure on the flight plan record; the coordinator looks up every team base in the console.”
+
+**ON-SCREEN** — **Ferry / recovery model** → select **Staged refuel (finish survey before weather)**; **Look up** shared refueling airport (e.g. near the MTR). Show **Return-to-home fuel** guidance box and en-route recovery lightbulb tip.
+
+**NARRATION**  
+“For long ferries — typical on routes like **IR107** from Albuquerque — choose **Staged refuel**. Pick one **shared refuel airport** for all aircraft. Sortie one ends at that field after survey work; the **final sortie** returns home. When the last survey leg plus return fits your NM budget, the planner merges them into one sortie so crews are home sooner for weather recovery. Return-home-only rows show **Return home** in the table — pilots plan fuel; no survey **.fpl** for those legs. Multi-aircraft: stagger takeoffs and deconflict on the radio.”
+
+**ON-SCREEN** — **Sortie distance budget (NM)** — show 400–500.
+
+**NARRATION**  
+“Set the sortie budget your Wing uses — typically four hundred to five hundred nautical miles. Corridor width and offsets come from **Scenario** above, not from fixed VR114 defaults.”
+
+**ON-SCREEN** — Click **Compare 1 vs 2 teams** (or **Run planner** for single mode). Wait for **Results**.
+
+**NARRATION**  
+“Results show centerline length, the applied leg track plan, total wing sorties, and NM breakdown per sortie — ferry in, along the route, ferry out. Staged refuel shows the recovery airport in the results header.”
+
+**ON-SCREEN** — **Staffing comparison** table (1 vs 2) or **Geographic assignment** table (3 teams); scroll sortie rows.
+
+**NARRATION**  
+“In compare mode, read the summary row first — wing sorties, wing NM, and any over-budget warning. Then drill into each team’s sortie table: waypoint range, which side, start direction, and offsets. Geographic split shows boundary waypoints and segment ownership per team.”
+
+**ON-SCREEN** — Click **Export .fpl** on one sortie row; show **Sortie pilot brief** modal (offsets, Heading-mode SOP); dismiss or complete download.
+
+**NARRATION**  
+“Each sortie row can export a G1000 **.fpl** with the serpentine route for that assignment. Email that file to the Mission Pilot of the aircraft flying the sortie — or copy it to an SD card. The pilot brief lists parallel-track offsets and heading-mode reminders — offsets are set on the G1000, not in the file. Copy to the SD card root, eject before removing the card, then import on the panel. Rename to your Wing’s dep-to-dep filename if the G1000 catalog expects it.”
+
+**ON-SCREEN** — Red **Wing planning aid only** disclaimer at bottom of results; cut back to printed handout, point at crew-communication section if present.
+
+**NARRATION**  
+“Treat every number as a planning aid — crews still fly corridors in ForeFlight Military Flight Bag and follow Wing SOP for MOA, scheduling, and safety. After you run a scenario, use the printed handout to brief each crew: team, segment, sortie number, offsets, and side — the same fields in the sortie table and pilot brief modal.”
+
+**PAUSE**
+
+---
+
+## Appendix B — Wing Administrator (optional separate video, 3–5 min)
 
 **Audience** — Few designated members; not the whole aircrew.
 
@@ -333,6 +324,27 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 “Before publishing, rename the **outer folder inside the ZIP** to something short and stable — for example `IR112_content_pack` — so future inventory stays readable.”
 
 **PAUSE** — end.
+
+---
+
+## Appendix C — Content pack for mission prep (ForeFlight) (3–5 min)
+
+**ON-SCREEN** — **Coordinator Survey Console** for the same route; scroll to **ForeFlight content pack**.
+
+**NARRATION**  
+“Before the flight, crews pull the latest route content pack from the Wing server as a ForeFlight **content pack**. The app matches your flight plan’s route number to the right pack when one exists. Aircrews can expect at this point that these contain all towers discovered in previous years. If the aircrew finds any new towers, this content pack will be updated, and there is direction later in this sequence that results in storage of the file for next year's survey.”
+
+**ON-SCREEN** — If the card shows “No pack on server,” narrate that the Wing must publish one; otherwise show **Download for ForeFlight (.zip)**.
+
+**NARRATION**  
+“If a pack matches your route, click **Download for ForeFlight**. You need the Wing **Content Pack API key** in this browser once — same as elsewhere in the app — usually saved under **ForeFlight Content Pack Update** → Settings → Server connection.”
+
+**ON-SCREEN** — Click download; show success toast or confirmation if present.
+
+**NARRATION**  
+“Import the ZIP in ForeFlight on your iPad or iPhone the way your Wing briefs — typically Files → share sheet → Open in ForeFlight. After import, tower waypoints appear on the map for that route.”
+
+**PAUSE**
 
 ---
 
@@ -353,4 +365,4 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 |------|--------|--------|
 | 2026-05-14 | Project doc | Initial script aligned to `WorkflowGuidePage` and `MainLayout` nav. |
 | 2026-06-13 | Project doc | Added Chapter 3 Coordinator Survey Console (1–3 teams, compare modes, sortie `.fpl` export, printed handout); updated flight plan export (full route vs sortie fragment); renumbered chapters. |
-| 2026-07-05 | Project doc | Chapter 2: Coordinator departure choices anchor plans. Chapter 3: Scenario corridor & custom parallel tracks, staged refuel / return-home merge, anchor Team 1 lookup, lightbulb tips. Chapters 6–7: tower not on map; AGL/MSL `ft. - See Notes` on report form. Demo route table; post-production checklist. |
+| 2026-08-31 | Project doc | Chapter 2 rewritten for SR213 Waypoint sequence (top-to-bottom form, correct-sequence return, Hotel coords from ForeFlight, SD card). |

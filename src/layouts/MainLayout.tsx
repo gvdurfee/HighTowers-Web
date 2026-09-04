@@ -5,6 +5,7 @@ import { db } from '@/db/schema'
 type DetailView =
   | 'workflow'
   | 'flight-plans'
+  | 'coordinator-survey'
   | 'tower-analysis'
   | 'map'
   | 'report-form'
@@ -20,6 +21,7 @@ const NM_WING_LOGO_SRC = `${baseUrl}nm-wing-logo.png`
 const routeMap: Record<DetailView, string> = {
   workflow: '/workflow',
   'flight-plans': '/flight-plans',
+  'coordinator-survey': '/coordinator/survey',
   'tower-analysis': '/tower-analysis',
   map: '/map',
   'report-form': '/report-form',
@@ -42,7 +44,10 @@ export function MainLayout() {
       return location.pathname === '/export'
     }
     if (path === '/flight-plans') {
-      return location.pathname === '/flight-plans' && !location.pathname.includes('/new')
+      return location.pathname === '/flight-plans' || location.pathname.startsWith('/flight-plans/')
+    }
+    if (path === '/coordinator/survey') {
+      return location.pathname.startsWith('/coordinator/survey')
     }
     return location.pathname.startsWith(path)
   }
@@ -114,6 +119,14 @@ export function MainLayout() {
               >
                 <span aria-hidden>✈️</span>
                 {!sidebarCollapsed && <span>Flight Plans</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => nav('coordinator-survey')}
+                className={navButton(isActive('coordinator-survey'))}
+              >
+                <span aria-hidden>🧭</span>
+                {!sidebarCollapsed && <span>Coordinator Console</span>}
               </button>
             </li>
             <li className="px-2 py-1">

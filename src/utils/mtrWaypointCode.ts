@@ -19,3 +19,10 @@ export function parseWaypointCode(
     waypointLetter: match[2],
   }
 }
+
+/** Stable key so SR213H and SR213-H match when correcting a saved sequence. */
+export function waypointIdentityKey(code: string): string {
+  const parsed = parseWaypointCode(code)
+  if (!parsed) return code.trim().toUpperCase()
+  return `${parsed.routeType}${parsed.routeNumber}-${parsed.waypointLetter}`
+}

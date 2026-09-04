@@ -4,7 +4,7 @@ Wing **coordinator what-if planner** for Low Level Route tower surveys: given MT
 
 **Not in scope:** ForeFlight corridor display (crews use Military Flight Bag), maintenance scheduling, crew availability, MOA activation, or ATP-quality routing.
 
-**Launch:** Flight Plans → **Coordinator Survey Console** (bookmark `/coordinator/survey`; optional `?plan=<flightPlanId>`).
+**Launch:** Sidebar **Mission Planning** → **Coordinator Console** (`/coordinator/survey`; optional `?plan=<flightPlanId>`). Load the published MTR in the console. After staffing, email each sortie `.fpl` to that aircraft’s Mission Pilot.
 
 **Wing handout (print/PDF):** [`docs/handouts/Coordinator-Survey-Console-Handout.pdf`](./handouts/Coordinator-Survey-Console-Handout.pdf) — coordinator and crew communication; source [`COORDINATOR_SURVEY_CONSOLE_HANDOUT.md`](./COORDINATOR_SURVEY_CONSOLE_HANDOUT.md). Regenerate: `npm run handout:coordinator-pdf`.
 
@@ -134,6 +134,8 @@ Per scenario:
 - **Passes per side per leg**
 - Per team: sortie list with waypoint range, offsets, NM breakdown (ferry / along-route / return)
 - **G1000 sortie `.fpl` export** per sortie row (serpentine route + pilot brief modal with offsets and Heading-mode SOP)
+- **Manual Export sortie fragment (.fpl)** (From/To/offsets without running the planner)
+- ForeFlight **content pack** reminder card (baseline pack for crews)
 - **Total sorties** and **total NM**
 - **Entry direction** recommendation (fewest turnarounds / shortest return)
 - Disclaimer: **Wing planning aid only**

@@ -149,7 +149,8 @@ When updating ForeFlight / Flight Plan / Export screens:
 
 | Surface | Role |
 |---------|------|
-| **Flight Plan** detail — content pack card | Reminder: baseline pack from Wing *Content Packs for Flight Planning* |
+| **Coordinator Survey Console** — content pack card | Reminder: baseline pack from Wing *Content Packs for Flight Planning* (issued by coordinators) |
+| **Coordinator Survey Console** — Export sortie fragment | Manual serpentine `.fpl` for one From/To assignment |
 | **Export Reported Data** | Air Force PDF + optional local ZIP preview/download for close-out |
 | **Administrator → Content packs** | Wing Administrator publish/delete (optional API) |
 | **`/foreflight-content-pack`** | Legacy URL; redirects to Export |

@@ -65,7 +65,7 @@ export function CorridorTrackPlanEditor({
         </div>
         <GuidedHint
           hintId={HINT_COORD_CORRIDOR_TRACKS}
-          stepNumber={2}
+          stepNumber={3}
           title="Corridor width and parallel tracks"
           body={
             <>

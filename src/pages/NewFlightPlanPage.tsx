@@ -1,12 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { db } from '@/db/schema'
+import type { FlightPlanRecord, WaypointRecord, FlightPlanCreationLoadMethod } from '@/db/schema'
 import { generateId } from '@/utils/id'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
 import { apiService, type AirportResult } from '@/services/api'
 import { FlightPlanLoadMethodHelpModal } from '@/components/FlightPlanLoadMethodHelpModal'
-import { parseWaypointCode } from '@/utils/mtrWaypointCode'
+import { parseWaypointCode, waypointIdentityKey } from '@/utils/mtrWaypointCode'
+import {
+  normalizeWaypointToken,
+  parseRouteInput,
+  resolveWaypointToken,
+} from '@/utils/mtrRouteInput'
 import { GuidedHint } from '@/components/GuidedHint'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 
@@ -28,11 +34,15 @@ type RoutePreview =
   | { count: number; routeId: string; resolvedCount?: number; totalListedWaypoints?: number }
   | { error: string }
 
-type LoadMethod = 'route' | 'sequence' | 'sequenceLibrary' | 'coordinatorSurvey'
+type LoadMethod = 'route' | 'sequence'
 
 export function NewFlightPlanPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const editPlanId = searchParams.get('edit')
+  const isEditing = Boolean(editPlanId)
   const [loading, setLoading] = useState(false)
+  const [hydrating, setHydrating] = useState(Boolean(editPlanId))
   const [error, setError] = useState<string | null>(null)
   const [loadMethod, setLoadMethod] = useState<LoadMethod>('route')
   const [routeInput, setRouteInput] = useState('')
@@ -54,6 +64,7 @@ export function NewFlightPlanPage() {
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
     defaultValues: {
@@ -82,10 +93,90 @@ export function NewFlightPlanPage() {
   const destinationCodeField = register('destinationCode')
 
   useEffect(() => {
-    setDepartureAirport(null)
+    if (!editPlanId) {
+      setHydrating(false)
+      return
+    }
+    let cancelled = false
+    const hydrate = async () => {
+      setHydrating(true)
+      setError(null)
+      try {
+        const plan = await db.flightPlans.get(editPlanId)
+        if (!plan) {
+          if (!cancelled) {
+            setError('Flight plan not found. Return to Flight Plans and open the plan again.')
+            setHydrating(false)
+          }
+          return
+        }
+        const wps = await db.waypoints.where('flightPlanId').equals(editPlanId).sortBy('sequence')
+        const method: LoadMethod =
+          plan.creationLoadMethod === 'route' ? 'route' : 'sequence'
+        if (cancelled) return
+        setLoadMethod(method)
+        setValue('name', plan.name)
+        if (plan.departureAirportId) {
+          const dep = await db.airports.get(plan.departureAirportId)
+          if (dep && !cancelled) {
+            setValue('departureCode', dep.identifier)
+            setDepartureAirport({
+              identifier: dep.identifier,
+              name: dep.name,
+              latitude: dep.latitude,
+              longitude: dep.longitude,
+              elevation: dep.elevation,
+            })
+          }
+        }
+        if (plan.destinationAirportId) {
+          const dest = await db.airports.get(plan.destinationAirportId)
+          if (dest && !cancelled) {
+            setValue('destinationCode', dest.identifier)
+            setDestinationAirport({
+              identifier: dest.identifier,
+              name: dest.name,
+              latitude: dest.latitude,
+              longitude: dest.longitude,
+              elevation: dest.elevation,
+            })
+          }
+        }
+        if (method === 'route') {
+          const inferred = inferFullRouteFields(plan, wps)
+          setRouteInput(inferred.routeInput)
+          setEntryWaypoint(inferred.entry)
+          setExitWaypoint(inferred.exit)
+        } else {
+          const inferred = inferSequenceFields(plan, wps)
+          setValue('routeIdentifier', inferred.routeIdentifier)
+          setValue('waypointSequence', inferred.waypointSequence)
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Could not load this flight plan for correction.')
+        }
+      } finally {
+        if (!cancelled) setHydrating(false)
+      }
+    }
+    void hydrate()
+    return () => {
+      cancelled = true
+    }
+  }, [editPlanId, setValue])
+
+  useEffect(() => {
+    setDepartureAirport((prev) => {
+      if (prev && depCode?.trim().toUpperCase() === prev.identifier.toUpperCase()) return prev
+      return null
+    })
   }, [depCode])
   useEffect(() => {
-    setDestinationAirport(null)
+    setDestinationAirport((prev) => {
+      if (prev && destCode?.trim().toUpperCase() === prev.identifier.toUpperCase()) return prev
+      return null
+    })
   }, [destCode])
   useEffect(() => {
     setRoutePreview(null)
@@ -191,57 +282,6 @@ export function NewFlightPlanPage() {
         .map(normalizeWaypointToken)
         .filter(Boolean)
 
-      if (loadMethod === 'sequenceLibrary') {
-        const seenG1000 = new Set<string>()
-        const duplicateLabels: string[] = []
-        const uniqueResolved: { resolved: string; g1000: string }[] = []
-        for (const part of parts) {
-          const resolved = resolveWaypointToken(routeId || undefined, part)
-          if (!resolved) continue
-          const g1000 = convertWaypointNameToG1000(resolved)
-          if (seenG1000.has(g1000)) {
-            duplicateLabels.push(`${part.trim().toUpperCase()} → ${g1000}`)
-            continue
-          }
-          seenG1000.add(g1000)
-          uniqueResolved.push({ resolved, g1000 })
-        }
-        if (uniqueResolved.length === 0) {
-          setSequencePreview({
-            error:
-              duplicateLabels.length > 0
-                ? 'Every waypoint duplicates an earlier G1000 waypoint name. List each unique point only once.'
-                : 'No waypoints resolved. Set Route identifier and suffixes, or use full waypoint IDs.',
-          })
-          return
-        }
-        let found = 0
-        for (const { resolved } of uniqueResolved) {
-          const parsed = parseWaypointCode(resolved)
-          if (!parsed) continue
-          const coords = await apiService.fetchWaypointCoordinate(
-            parsed.routeType,
-            parsed.routeNumber,
-            parsed.waypointLetter
-          )
-          if (coords) found++
-        }
-        if (found === 0) {
-          setSequencePreview({
-            error:
-              'No waypoints found in the database for your unique list. Check identifiers and the MTR database.',
-          })
-        } else {
-          setSequencePreview({
-            count: found,
-            routeId: `${found} unique in DB / ${uniqueResolved.length} unique / ${parts.length} waypoints${
-              duplicateLabels.length ? ` (${duplicateLabels.length} duplicate G1000 names skipped)` : ''
-            }`,
-          })
-        }
-        return
-      }
-
       let found = 0
       for (const part of parts) {
         const resolved = resolveWaypointToken(routeId || undefined, part)
@@ -280,52 +320,35 @@ export function NewFlightPlanPage() {
     setError(null)
     try {
       const now = new Date().toISOString()
-      const planId = generateId()
+      const existingPlan = editPlanId ? await db.flightPlans.get(editPlanId) : undefined
+      if (editPlanId && !existingPlan) {
+        setError('Flight plan not found. Return to Flight Plans and open the plan again.')
+        setLoading(false)
+        return
+      }
+      const planId = existingPlan?.id ?? generateId()
 
       let departureAirportId: string | undefined
       let destinationAirportId: string | undefined
 
-      if (loadMethod !== 'coordinatorSurvey' && data.departureCode.trim()) {
-        const dep =
-          departureAirport?.identifier?.toUpperCase() === data.departureCode.trim().toUpperCase()
-            ? departureAirport
-            : await apiService.fetchAirport(data.departureCode.trim())
-        if (dep) {
-          const depId = generateId()
-          await db.airports.add({
-            id: depId,
-            identifier: dep.identifier,
-            name: dep.name,
-            latitude: dep.latitude,
-            longitude: dep.longitude,
-            elevation: dep.elevation,
-          })
-          departureAirportId = depId
-        }
+      if (data.departureCode.trim()) {
+        departureAirportId = await resolveAirportRecordId({
+          code: data.departureCode.trim(),
+          fetched: departureAirport,
+          existingAirportId: existingPlan?.departureAirportId,
+        })
       }
-      if (loadMethod !== 'coordinatorSurvey' && data.destinationCode.trim()) {
-        const dest =
-          destinationAirport?.identifier?.toUpperCase() === data.destinationCode.trim().toUpperCase()
-            ? destinationAirport
-            : await apiService.fetchAirport(data.destinationCode.trim())
-        if (dest) {
-          const destId = generateId()
-          await db.airports.add({
-            id: destId,
-            identifier: dest.identifier,
-            name: dest.name,
-            latitude: dest.latitude,
-            longitude: dest.longitude,
-            elevation: dest.elevation,
-          })
-          destinationAirportId = destId
-        }
+      if (data.destinationCode.trim()) {
+        destinationAirportId = await resolveAirportRecordId({
+          code: data.destinationCode.trim(),
+          fetched: destinationAirport,
+          existingAirportId: existingPlan?.destinationAirportId,
+        })
       }
 
       const waypoints: { originalName: string; g1000Name: string; lat: number; lon: number; routeType: 'IR' | 'SR' | 'VR'; sequence: number }[] = []
       let skippedWaypoints: string[] = []
       let pendingWithPosition: { code: string; sequence: number }[] = []
-      let postCreateDuplicateMessage = ''
 
       if (loadMethod === 'route' && routeInput.trim()) {
         const parsed = parseRouteInput(routeInput.trim())
@@ -354,47 +377,18 @@ export function NewFlightPlanPage() {
           setLoading(false)
           return
         }
-      } else if (
-        (loadMethod === 'sequence' ||
-          loadMethod === 'sequenceLibrary' ||
-          loadMethod === 'coordinatorSurvey') &&
-        data.waypointSequence.trim()
-      ) {
+      } else if (loadMethod === 'sequence' && data.waypointSequence.trim()) {
         const routeId = data.routeIdentifier.trim()
         if (routeId && !parseRouteInput(routeId)) {
           setError('Invalid route identifier. Use IR109, SR45, or VR108.')
           setLoading(false)
           return
         }
-        if (loadMethod === 'sequenceLibrary') {
-          const d = data.departureCode.trim().toUpperCase()
-          const dst = data.destinationCode.trim().toUpperCase()
-          if (!d || !dst) {
-            setError(
-              'G1000 user waypoint library requires both departure and destination (ICAO or FAA location ID / NASR identifier), and they must be different.'
-            )
-            setLoading(false)
-            return
-          }
-          if (d === dst) {
-            setError(
-              'G1000 user waypoint library cannot be used for round-robin flights (same departure and destination). Use standard Waypoint sequence or Load full route for that case.'
-            )
-            setLoading(false)
-            return
-          }
-        }
         const parts = data.waypointSequence
           .split(/[\s,]+/)
           .map(normalizeWaypointToken)
           .filter(Boolean)
         const skipped: string[] = []
-        const duplicateSkipped: string[] = []
-        const seenG1000Library = new Set<string>()
-        // In sequenceLibrary, saved waypoints are compacted to 0..N, but pending items were using
-        // the raw list index `i`, which can collide and hide pending rows in the detail view.
-        // Use a single monotonic index across all unique (non-duplicate) waypoints.
-        let librarySequenceIndex = 0
         for (let i = 0; i < parts.length; i++) {
           const raw = parts[i]
           const resolved = resolveWaypointToken(routeId || undefined, raw)
@@ -403,9 +397,8 @@ export function NewFlightPlanPage() {
             skipped.push(label)
             pendingWithPosition.push({
               code: label,
-              sequence: loadMethod === 'sequenceLibrary' ? librarySequenceIndex : i,
+              sequence: i,
             })
-            if (loadMethod === 'sequenceLibrary') librarySequenceIndex++
             continue
           }
           const parsed = parseWaypointCode(resolved)
@@ -413,71 +406,117 @@ export function NewFlightPlanPage() {
             skipped.push(resolved)
             pendingWithPosition.push({
               code: resolved,
-              sequence: loadMethod === 'sequenceLibrary' ? librarySequenceIndex : i,
+              sequence: i,
             })
-            if (loadMethod === 'sequenceLibrary') librarySequenceIndex++
             continue
           }
           const g1000Name = convertWaypointNameToG1000(resolved)
-          if (loadMethod === 'sequenceLibrary' && seenG1000Library.has(g1000Name)) {
-            duplicateSkipped.push(`${raw.trim().toUpperCase()} (${g1000Name})`)
-            continue
-          }
           const coords = await apiService.fetchWaypointCoordinate(
             parsed.routeType,
             parsed.routeNumber,
             parsed.waypointLetter
           )
           if (coords) {
-            if (loadMethod === 'sequenceLibrary') {
-              seenG1000Library.add(g1000Name)
-            }
             waypoints.push({
               originalName: resolved,
               g1000Name,
               lat: coords.latitude,
               lon: coords.longitude,
               routeType: parsed.routeType,
-              sequence: loadMethod === 'sequenceLibrary' ? librarySequenceIndex : i,
+              sequence: i,
             })
-            if (loadMethod === 'sequenceLibrary') librarySequenceIndex++
           } else {
             skipped.push(resolved)
             pendingWithPosition.push({
               code: resolved,
-              sequence: loadMethod === 'sequenceLibrary' ? librarySequenceIndex : i,
+              sequence: i,
             })
-            if (loadMethod === 'sequenceLibrary') librarySequenceIndex++
           }
         }
         skippedWaypoints = skipped
-        if (duplicateSkipped.length > 0) {
-          postCreateDuplicateMessage =
-            `Omitted ${duplicateSkipped.length} duplicate waypoint(s) (same G1000 name as an earlier point): ${duplicateSkipped.join(', ')}. `
-        }
       }
 
-      const creationLoadMethod =
-        loadMethod === 'route'
-          ? 'route'
-          : loadMethod === 'sequenceLibrary'
-            ? 'sequenceLibrary'
-            : loadMethod === 'coordinatorSurvey'
-              ? 'coordinatorSurvey'
-              : 'sequence'
+      if (existingPlan) {
+        const priorWps = await db.waypoints.where('flightPlanId').equals(planId).toArray()
+        const priorByKey = new Map(
+          priorWps.map((w) => [waypointIdentityKey(w.originalName), w] as const)
+        )
+        const stillPending: { code: string; sequence: number }[] = []
+        for (const pending of pendingWithPosition) {
+          const prior = priorByKey.get(waypointIdentityKey(pending.code))
+          if (prior) {
+            waypoints.push({
+              originalName: prior.originalName,
+              g1000Name: prior.g1000Name,
+              lat: prior.latitude,
+              lon: prior.longitude,
+              routeType: prior.routeType,
+              sequence: pending.sequence,
+            })
+          } else {
+            stillPending.push(pending)
+          }
+        }
+        pendingWithPosition = stillPending
+        skippedWaypoints = stillPending.map((p) => p.code)
+      }
 
-      await db.flightPlans.add({
-        id: planId,
-        name: data.name || 'Untitled Flight Plan',
-        dateCreated: now,
-        dateModified: now,
-        departureAirportId,
-        destinationAirportId,
-        isActive: false,
+      const triedToLoadWaypoints =
+        (loadMethod === 'route' && Boolean(routeInput.trim())) ||
+        (loadMethod === 'sequence' && Boolean(data.waypointSequence.trim()))
+      if (triedToLoadWaypoints && waypoints.length === 0 && pendingWithPosition.length === 0) {
+        setError(
+          loadMethod === 'route'
+            ? 'No waypoints found for that route. Check the route ID (e.g. IR111, VR108).'
+            : 'No waypoints resolved. Set Route identifier (e.g. IR109) and suffixes (AM, P1, AQ), or enter full IDs like IR109-AM.'
+        )
+        setLoading(false)
+        return
+      }
+
+      const creationLoadMethod: FlightPlanCreationLoadMethod =
+        loadMethod === 'route' ? 'route' : 'sequence'
+
+      const snapshot = {
         creationLoadMethod,
-        pendingWaypoints:
-          pendingWithPosition.length > 0 ? pendingWithPosition : undefined,
-      })
+        creationRouteIdentifier:
+          loadMethod === 'route' ? undefined : data.routeIdentifier.trim() || undefined,
+        creationWaypointSequence:
+          loadMethod === 'route' ? undefined : data.waypointSequence.trim() || undefined,
+        creationRouteInput: loadMethod === 'route' ? routeInput.trim() || undefined : undefined,
+        creationEntryWaypoint: loadMethod === 'route' ? entryWaypoint.trim() || undefined : undefined,
+        creationExitWaypoint: loadMethod === 'route' ? exitWaypoint.trim() || undefined : undefined,
+      }
+
+      if (existingPlan) {
+        await db.waypoints.where('flightPlanId').equals(planId).delete()
+        const nextPlan: FlightPlanRecord = {
+          id: existingPlan.id,
+          name: data.name || existingPlan.name,
+          dateCreated: existingPlan.dateCreated,
+          dateModified: now,
+          isActive: existingPlan.isActive,
+          departureAirportId,
+          destinationAirportId,
+          pendingWaypoints:
+            pendingWithPosition.length > 0 ? pendingWithPosition : undefined,
+          ...snapshot,
+        }
+        await db.flightPlans.put(nextPlan)
+      } else {
+        await db.flightPlans.add({
+          id: planId,
+          name: data.name || 'Untitled Flight Plan',
+          dateCreated: now,
+          dateModified: now,
+          departureAirportId,
+          destinationAirportId,
+          isActive: false,
+          pendingWaypoints:
+            pendingWithPosition.length > 0 ? pendingWithPosition : undefined,
+          ...snapshot,
+        })
+      }
 
       for (const wp of waypoints) {
         await db.waypoints.add({
@@ -492,48 +531,19 @@ export function NewFlightPlanPage() {
         })
       }
 
-      if (loadMethod === 'route' && waypoints.length === 0) {
-        setError('No waypoints found for that route. Check the route ID (e.g. IR111, VR108).')
-      } else if (
-        (loadMethod === 'sequence' ||
-          loadMethod === 'sequenceLibrary' ||
-          loadMethod === 'coordinatorSurvey') &&
-        data.waypointSequence.trim() &&
-        waypoints.length === 0
-      ) {
-        setError(
-          'No waypoints resolved. Set Route identifier (e.g. IR109) and suffixes (AM, P1, AQ), or enter full IDs like IR109-AM.'
-        )
-      } else {
-        const skipMessage =
-          skippedWaypoints.length > 0
-            ? `Could not find ${skippedWaypoints.length} waypoint(s) in the database: ${skippedWaypoints.join(', ')}. The MTR database may be incomplete compared to current AP/1B.`
-            : ''
-        const combinedMessage = [postCreateDuplicateMessage.trim(), skipMessage].filter(Boolean).join(' ')
-        const showPostCreateInfo =
-          postCreateDuplicateMessage.length > 0 || skippedWaypoints.length > 0
-        if (loadMethod === 'coordinatorSurvey') {
-          navigate(`/coordinator/survey?plan=${planId}`, {
-            state: showPostCreateInfo
-              ? {
-                  skippedWaypoints:
-                    skippedWaypoints.length > 0 ? skippedWaypoints : undefined,
-                  message: combinedMessage || undefined,
-                }
-              : undefined,
-          })
-        } else {
-          navigate(`/flight-plans/${planId}`, {
-            state: showPostCreateInfo
-              ? {
-                  skippedWaypoints:
-                    skippedWaypoints.length > 0 ? skippedWaypoints : undefined,
-                  message: combinedMessage || undefined,
-                }
-              : undefined,
-          })
-        }
-      }
+      const skipMessage =
+        skippedWaypoints.length > 0
+          ? `Could not find ${skippedWaypoints.length} waypoint(s) in the database: ${skippedWaypoints.join(', ')}. The MTR database may be incomplete compared to current AP/1B.`
+          : ''
+      const showPostCreateInfo = skippedWaypoints.length > 0
+      const detailState = showPostCreateInfo
+        ? {
+            skippedWaypoints:
+              skippedWaypoints.length > 0 ? skippedWaypoints : undefined,
+            message: skipMessage || undefined,
+          }
+        : undefined
+      navigate(`/flight-plans/${planId}`, { state: detailState })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create flight plan')
     } finally {
@@ -547,21 +557,11 @@ export function NewFlightPlanPage() {
     routePreview !== null &&
     'error' in routePreview
 
-  const isCoordinatorSurveyMode = loadMethod === 'coordinatorSurvey'
-
   const isSequencePreviewFailed =
-    (loadMethod === 'sequence' ||
-      loadMethod === 'sequenceLibrary' ||
-      loadMethod === 'coordinatorSurvey') &&
+    loadMethod === 'sequence' &&
     !!waypointSequenceWatch?.trim() &&
     sequencePreview !== null &&
     'error' in sequencePreview
-
-  const librarySequenceInvalid =
-    loadMethod === 'sequenceLibrary' &&
-    (!depCode?.trim() ||
-      !destCode?.trim() ||
-      depCode.trim().toUpperCase() === destCode.trim().toUpperCase())
 
   return (
     <div className="app-page-shell overflow-auto">
@@ -569,13 +569,15 @@ export function NewFlightPlanPage() {
       <div className="flex items-center gap-4 mb-6">
         <button
           type="button"
-          onClick={() => navigate('/flight-plans')}
+          onClick={() => navigate(isEditing && editPlanId ? `/flight-plans/${editPlanId}` : '/flight-plans')}
           className="text-cap-ultramarine hover:underline shrink-0"
         >
           ← Back
         </button>
         <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900 truncate">New Flight Plan</h1>
+          <h1 className="text-2xl font-bold text-gray-900 truncate">
+            {isEditing ? 'Correct Flight Plan' : 'New Flight Plan'}
+          </h1>
           <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
@@ -596,6 +598,17 @@ export function NewFlightPlanPage() {
           </div>
         </div>
       </div>
+
+      {hydrating && (
+        <p className="text-sm text-gray-600 mb-4">Loading saved plan…</p>
+      )}
+      {isEditing && !hydrating && (
+        <p className="text-sm text-gray-700 rounded-lg border border-cap-ultramarine/25 bg-slate-50 px-4 py-3 mb-6">
+          Correct the waypoint loading for this saved plan, then press <strong>Update Flight Plan</strong>.
+          Coordinates you already supplied are kept when that waypoint is still in the list. You return to
+          the same detail page to finish.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div>
@@ -630,7 +643,6 @@ export function NewFlightPlanPage() {
           )}
         </div>
 
-        {!isCoordinatorSurveyMode && (
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">
             <span className="text-sm font-medium text-gray-700">Departure &amp; destination</span>
@@ -703,14 +715,6 @@ export function NewFlightPlanPage() {
           </div>
         </div>
         </div>
-        )}
-
-        {isCoordinatorSurveyMode && (
-          <p className="text-sm text-gray-600 rounded-lg border border-cap-ultramarine/25 bg-slate-50 px-4 py-3">
-            Departure, destination, and refuel airports are chosen in the{' '}
-            <strong>Coordinator Survey Console</strong> after you create this plan.
-          </p>
-        )}
 
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">
@@ -719,7 +723,7 @@ export function NewFlightPlanPage() {
               hintId={HINT_FP_LOAD}
               stepNumber={3}
               title="How waypoints are loaded"
-              body="Load full route: segment between entry and exit on one published route. Waypoint sequence: type waypoints (suffixes or full IDs) for one or blended routes. G1000 user waypoint library: import-focused list with unique G1000 names—requires two different airport identifiers (not round-robin). Coordinator departure choices: waypoint sequence only for survey what-if—airports chosen in Survey Console. Use the ? help for full detail."
+              body="Load full route: segment between entry and exit on one published route. Waypoint sequence: type waypoints (suffixes or full IDs) for one or blended routes. Use the ? help for full detail."
               isSeen={isSeen(HINT_FP_LOAD)}
               onDismiss={markSeen}
               surface="light"
@@ -731,7 +735,6 @@ export function NewFlightPlanPage() {
                 type="radio"
                 checked={loadMethod === 'route'}
                 onChange={() => setLoadMethod('route')}
-                disabled={isCoordinatorSurveyMode}
               />
               Load full route
             </label>
@@ -740,50 +743,10 @@ export function NewFlightPlanPage() {
                 type="radio"
                 checked={loadMethod === 'sequence'}
                 onChange={() => setLoadMethod('sequence')}
-                disabled={isCoordinatorSurveyMode}
               />
               Waypoint sequence
             </label>
-            <label className="flex items-start gap-2">
-              <input
-                type="radio"
-                className="mt-1"
-                checked={loadMethod === 'sequenceLibrary'}
-                onChange={() => setLoadMethod('sequenceLibrary')}
-                disabled={isCoordinatorSurveyMode}
-              />
-              <span>
-                <span className="font-medium">G1000 user waypoint library</span>
-                <span className="block text-xs text-gray-600 font-normal mt-0.5">
-                  Unique G1000 names only—good for importing a clean waypoint list into the avionics.
-                  Requires <strong>different</strong> departure and destination identifiers (ICAO
-                  or FAA location ID / NASR—not round-robin).
-                </span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2">
-              <input
-                type="radio"
-                className="mt-1"
-                checked={loadMethod === 'coordinatorSurvey'}
-                onChange={() => setLoadMethod('coordinatorSurvey')}
-              />
-              <span>
-                <span className="font-medium">Coordinator departure choices (survey planning)</span>
-                <span className="block text-xs text-gray-600 font-normal mt-0.5">
-                  Load route waypoints only via <strong>Waypoint sequence</strong>. Compare departure
-                  airports and teams in the Survey Console—no departure or destination on this form.
-                </span>
-              </span>
-            </label>
           </div>
-          {librarySequenceInvalid && loadMethod === 'sequenceLibrary' && (
-            <p className="text-sm text-cap-pimento mb-2">
-              Enter two different airport identifiers (ICAO or FAA location ID / NASR identifier).
-              Round-robin (same airport both ends) is not available for this mode—use Waypoint
-              sequence or Load full route instead.
-            </p>
-          )}
           {loadMethod === 'route' && (
             <div className="space-y-3">
               <div>
@@ -852,30 +815,8 @@ export function NewFlightPlanPage() {
               )}
             </div>
           )}
-          {(loadMethod === 'sequence' ||
-            loadMethod === 'sequenceLibrary' ||
-            loadMethod === 'coordinatorSurvey') && (
+          {loadMethod === 'sequence' && (
             <div className="space-y-3">
-              {loadMethod === 'coordinatorSurvey' && (
-                <div className="p-3 rounded-lg bg-slate-50 border border-cap-ultramarine/25 text-sm text-gray-800">
-                  <p className="font-medium mb-1">Survey anchor plan</p>
-                  <p>
-                    After create, you&apos;ll open the Coordinator Survey Console to look up Team 1,
-                    Team 2, refuel, and other departure choices for what-if sortie planning.
-                  </p>
-                </div>
-              )}
-              {loadMethod === 'sequenceLibrary' && (
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-950">
-                  <p className="font-medium mb-1">Import-focused list</p>
-                  <p>
-                    Duplicate waypoints that resolve to the same G1000 name are skipped. After import,
-                    you can delete this flight plan from the G1000 catalog; user waypoints typically
-                    remain until you remove them. Clear survey-specific user waypoints at end of
-                    season—fixes can change next year.
-                  </p>
-                </div>
-              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Route identifier (optional) — Leave blank for blended routes
@@ -950,7 +891,7 @@ export function NewFlightPlanPage() {
                             <>
                               {' '}
                               <strong>
-                                <em>add coordinates on page after “Create Flight Plan”</em>
+                                <em>add coordinates on the page after you save</em>
                               </strong>
                             </>
                           )}
@@ -977,13 +918,6 @@ export function NewFlightPlanPage() {
                     route order.
                   </p>
                 )}
-                {loadMethod === 'coordinatorSurvey' && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    Use the same waypoint sequence entry as standard Waypoint sequence. This plan
-                    stores coordinates for survey planning only—export a pilot flight plan later with
-                    airports when crews are ready to fly.
-                  </p>
-                )}
               </div>
             </div>
           )}
@@ -997,18 +931,26 @@ export function NewFlightPlanPage() {
           <GuidedHint
             hintId={HINT_FP_CREATE}
             stepNumber={4}
-            title="Create Flight Plan"
+            title={isEditing ? 'Update Flight Plan' : 'Create Flight Plan'}
             body={
-              <>
-                Creates the plan in this device’s database and opens the flight plan detail page. You{' '}
-                <strong><em>must</em></strong> press the Create Flight Button to save the flight plan
-                before moving to another function in the application, otherwise the flight plan will
-                need to be recreated. If any waypoints are missing coordinates, you can fill them on
-                the detail page, then export a .fpl for the G1000 to your SD card when ready. When
-                importing the flight plan into the G1000, be sure to insert the SD card into the top
-                slot of the MFD <strong>before</strong> you power up the MFD. Otherwise, you may see
-                an error message saying there is no flight plan to import.
-              </>
+              isEditing ? (
+                <>
+                  Rebuilds the waypoint list on this same plan and opens the detail page again. Coordinates you
+                  already entered for a waypoint are kept if that point is still in the sequence. You must press{' '}
+                  <strong>Update Flight Plan</strong> to save the correction.
+                </>
+              ) : (
+                <>
+                  Creates the plan in this device’s database and opens the flight plan detail page. You{' '}
+                  <strong><em>must</em></strong> press Create Flight Plan to save before moving to another
+                  function, otherwise the flight plan will need to be recreated. If a waypoint is missing or
+                  extra on the next page, use <strong>Correct waypoint sequence</strong> instead of starting
+                  over. If any waypoints are missing coordinates, fill them on the detail page, then export a
+                  .fpl for the G1000 to your SD card when ready. When importing into the G1000, insert the SD
+                  card into the top slot of the MFD <strong>before</strong> you power up the MFD. Otherwise, you
+                  may see an error saying there is no flight plan to import.
+                </>
+              )
             }
             isSeen={isSeen(HINT_FP_CREATE)}
             onDismiss={markSeen}
@@ -1018,17 +960,23 @@ export function NewFlightPlanPage() {
             type="submit"
             disabled={
               loading ||
-              librarySequenceInvalid ||
+              hydrating ||
               isRoutePreviewFailed ||
               isSequencePreviewFailed
             }
             className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
           >
-            {loading ? 'Creating...' : 'Create Flight Plan'}
+            {loading
+              ? isEditing
+                ? 'Updating...'
+                : 'Creating...'
+              : isEditing
+                ? 'Update Flight Plan'
+                : 'Create Flight Plan'}
           </button>
           <button
             type="button"
-            onClick={() => navigate('/flight-plans')}
+            onClick={() => navigate(isEditing && editPlanId ? `/flight-plans/${editPlanId}` : '/flight-plans')}
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-900"
           >
             Cancel
@@ -1045,48 +993,98 @@ export function NewFlightPlanPage() {
   )
 }
 
-/**
- * Build full MTR id (e.g. IR109-AM) from optional route identifier + waypoint suffix/id.
- * If the value is already a full waypoint id, it is returned unchanged.
- */
-function normalizeWaypointToken(token: string): string {
-  // Common paste sources include punctuation (e.g. "Q)", "AK.", "IR112-AQ,").
-  // Keep only alphanumerics and hyphen, then drop leading hyphens.
-  return token.trim().toUpperCase().replace(/[^A-Z0-9-]+/g, '').replace(/^-+/, '')
+function orderedOriginalNames(plan: FlightPlanRecord, wps: WaypointRecord[]): string[] {
+  const pending = plan.pendingWaypoints ?? []
+  const wpBySeq = new Map(wps.map((w) => [w.sequence, w.originalName]))
+  const pendingBySeq = new Map(pending.map((p) => [p.sequence, p.code]))
+  const seqs = [...new Set([...wpBySeq.keys(), ...pendingBySeq.keys()])].sort((a, b) => a - b)
+  return seqs.map((seq) => wpBySeq.get(seq) ?? pendingBySeq.get(seq) ?? '').filter(Boolean)
 }
 
-function resolveWaypointToken(
-  routeIdentifier: string | undefined,
-  token: string
-): string | null {
-  const t = normalizeWaypointToken(token)
-  if (!t) return null
-
-  if (parseWaypointCode(t)) {
-    return t
+function inferSequenceFields(
+  plan: FlightPlanRecord,
+  wps: WaypointRecord[]
+): { routeIdentifier: string; waypointSequence: string } {
+  if (plan.creationWaypointSequence?.trim()) {
+    return {
+      routeIdentifier: plan.creationRouteIdentifier?.trim() ?? '',
+      waypointSequence: plan.creationWaypointSequence.trim(),
+    }
   }
-
-  const rid = (routeIdentifier ?? '').trim().toUpperCase()
-  if (!rid) return null
-
-  const route = parseRouteInput(rid)
-  if (!route) return null
-
-  const suffix = t
-  if (!suffix || !/^[A-Z0-9]+$/.test(suffix)) return null
-
-  return `${route.routeType}${route.routeNumber}-${suffix}`
+  const names = orderedOriginalNames(plan, wps)
+  const storedRoute = plan.creationRouteIdentifier?.trim() ?? ''
+  const parsed = names.map((n) => parseWaypointCode(n)).filter(Boolean) as NonNullable<
+    ReturnType<typeof parseWaypointCode>
+  >[]
+  const commonRoute =
+    storedRoute ||
+    (parsed.length > 0 &&
+    parsed.every(
+      (p) => p.routeType === parsed[0].routeType && p.routeNumber === parsed[0].routeNumber
+    )
+      ? `${parsed[0].routeType}${parsed[0].routeNumber}`
+      : '')
+  if (!commonRoute) {
+    return { routeIdentifier: '', waypointSequence: names.join(', ') }
+  }
+  const route = parseRouteInput(commonRoute)
+  const tokens = names.map((n) => {
+    const p = parseWaypointCode(n)
+    if (p && route && p.routeType === route.routeType && p.routeNumber === route.routeNumber) {
+      return p.waypointLetter
+    }
+    return n
+  })
+  return { routeIdentifier: commonRoute, waypointSequence: tokens.join(', ') }
 }
 
-function parseRouteInput(
-  input: string
-): { routeType: 'IR' | 'SR' | 'VR'; routeNumber: string } | null {
-  const upper = input.toUpperCase().trim()
-  const match = upper.match(/^(IR|SR|VR)(\d+)$/)
-  if (!match) return null
+function inferFullRouteFields(
+  plan: FlightPlanRecord,
+  wps: WaypointRecord[]
+): { routeInput: string; entry: string; exit: string } {
+  if (plan.creationRouteInput?.trim()) {
+    return {
+      routeInput: plan.creationRouteInput.trim(),
+      entry: plan.creationEntryWaypoint?.trim() || 'A',
+      exit: plan.creationExitWaypoint?.trim() || 'Q',
+    }
+  }
+  const names = orderedOriginalNames(plan, wps)
+  const first = names[0] ? parseWaypointCode(names[0]) : null
+  const last = names[names.length - 1] ? parseWaypointCode(names[names.length - 1]) : null
   return {
-    routeType: match[1] as 'IR' | 'SR' | 'VR',
-    routeNumber: match[2],
+    routeInput: first ? `${first.routeType}${first.routeNumber}` : '',
+    entry: first?.waypointLetter || 'A',
+    exit: last?.waypointLetter || 'Q',
   }
+}
+
+async function resolveAirportRecordId(input: {
+  code: string
+  fetched: AirportResult | null
+  existingAirportId?: string
+}): Promise<string | undefined> {
+  const code = input.code.trim().toUpperCase()
+  if (input.existingAirportId) {
+    const existing = await db.airports.get(input.existingAirportId)
+    if (existing && existing.identifier.toUpperCase() === code) {
+      return existing.id
+    }
+  }
+  const dep =
+    input.fetched?.identifier?.toUpperCase() === code
+      ? input.fetched
+      : await apiService.fetchAirport(input.code.trim())
+  if (!dep) return undefined
+  const id = generateId()
+  await db.airports.add({
+    id,
+    identifier: dep.identifier,
+    name: dep.name,
+    latitude: dep.latitude,
+    longitude: dep.longitude,
+    elevation: dep.elevation,
+  })
+  return id
 }
 
