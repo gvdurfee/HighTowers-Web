@@ -242,6 +242,23 @@ export function MissionMapPage() {
   }, [bounds])
 
   useEffect(() => {
+    const w = window as unknown as {
+      __htMapFlyTo?: (lng: number, lat: number, zoom: number, durationMs: number) => void
+    }
+    w.__htMapFlyTo = (lng, lat, zoom, durationMs) => {
+      mapRef.current?.flyTo({
+        center: [lng, lat],
+        zoom,
+        duration: durationMs,
+        essential: true,
+      })
+    }
+    return () => {
+      delete w.__htMapFlyTo
+    }
+  }, [])
+
+  useEffect(() => {
     if (mapReady && bounds) {
       fitMapToRoute()
     }

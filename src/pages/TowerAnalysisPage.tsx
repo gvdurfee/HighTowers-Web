@@ -86,6 +86,8 @@ export function TowerAnalysisPage() {
   const focalLength = imageMeta?.focalLengthMm ?? 50
   const sensorHeight = getSensorHeight(imageMeta?.cameraModel)
   const cameraAltitude = (() => {
+    const override = (window as unknown as { __htCameraAltitudeFt?: number }).__htCameraAltitudeFt
+    if (typeof override === 'number' && override > 0) return override
     const exif = imageMeta?.altitudeFt
     if (exif != null && exif > groundElevation) return exif
     return groundElevation + 1000

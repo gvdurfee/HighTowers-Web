@@ -33,6 +33,17 @@ type DisplayItem =
   | { type: 'waypoint'; sequence: number; waypoint: WaypointRecord }
   | { type: 'pending'; sequence: number; pending: PendingWaypoint }
 
+function WaypointColumnHeaders() {
+  return (
+    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500 pb-1.5 mb-1 border-b border-gray-200">
+      <span className="w-6 shrink-0" aria-hidden />
+      <span className="min-w-[5rem]">ForeFlight</span>
+      <span className="w-4 shrink-0" aria-hidden />
+      <span>G1000</span>
+    </div>
+  )
+}
+
 export function FlightPlanDetailPage() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
@@ -137,8 +148,9 @@ export function FlightPlanDetailPage() {
 
   const pendingWaypoints = plan.pendingWaypoints ?? []
   const showPostCreateBanner =
-    !dismissedSkippedWarning &&
-    (!!navState?.message?.trim() || pendingWaypoints.length > 0)
+    pendingWaypoints.length > 1 ||
+    (!dismissedSkippedWarning &&
+      (!!navState?.message?.trim() || pendingWaypoints.length > 0))
 
   // Merge waypoints and pending into display order by sequence
   const displayList: DisplayItem[] = []
@@ -154,6 +166,12 @@ export function FlightPlanDetailPage() {
     else if (pend)
       displayList.push({ type: 'pending', sequence: seq, pending: pend })
   }
+
+  const waypointSplit = Math.ceil(displayList.length / 2)
+  const waypointColumns = [
+    displayList.slice(0, waypointSplit),
+    displayList.slice(waypointSplit),
+  ]
 
   const supplyCoordinates = async (code: string, sequence: number) => {
     if (!plan) return
@@ -214,28 +232,26 @@ export function FlightPlanDetailPage() {
 
   return (
     <div className="app-page-shell overflow-auto">
-      <div className="app-panel max-w-3xl mx-auto p-6 md:p-8">
+      <div className="app-panel w-full min-h-full p-6 md:p-8">
       {showPostCreateBanner && (
         <div className="mb-4 p-4 bg-cap-yellow/20 border border-cap-yellow rounded-lg flex items-start justify-between gap-3">
-          <div className="text-sm text-gray-800 space-y-2">
-            {navState?.message?.trim() ? <p>{navState.message}</p> : null}
-            {pendingWaypoints.length > 0 ? (
-              <p>
-                Supply coordinates below for pending waypoints:{' '}
-                {pendingWaypoints.map((p) => p.code).join(', ')} (e.g. from ForeFlight or AP/1B).
-              </p>
-            ) : null}
-            <p>
-              If the waypoint list itself is wrong, use{' '}
-              <Link
-                to={`/flight-plans/new?edit=${plan.id}`}
-                className="text-cap-ultramarine font-medium hover:underline"
-              >
-                Correct waypoint sequence
-              </Link>{' '}
-              to edit this plan instead of starting over.
-            </p>
-          </div>
+          <p className="text-sm text-gray-800 flex-1 min-w-0">
+            {navState?.message?.trim() ? `${navState.message.trim()} ` : null}
+            {pendingWaypoints.length > 1
+              ? `More than one waypoint still needs coordinates. Supply them in the Waypoints list — scroll that panel if a pending row is not in view: ${pendingWaypoints.map((p) => p.code).join(', ')} (e.g. from ForeFlight or AP/1B). `
+              : pendingWaypoints.length > 0
+                ? `Supply coordinates below for pending waypoints: ${pendingWaypoints.map((p) => p.code).join(', ')} (e.g. from ForeFlight or AP/1B). `
+                : null}
+            If the waypoint list itself is wrong, use{' '}
+            <Link
+              to={`/flight-plans/new?edit=${plan.id}`}
+              className="text-cap-ultramarine font-medium hover:underline"
+            >
+              Correct waypoint sequence
+            </Link>{' '}
+            to edit this plan instead of starting over.
+          </p>
+          {pendingWaypoints.length <= 1 ? (
           <button
             type="button"
             onClick={() => setDismissedSkippedWarning(true)}
@@ -244,6 +260,7 @@ export function FlightPlanDetailPage() {
           >
             ✕
           </button>
+          ) : null}
         </div>
       )}
       {isAnchorPlan && (
@@ -272,7 +289,8 @@ export function FlightPlanDetailPage() {
         </button>
       </div>
 
-      <div className="space-y-6">
+      <div className="grid gap-6 lg:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] lg:items-stretch">
+        <div className="space-y-6 min-w-0">
         <section className="p-4 bg-white rounded-lg border border-gray-200">
           <h2 className="font-semibold text-gray-900 mb-3">Details</h2>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
@@ -315,131 +333,6 @@ export function FlightPlanDetailPage() {
         </section>
 
         <section className="p-4 bg-white rounded-lg border border-gray-200">
-          <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-            <h2 className="font-semibold text-gray-900">
-              Waypoints ({displayList.length})
-            </h2>
-            <Link
-              to={`/flight-plans/new?edit=${plan.id}`}
-              className="px-3 py-1.5 text-sm font-medium text-cap-ultramarine border border-cap-ultramarine/40 rounded-lg hover:bg-cap-ultramarine/5"
-            >
-              Correct waypoint sequence
-            </Link>
-          </div>
-          {displayList.length === 0 ? (
-            <p className="text-gray-500 text-sm">No waypoints</p>
-          ) : (
-            <>
-              {/* Column headers illustrate the ForeFlight → G1000 name translation. */}
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500 pb-1.5 mb-1 border-b border-gray-200">
-                <span className="w-6" aria-hidden />
-                <span className="min-w-[5rem]">ForeFlight</span>
-                <span className="w-4" aria-hidden />
-                <span>G1000</span>
-              </div>
-              <ul className="space-y-2 max-h-96 overflow-y-auto">
-                {displayList.map((item, i) => (
-                <li
-                  key={
-                    item.type === 'waypoint'
-                      ? item.waypoint.id
-                      : `pending-${item.pending.code}`
-                  }
-                  className="flex flex-wrap items-center gap-2 text-sm py-1.5"
-                >
-                  <span className="text-gray-500 w-6">{i + 1}.</span>
-                  {item.type === 'waypoint' ? (
-                    <>
-                      <span className="min-w-[5rem]">{item.waypoint.originalName}</span>
-                      <span className="text-gray-400 w-4 text-center">→</span>
-                      <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
-                        {item.waypoint.g1000Name}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="min-w-[5rem]">{item.pending.code}</span>
-                      <span className="text-gray-400 w-4 text-center">→</span>
-                      <span className="px-2 py-0.5 bg-cap-pimento/30 text-cap-pimento rounded text-xs">
-                        {convertWaypointNameToG1000(item.pending.code)}
-                      </span>
-                      <span className="text-xs text-gray-500 ml-1">
-                        Enter degrees and minutes (from ForeFlight)
-                      </span>
-                      <div className="flex flex-wrap gap-2 ml-2 items-center">
-                        <span className="text-xs text-gray-600">Latitude</span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={coordsByPending[item.pending.code]?.latDeg ?? ''}
-                          onChange={(e) =>
-                            setCoordForPending(item.pending.code, 'latDeg', e.target.value)
-                          }
-                          placeholder="34"
-                          className="w-12 px-2 py-1 border border-gray-300 rounded text-xs text-center"
-                        />
-                        <span className="text-xs text-gray-500">º</span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={coordsByPending[item.pending.code]?.latMin ?? ''}
-                          onChange={(e) =>
-                            setCoordForPending(item.pending.code, 'latMin', e.target.value)
-                          }
-                          placeholder="48.50"
-                          className="w-14 px-2 py-1 border border-gray-300 rounded text-xs text-center"
-                        />
-                        <span className="text-xs text-gray-500">' N</span>
-                        <span className="text-xs text-gray-600 ml-1">Longitude</span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={coordsByPending[item.pending.code]?.lonDeg ?? ''}
-                          onChange={(e) =>
-                            setCoordForPending(item.pending.code, 'lonDeg', e.target.value)
-                          }
-                          placeholder="106"
-                          className="w-12 px-2 py-1 border border-gray-300 rounded text-xs text-center"
-                        />
-                        <span className="text-xs text-gray-500">º</span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={coordsByPending[item.pending.code]?.lonMin ?? ''}
-                          onChange={(e) =>
-                            setCoordForPending(item.pending.code, 'lonMin', e.target.value)
-                          }
-                          placeholder="33.00"
-                          className="w-14 px-2 py-1 border border-gray-300 rounded text-xs text-center"
-                        />
-                        <span className="text-xs text-gray-500">' W</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            supplyCoordinates(item.pending.code, item.sequence)
-                          }
-                          disabled={
-                            supplyingCode === item.pending.code ||
-                            !(coordsByPending[item.pending.code]?.latDeg ?? '').trim() ||
-                            !(coordsByPending[item.pending.code]?.latMin ?? '').trim() ||
-                            !(coordsByPending[item.pending.code]?.lonDeg ?? '').trim() ||
-                            !(coordsByPending[item.pending.code]?.lonMin ?? '').trim()
-                          }
-                          className="px-3 py-1 bg-cap-ultramarine text-white rounded text-xs font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
-                        >
-                          {supplyingCode === item.pending.code ? '...' : 'Supply Coordinates'}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </li>
-              ))}
-              </ul>
-            </>
-          )}
-        </section>
-
-        <section className="p-4 bg-white rounded-lg border border-gray-200">
           <h3 className="font-semibold text-gray-900">Full flight plan</h3>
           <p className="text-sm text-gray-600 mt-1 mb-3">
             All waypoints in this plan — for G1000 import of the complete route.
@@ -470,6 +363,140 @@ export function FlightPlanDetailPage() {
             sortie <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> to that aircraft&apos;s
             Mission Pilot.
           </p>
+        </section>
+        </div>
+
+        <section className="p-4 bg-white rounded-lg border border-gray-200 min-w-0 h-full flex flex-col">
+          <div className="flex flex-wrap items-start justify-between gap-2 mb-3 shrink-0">
+            <h2 className="font-semibold text-gray-900">
+              Waypoints ({displayList.length})
+            </h2>
+            <Link
+              to={`/flight-plans/new?edit=${plan.id}`}
+              className="px-3 py-1.5 text-sm font-medium text-cap-ultramarine border border-cap-ultramarine/40 rounded-lg hover:bg-cap-ultramarine/5"
+            >
+              Correct waypoint sequence
+            </Link>
+          </div>
+          {displayList.length === 0 ? (
+            <p className="text-gray-500 text-sm">No waypoints</p>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-4 flex-1 min-h-0 overflow-y-auto">
+              {waypointColumns.map((col, colIdx) =>
+                col.length === 0 ? null : (
+                  <div key={colIdx} className="min-w-0">
+                    <WaypointColumnHeaders />
+                    <ul className="space-y-1">
+                      {col.map((item, j) => {
+                        const i = (colIdx === 0 ? 0 : waypointSplit) + j
+                        return (
+                          <li
+                            key={
+                              item.type === 'waypoint'
+                                ? item.waypoint.id
+                                : `pending-${item.pending.code}`
+                            }
+                            className="text-sm py-1.5"
+                          >
+                            {item.type === 'waypoint' ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 w-6 shrink-0">{i + 1}.</span>
+                                <span className="min-w-[5rem]">{item.waypoint.originalName}</span>
+                                <span className="text-gray-400 w-4 text-center shrink-0">→</span>
+                                <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
+                                  {item.waypoint.g1000Name}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-gray-500 w-6 shrink-0">{i + 1}.</span>
+                                  <span className="min-w-[5rem]">{item.pending.code}</span>
+                                  <span className="text-gray-400 w-4 text-center shrink-0">→</span>
+                                  <span className="px-2 py-0.5 bg-cap-pimento/30 text-cap-pimento rounded text-xs">
+                                    {convertWaypointNameToG1000(item.pending.code)}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-500 pl-8">
+                                  Enter degrees and minutes (from ForeFlight)
+                                </p>
+                                <div className="pl-8 flex items-center gap-2 whitespace-nowrap text-xs">
+                                  <span className="text-gray-600">Latitude</span>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={coordsByPending[item.pending.code]?.latDeg ?? ''}
+                                    onChange={(e) =>
+                                      setCoordForPending(item.pending.code, 'latDeg', e.target.value)
+                                    }
+                                    placeholder="34"
+                                    className="w-12 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                                  />
+                                  <span className="text-gray-500">º</span>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={coordsByPending[item.pending.code]?.latMin ?? ''}
+                                    onChange={(e) =>
+                                      setCoordForPending(item.pending.code, 'latMin', e.target.value)
+                                    }
+                                    placeholder="48.50"
+                                    className="w-14 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                                  />
+                                  <span className="text-gray-500">' N</span>
+                                  <span className="text-gray-600 ml-1">Longitude</span>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={coordsByPending[item.pending.code]?.lonDeg ?? ''}
+                                    onChange={(e) =>
+                                      setCoordForPending(item.pending.code, 'lonDeg', e.target.value)
+                                    }
+                                    placeholder="106"
+                                    className="w-12 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                                  />
+                                  <span className="text-gray-500">º</span>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={coordsByPending[item.pending.code]?.lonMin ?? ''}
+                                    onChange={(e) =>
+                                      setCoordForPending(item.pending.code, 'lonMin', e.target.value)
+                                    }
+                                    placeholder="33.00"
+                                    className="w-14 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                                  />
+                                  <span className="text-gray-500">' W</span>
+                                </div>
+                                <div className="pl-8">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      supplyCoordinates(item.pending.code, item.sequence)
+                                    }
+                                    disabled={
+                                      supplyingCode === item.pending.code ||
+                                      !(coordsByPending[item.pending.code]?.latDeg ?? '').trim() ||
+                                      !(coordsByPending[item.pending.code]?.latMin ?? '').trim() ||
+                                      !(coordsByPending[item.pending.code]?.lonDeg ?? '').trim() ||
+                                      !(coordsByPending[item.pending.code]?.lonMin ?? '').trim()
+                                    }
+                                    className="px-3 py-1 bg-cap-ultramarine text-white rounded text-xs font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
+                                  >
+                                    {supplyingCode === item.pending.code ? '...' : 'Supply Coordinates'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                )
+              )}
+            </div>
+          )}
         </section>
       </div>
 

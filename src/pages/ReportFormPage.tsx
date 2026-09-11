@@ -362,7 +362,7 @@ export function ReportFormPage() {
             hintId={HINT_REPORT_MISSION}
             stepNumber={1}
             title="Mission selection"
-            body="Pick the mission you are reporting on, or start by filling Mission Information below and creating a new mission. The form loads saved POC details, dates, and any mission notes from storage."
+            body="Pick the mission you are reporting on, or start blank and fill Date, Point of Contact, and Mission Information below. Date, Mission Number, and MTR Route are the minimum to enable Save Mission Changes."
             isSeen={isSeen(HINT_REPORT_MISSION)}
             onDismiss={markSeen}
             surface="light"
@@ -416,7 +416,7 @@ export function ReportFormPage() {
               hintId={HINT_REPORT_SAVE_FP}
               stepNumber={2}
               title="Save and flight plan"
-              body="Create or update the mission once Mission Number, MTR Route, and Date are set. Associate a flight plan when prompted so tower notes can include distance and true bearing from the route."
+              body="Save Mission Changes stays disabled until Date, Mission Number, and MTR Route are filled. Those three are the minimum. Associate a flight plan when prompted so tower notes can include distance and true bearing from the route."
               isSeen={isSeen(HINT_REPORT_SAVE_FP)}
               onDismiss={markSeen}
               surface="light"
@@ -489,7 +489,7 @@ export function ReportFormPage() {
               hintId={HINT_REPORT_POC}
               stepNumber={3}
               title="Point of contact"
-              body="Enter the customer POC exactly as it should appear on the report: name, CAP unit, phone, and email are required before you can generate the PDF."
+              body="Enter the customer POC exactly as it should appear on the report: name, CAP unit, phone, and email. These are not required to save the mission, but they are required before you can generate the PDF."
               isSeen={isSeen(HINT_REPORT_POC)}
               onDismiss={markSeen}
               surface="light"
@@ -546,7 +546,7 @@ export function ReportFormPage() {
               hintId={HINT_REPORT_MISSION_INFO}
               stepNumber={4}
               title="Mission identifiers"
-              body="Mission Number, MTR Route (letters and digits only, e.g. IR111), and the survey date identify this job on the form and in exports."
+              body="Mission Number, MTR Route (letters and digits only, e.g. IR111), and the survey Date identify this job. Those three fields enable Save Mission Changes."
               isSeen={isSeen(HINT_REPORT_MISSION_INFO)}
               onDismiss={markSeen}
               surface="light"
@@ -585,7 +585,7 @@ export function ReportFormPage() {
               hintId={HINT_REPORT_TOWERS}
               stepNumber={5}
               title="Tower rows"
-              body="Complete up to six towers. Coordinates and heights come from Tower Data Analysis; set structure type, lighting, and any extra wording here. Leave unused rows blank."
+              body="Complete up to six towers. Coordinates and heights come from Tower Data Analysis. After analysis is finished, come back here to set Structure Type and Lighting on each row — those do not fill automatically. Leave unused rows blank."
               isSeen={isSeen(HINT_REPORT_TOWERS)}
               onDismiss={markSeen}
               surface="light"
@@ -690,9 +690,11 @@ export function ReportFormPage() {
             <h2 className="text-xl font-bold mb-4">Air Force Report Form Help</h2>
             <div className="space-y-4 text-sm text-gray-700">
               <p>
-                Create a mission (Mission Number, MTR Route, Date) or select an existing one.
-                Record tower observations in Tower Data Analysis, then return here to complete
-                structure type, lighting, and notes.
+                Create a mission or select an existing one. Save Mission Changes requires Date,
+                Mission Number, and MTR Route — those three are the minimum. Record tower
+                observations in Tower Data Analysis, then return here to complete Structure Type,
+                Lighting, and notes. Coordinates and heights fill from analysis; type and lighting
+                do not.
               </p>
               <p>
                 As each reported tower data is analyzed, its distance and True bearing from

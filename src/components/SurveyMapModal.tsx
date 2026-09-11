@@ -177,6 +177,20 @@ export function SurveyMapModal({
     zoom: 16,
   })
 
+  useEffect(() => {
+    if (!isOpen) return
+    const w = window as unknown as {
+      __htSurveyNudge?: (lng: number, lat: number) => void
+    }
+    w.__htSurveyNudge = (lng, lat) => {
+      skipNextMapCenterSyncRef.current = true
+      setViewState((prev) => ({ ...prev, longitude: lng, latitude: lat }))
+    }
+    return () => {
+      delete w.__htSurveyNudge
+    }
+  }, [isOpen])
+
   const clampPanelToViewport = useCallback(() => {
     const el = modalRef.current
     if (!el) return
