@@ -44,6 +44,108 @@ function WaypointColumnHeaders() {
   )
 }
 
+type DegMinFields = { latDeg: string; latMin: string; lonDeg: string; lonMin: string }
+
+const emptyDegMin: DegMinFields = { latDeg: '', latMin: '', lonDeg: '', lonMin: '' }
+
+function decimalToDegMin(lat: number, lon: number): DegMinFields {
+  const latAbs = Math.abs(lat)
+  const lonAbs = Math.abs(lon)
+  const latDeg = Math.floor(latAbs)
+  const lonDeg = Math.floor(lonAbs)
+  return {
+    latDeg: String(latDeg),
+    latMin: ((latAbs - latDeg) * 60).toFixed(2),
+    lonDeg: String(lonDeg),
+    lonMin: ((lonAbs - lonDeg) * 60).toFixed(2),
+  }
+}
+
+function parseDegMinFields(fields: DegMinFields): { latitude: number; longitude: number } | null {
+  const latDeg = parseFloat(fields.latDeg)
+  const latMin = parseFloat(fields.latMin)
+  const lonDeg = parseFloat(fields.lonDeg)
+  const lonMin = parseFloat(fields.lonMin)
+  if (
+    Number.isNaN(latDeg) ||
+    Number.isNaN(latMin) ||
+    Number.isNaN(lonDeg) ||
+    Number.isNaN(lonMin)
+  ) {
+    return null
+  }
+  const latitude = latDeg + latMin / 60
+  const longitude = -(lonDeg + lonMin / 60)
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null
+  return { latitude, longitude }
+}
+
+function fieldsComplete(fields: DegMinFields | undefined): boolean {
+  if (!fields) return false
+  return (
+    !!fields.latDeg.trim() &&
+    !!fields.latMin.trim() &&
+    !!fields.lonDeg.trim() &&
+    !!fields.lonMin.trim()
+  )
+}
+
+function DegMinEditor({
+  fields,
+  onChange,
+}: {
+  fields: DegMinFields
+  onChange: (field: keyof DegMinFields, value: string) => void
+}) {
+  return (
+    <>
+      <p className="text-xs text-gray-500 pl-8">
+        Enter degrees and minutes (from ForeFlight)
+      </p>
+      <div className="pl-8 flex items-center gap-2 whitespace-nowrap text-xs">
+        <span className="text-gray-600">Latitude</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={fields.latDeg}
+          onChange={(e) => onChange('latDeg', e.target.value)}
+          placeholder="34"
+          className="w-12 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+        />
+        <span className="text-gray-500">º</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={fields.latMin}
+          onChange={(e) => onChange('latMin', e.target.value)}
+          placeholder="48.50"
+          className="w-14 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+        />
+        <span className="text-gray-500">' N</span>
+        <span className="text-gray-600 ml-1">Longitude</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={fields.lonDeg}
+          onChange={(e) => onChange('lonDeg', e.target.value)}
+          placeholder="106"
+          className="w-12 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+        />
+        <span className="text-gray-500">º</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={fields.lonMin}
+          onChange={(e) => onChange('lonMin', e.target.value)}
+          placeholder="33.00"
+          className="w-14 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+        />
+        <span className="text-gray-500">' W</span>
+      </div>
+    </>
+  )
+}
+
 export function FlightPlanDetailPage() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
@@ -55,10 +157,9 @@ export function FlightPlanDetailPage() {
   const [destination, setDestination] = useState<AirportRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [showExport, setShowExport] = useState(false)
-  const [coordsByPending, setCoordsByPending] = useState<
-    Record<string, { latDeg: string; latMin: string; lonDeg: string; lonMin: string }>
-  >({})
+  const [coordsByPending, setCoordsByPending] = useState<Record<string, DegMinFields>>({})
   const [supplyingCode, setSupplyingCode] = useState<string | null>(null)
+  const [editingWaypointId, setEditingWaypointId] = useState<string | null>(null)
   const { resetAll: resetAllHints } = useHintsSeen()
 
   useEffect(() => {
@@ -122,13 +223,13 @@ export function FlightPlanDetailPage() {
 
   const setCoordForPending = (
     code: string,
-    field: 'latDeg' | 'latMin' | 'lonDeg' | 'lonMin',
+    field: keyof DegMinFields,
     value: string
   ) => {
     setCoordsByPending((prev) => ({
       ...prev,
       [code]: {
-        ...(prev[code] ?? { latDeg: '', latMin: '', lonDeg: '', lonMin: '' }),
+        ...(prev[code] ?? emptyDegMin),
         [field]: value,
       },
     }))
@@ -173,24 +274,52 @@ export function FlightPlanDetailPage() {
     displayList.slice(waypointSplit),
   ]
 
+  const beginEditWaypoint = (wp: WaypointRecord) => {
+    setEditingWaypointId(wp.id)
+    setCoordsByPending((prev) => ({
+      ...prev,
+      [wp.id]: decimalToDegMin(wp.latitude, wp.longitude),
+    }))
+  }
+
+  const cancelEditWaypoint = (id: string) => {
+    setEditingWaypointId(null)
+    setCoordsByPending((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }
+
+  const saveWaypointCoordinates = async (wp: WaypointRecord) => {
+    if (!plan) return
+    const parsed = parseDegMinFields(coordsByPending[wp.id] ?? emptyDegMin)
+    if (!parsed) return
+    setSupplyingCode(wp.id)
+    try {
+      await db.waypoints.update(wp.id, {
+        latitude: parsed.latitude,
+        longitude: parsed.longitude,
+      })
+      await db.flightPlans.update(plan.id, { dateModified: new Date().toISOString() })
+      const updated = await db.flightPlans.get(plan.id)
+      if (updated) setPlan(updated)
+      const wps = await db.waypoints
+        .where('flightPlanId')
+        .equals(plan.id)
+        .sortBy('sequence')
+      setWaypoints(wps)
+      cancelEditWaypoint(wp.id)
+    } finally {
+      setSupplyingCode(null)
+    }
+  }
+
   const supplyCoordinates = async (code: string, sequence: number) => {
     if (!plan) return
-    const entry = coordsByPending[code]
-    if (!entry) return
-    const latDeg = parseFloat(entry.latDeg)
-    const latMin = parseFloat(entry.latMin)
-    const lonDeg = parseFloat(entry.lonDeg)
-    const lonMin = parseFloat(entry.lonMin)
-    if (
-      Number.isNaN(latDeg) ||
-      Number.isNaN(latMin) ||
-      Number.isNaN(lonDeg) ||
-      Number.isNaN(lonMin)
-    )
-      return
-    const latitude = latDeg + latMin / 60 // N
-    const longitude = -(lonDeg + lonMin / 60) // W = negative
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return
+    const parsed = parseDegMinFields(coordsByPending[code] ?? emptyDegMin)
+    if (!parsed) return
+    const { latitude, longitude } = parsed
     setSupplyingCode(code)
     try {
       const name = code.trim().toUpperCase()
@@ -399,13 +528,55 @@ export function FlightPlanDetailPage() {
                             className="text-sm py-1.5"
                           >
                             {item.type === 'waypoint' ? (
-                              <div className="flex items-center gap-2">
-                                <span className="text-gray-500 w-6 shrink-0">{i + 1}.</span>
-                                <span className="min-w-[5rem]">{item.waypoint.originalName}</span>
-                                <span className="text-gray-400 w-4 text-center shrink-0">→</span>
-                                <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
-                                  {item.waypoint.g1000Name}
-                                </span>
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-gray-500 w-6 shrink-0">{i + 1}.</span>
+                                  <span className="min-w-[5rem]">{item.waypoint.originalName}</span>
+                                  <span className="text-gray-400 w-4 text-center shrink-0">→</span>
+                                  <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
+                                    {item.waypoint.g1000Name}
+                                  </span>
+                                  {editingWaypointId !== item.waypoint.id ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => beginEditWaypoint(item.waypoint)}
+                                      className="ml-1 px-2 py-0.5 text-xs font-medium text-cap-ultramarine border border-cap-ultramarine/40 rounded hover:bg-cap-ultramarine/5"
+                                    >
+                                      Edit coordinates
+                                    </button>
+                                  ) : null}
+                                </div>
+                                {editingWaypointId === item.waypoint.id ? (
+                                  <>
+                                    <DegMinEditor
+                                      fields={coordsByPending[item.waypoint.id] ?? emptyDegMin}
+                                      onChange={(field, value) =>
+                                        setCoordForPending(item.waypoint.id, field, value)
+                                      }
+                                    />
+                                    <div className="pl-8 flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => saveWaypointCoordinates(item.waypoint)}
+                                        disabled={
+                                          supplyingCode === item.waypoint.id ||
+                                          !fieldsComplete(coordsByPending[item.waypoint.id])
+                                        }
+                                        className="px-3 py-1 bg-cap-ultramarine text-white rounded text-xs font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
+                                      >
+                                        {supplyingCode === item.waypoint.id ? '...' : 'Save coordinates'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => cancelEditWaypoint(item.waypoint.id)}
+                                        disabled={supplyingCode === item.waypoint.id}
+                                        className="px-3 py-1 border border-gray-300 rounded text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </>
+                                ) : null}
                               </div>
                             ) : (
                               <div className="space-y-2">
@@ -417,57 +588,12 @@ export function FlightPlanDetailPage() {
                                     {convertWaypointNameToG1000(item.pending.code)}
                                   </span>
                                 </div>
-                                <p className="text-xs text-gray-500 pl-8">
-                                  Enter degrees and minutes (from ForeFlight)
-                                </p>
-                                <div className="pl-8 flex items-center gap-2 whitespace-nowrap text-xs">
-                                  <span className="text-gray-600">Latitude</span>
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={coordsByPending[item.pending.code]?.latDeg ?? ''}
-                                    onChange={(e) =>
-                                      setCoordForPending(item.pending.code, 'latDeg', e.target.value)
-                                    }
-                                    placeholder="34"
-                                    className="w-12 px-2 py-1 border border-gray-300 rounded text-xs text-center"
-                                  />
-                                  <span className="text-gray-500">º</span>
-                                  <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={coordsByPending[item.pending.code]?.latMin ?? ''}
-                                    onChange={(e) =>
-                                      setCoordForPending(item.pending.code, 'latMin', e.target.value)
-                                    }
-                                    placeholder="48.50"
-                                    className="w-14 px-2 py-1 border border-gray-300 rounded text-xs text-center"
-                                  />
-                                  <span className="text-gray-500">' N</span>
-                                  <span className="text-gray-600 ml-1">Longitude</span>
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={coordsByPending[item.pending.code]?.lonDeg ?? ''}
-                                    onChange={(e) =>
-                                      setCoordForPending(item.pending.code, 'lonDeg', e.target.value)
-                                    }
-                                    placeholder="106"
-                                    className="w-12 px-2 py-1 border border-gray-300 rounded text-xs text-center"
-                                  />
-                                  <span className="text-gray-500">º</span>
-                                  <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={coordsByPending[item.pending.code]?.lonMin ?? ''}
-                                    onChange={(e) =>
-                                      setCoordForPending(item.pending.code, 'lonMin', e.target.value)
-                                    }
-                                    placeholder="33.00"
-                                    className="w-14 px-2 py-1 border border-gray-300 rounded text-xs text-center"
-                                  />
-                                  <span className="text-gray-500">' W</span>
-                                </div>
+                                <DegMinEditor
+                                  fields={coordsByPending[item.pending.code] ?? emptyDegMin}
+                                  onChange={(field, value) =>
+                                    setCoordForPending(item.pending.code, field, value)
+                                  }
+                                />
                                 <div className="pl-8">
                                   <button
                                     type="button"
@@ -476,10 +602,7 @@ export function FlightPlanDetailPage() {
                                     }
                                     disabled={
                                       supplyingCode === item.pending.code ||
-                                      !(coordsByPending[item.pending.code]?.latDeg ?? '').trim() ||
-                                      !(coordsByPending[item.pending.code]?.latMin ?? '').trim() ||
-                                      !(coordsByPending[item.pending.code]?.lonDeg ?? '').trim() ||
-                                      !(coordsByPending[item.pending.code]?.lonMin ?? '').trim()
+                                      !fieldsComplete(coordsByPending[item.pending.code])
                                     }
                                     className="px-3 py-1 bg-cap-ultramarine text-white rounded text-xs font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
                                   >
