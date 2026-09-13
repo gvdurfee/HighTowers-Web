@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "fcpxml": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/gregdurfeem5pro/Developer/MCP-Servers/fcp-mcp-server",
+        "run",
+        "server.py"
+      ],
+      "env": {
+        "FCP_PROJECTS_DIR": "/Users/gregdurfeem5pro/Movies/HighTowers"
+      }
+    }
+  }
+}

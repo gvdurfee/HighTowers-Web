@@ -1,0 +1,12 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fswiss\fcharset0 Helvetica-Bold;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww15520\viewh26500\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 I want you to use this prompt as an exploratory experiment. HighTowers-Web allows a user to use a digital image with its captured coordinates and elevation, along with a MapBox layer where the user searches for the base of the tower for that image. The user provides an identification of the tower top and base. Altogether, the trigonometry employed in the app allows for an accurate estimate of tower coordinates and height (AGL & MSL). What I\'92m wondering, at this point, is there a new possible enhancement? My idea primarily has to do with tower base images that we can\'92t find on the map because the age of the map we use is not updated frequently, where remote locations are concerned.\
+My idea has to do with a question: Could AI help with this?  Also, since Cursor uses LLMs to write and test software, I\'92m assuming that we can\'92t imbed an LLM as an imbedded part of a web application, but I\'92m wondering if an application can call on a subscription based general service, like ChatGPT?\
+In HighTowers-Web, we do this by providing a zoomable view to hunt for the tower base, and once found, our software makes a GET request to retrieve coordinates and ground elevation of the identified tower base. 
+\f1\b For instances where a tower base cannot be identified because the age of the map predates the tower construction, could we use AI to compare the terrain surrounding the tower image and the MapBox terrain to determine the tower location? I\'92m thinking we\'92d still use the fly-over coordinates the user inputs to bound the search.\
+Again, I\'92m thinking of this as an experiment. We could use my personal ChatGPT subscription to test this if I provide you with username and password. So, if this is doable, I suggest we do a PR to create a branch to get started? What do you think?}
