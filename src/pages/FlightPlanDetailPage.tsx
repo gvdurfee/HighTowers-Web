@@ -102,7 +102,7 @@ function DegMinEditor({
       <p className="text-xs text-gray-500 pl-8">
         Enter degrees and minutes (from ForeFlight)
       </p>
-      <div className="pl-8 flex items-center gap-2 whitespace-nowrap text-xs">
+      <div className="pl-8 flex flex-wrap items-center gap-2 text-xs">
         <span className="text-gray-600">Latitude</span>
         <input
           type="text"
@@ -418,7 +418,7 @@ export function FlightPlanDetailPage() {
         </button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] lg:items-stretch">
+      <div className="grid gap-6 lg:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] lg:items-stretch">
         <div className="space-y-6 min-w-0">
         <section className="p-4 bg-white rounded-lg border border-gray-200">
           <h2 className="font-semibold text-gray-900 mb-3">Details</h2>
@@ -510,7 +510,7 @@ export function FlightPlanDetailPage() {
           {displayList.length === 0 ? (
             <p className="text-gray-500 text-sm">No waypoints</p>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-4 flex-1 min-h-0 overflow-y-auto">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-4 flex-1 min-h-0 overflow-y-auto">
               {waypointColumns.map((col, colIdx) =>
                 col.length === 0 ? null : (
                   <div key={colIdx} className="min-w-0">
@@ -529,7 +529,7 @@ export function FlightPlanDetailPage() {
                           >
                             {item.type === 'waypoint' ? (
                               <div className="space-y-2">
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                   <span className="text-gray-500 w-6 shrink-0">{i + 1}.</span>
                                   <span className="min-w-[5rem]">{item.waypoint.originalName}</span>
                                   <span className="text-gray-400 w-4 text-center shrink-0">→</span>
@@ -540,7 +540,7 @@ export function FlightPlanDetailPage() {
                                     <button
                                       type="button"
                                       onClick={() => beginEditWaypoint(item.waypoint)}
-                                      className="ml-1 px-2 py-0.5 text-xs font-medium text-cap-ultramarine border border-cap-ultramarine/40 rounded hover:bg-cap-ultramarine/5"
+                                      className="ml-1 px-2 py-0.5 text-xs font-medium text-cap-ultramarine border border-cap-ultramarine/40 rounded hover:bg-cap-ultramarine/5 shrink-0"
                                     >
                                       Edit coordinates
                                     </button>
@@ -580,7 +580,7 @@ export function FlightPlanDetailPage() {
                               </div>
                             ) : (
                               <div className="space-y-2">
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                   <span className="text-gray-500 w-6 shrink-0">{i + 1}.</span>
                                   <span className="min-w-[5rem]">{item.pending.code}</span>
                                   <span className="text-gray-400 w-4 text-center shrink-0">→</span>

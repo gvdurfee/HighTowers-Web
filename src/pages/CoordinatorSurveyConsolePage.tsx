@@ -1050,7 +1050,7 @@ export function CoordinatorSurveyConsolePage() {
         )}
 
         {planBundle && (
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(32rem,1fr)] gap-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(28rem,1fr)] gap-6 items-start">
             <div className="space-y-6 min-w-0">
             <section className="rounded-xl border border-gray-200 bg-white p-5">
               <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
@@ -1632,7 +1632,7 @@ export function CoordinatorSurveyConsolePage() {
             </div>
 
             {(compareBundle || plannerResult) && legsResult && (
-              <section className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-5">
+              <section className="lg:col-span-2 xl:col-span-2 rounded-xl border border-gray-200 bg-white p-5">
                 <h2 className="text-lg font-semibold text-gray-900 mb-2">Results</h2>
                 <p className="text-sm text-gray-600 mb-4">
                   Sortie plan from Scenario corridor tracks and team parameters. Centerline{' '}

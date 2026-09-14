@@ -111,7 +111,7 @@ export function CorridorTrackPlanEditor({
               <p className="text-xs text-gray-500 mb-3">
                 Span: <span className="font-medium text-gray-700">{formatSpanLabel(row.fromPt, row.toPt)}</span>
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
                 <label className="block">
                   <span className="text-xs text-gray-600">Inner NM (left)</span>
                   <input
@@ -136,7 +136,7 @@ export function CorridorTrackPlanEditor({
                     aria-label={`Outer half-width NM for ${formatSpanLabel(row.fromPt, row.toPt)}`}
                   />
                 </label>
-                <label className="block sm:col-span-2 lg:col-span-1">
+                <label className="block sm:col-span-2 xl:col-span-1">
                   <span className="text-xs text-gray-600">Inner offsets (NM)</span>
                   <input
                     type="text"
@@ -147,7 +147,7 @@ export function CorridorTrackPlanEditor({
                     aria-label={`Inner parallel track offsets for ${formatSpanLabel(row.fromPt, row.toPt)}`}
                   />
                 </label>
-                <label className="block sm:col-span-2 lg:col-span-1">
+                <label className="block sm:col-span-2 xl:col-span-1">
                   <span className="text-xs text-gray-600">Outer offsets (NM)</span>
                   <input
                     type="text"
