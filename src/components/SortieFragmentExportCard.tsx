@@ -180,7 +180,7 @@ export function SortieFragmentExportCard({
         </button>
         <GuidedHint
           hintId={HINT_SORTIE_FRAGMENT_EXPORT}
-          stepNumber={6}
+          stepNumber={7}
           title="Sortie fragment vs planner export"
           body={
             <>

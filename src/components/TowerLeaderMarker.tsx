@@ -144,6 +144,7 @@ function TowerDetailLeader({ item, layout }: Props & { layout: Extract<Layout, {
             y={cy}
             textAnchor="middle"
             dominantBaseline="central"
+            transform={`rotate(${-bearingDeg} ${labelCx} ${cy})`}
             fill="#ffffff"
             fontSize={LABEL_FONT_PX}
             fontWeight="700"
@@ -159,7 +160,8 @@ function TowerDetailLeader({ item, layout }: Props & { layout: Extract<Layout, {
 
 /**
  * Tower overlay: overview circle on the tower when zoomed out; zoomed-in detail mode keeps the
- * map line anchored at the route waypoint, arrow tip on the tower, label slid toward the waypoint.
+ * map line anchored at the route waypoint, arrow tip on the tower, label slid toward the waypoint
+ * and kept screen-upright inside the circle.
  */
 export function TowerLeaderMarker({ item }: Props) {
   const { current: mapRef } = useMap()

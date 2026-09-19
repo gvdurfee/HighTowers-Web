@@ -24,8 +24,12 @@ function creationLoadMethodLabel(m: FlightPlanCreationLoadMethod): string {
 }
 import { G1000Service } from '@/services/g1000'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
+import { GuidedHint } from '@/components/GuidedHint'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
+
+const HINT_FP_WAYPOINTS = 'flightPlans.detail.waypoints'
+const HINT_FP_EXPORT_FULL = 'flightPlans.detail.exportFullRoute'
 
 type LocationState = { skippedWaypoints?: string[]; message?: string } | null
 
@@ -160,7 +164,7 @@ export function FlightPlanDetailPage() {
   const [coordsByPending, setCoordsByPending] = useState<Record<string, DegMinFields>>({})
   const [supplyingCode, setSupplyingCode] = useState<string | null>(null)
   const [editingWaypointId, setEditingWaypointId] = useState<string | null>(null)
-  const { resetAll: resetAllHints } = useHintsSeen()
+  const { isSeen, markSeen, resetAll: resetAllHints } = useHintsSeen()
 
   useEffect(() => {
     if (!id) return
@@ -462,7 +466,27 @@ export function FlightPlanDetailPage() {
         </section>
 
         <section className="p-4 bg-white rounded-lg border border-gray-200">
-          <h3 className="font-semibold text-gray-900">Full flight plan</h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold text-gray-900">Full flight plan</h3>
+            <GuidedHint
+              hintId={HINT_FP_EXPORT_FULL}
+              stepNumber={6}
+              title="Export full route"
+              body={
+                <>
+                  <strong>Export full route</strong> downloads the complete G1000{' '}
+                  <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> — every waypoint
+                  in the plan. Copy that file to the root of a FAT32 SD card, then eject the card
+                  before you remove it from the reader so the file is not corrupted. Insert the card
+                  in the top slot of the MFD before you power up; otherwise the panel may say there
+                  is no flight plan to import.
+                </>
+              }
+              isSeen={isSeen(HINT_FP_EXPORT_FULL)}
+              onDismiss={markSeen}
+              surface="light"
+            />
+          </div>
           <p className="text-sm text-gray-600 mt-1 mb-3">
             All waypoints in this plan — for G1000 import of the complete route.
             {!departure && isAnchorPlan && (
@@ -497,9 +521,27 @@ export function FlightPlanDetailPage() {
 
         <section className="p-4 bg-white rounded-lg border border-gray-200 min-w-0 h-full flex flex-col">
           <div className="flex flex-wrap items-start justify-between gap-2 mb-3 shrink-0">
-            <h2 className="font-semibold text-gray-900">
-              Waypoints ({displayList.length})
-            </h2>
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="font-semibold text-gray-900">
+                Waypoints ({displayList.length})
+              </h2>
+              <GuidedHint
+                hintId={HINT_FP_WAYPOINTS}
+                stepNumber={5}
+                title="ForeFlight and G1000 names"
+                body={
+                  <>
+                    This list shows ForeFlight-style names beside G1000 names so you can cross-check
+                    the chart and the navigator. If the ForeFlight plan starts with a blend-in (for
+                    example Golf, Sierra Romeo 214 Hotel, Golf) that is missing here, do not delete
+                    the plan and start over. Use <strong>Correct waypoint sequence</strong>.
+                  </>
+                }
+                isSeen={isSeen(HINT_FP_WAYPOINTS)}
+                onDismiss={markSeen}
+                surface="light"
+              />
+            </div>
             <Link
               to={`/flight-plans/new?edit=${plan.id}`}
               className="px-3 py-1.5 text-sm font-medium text-cap-ultramarine border border-cap-ultramarine/40 rounded-lg hover:bg-cap-ultramarine/5"

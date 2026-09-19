@@ -50,6 +50,8 @@ const PHOTO_OVERLAY_FONT_SIZE = 11
 const CAP_YELLOW = rgb(255 / 255, 217 / 255, 17 / 255)
 /** CAP ultramarine — map line / mission-map waypoint labels (tailwind cap-ultramarine) */
 const CAP_BLUE = rgb(14 / 255, 43 / 255, 141 / 255)
+/** Same red as Map View tower markers (`TOWER_MAP_COLOR` / #DB0029) */
+const CAP_TOWER_RED = rgb(219 / 255, 0, 41 / 255)
 
 /** Web Mercator Y (EPSG:3857) from latitude in degrees — matches Mapbox static map projection. */
 function webMercatorYFromLatDeg(latDeg: number): number {
@@ -111,6 +113,55 @@ function drawWaypointLabelsOnMissionMap(
       size: fontSize,
       font,
       color: CAP_BLUE,
+    })
+  }
+}
+
+function drawTowerLabelsOnMissionMap(
+  page: PDFPage,
+  font: PDFFont,
+  labelBounds: MissionMapGeographicBounds,
+  markers: MissionMapWaypointMarker[],
+  imgX: number,
+  imgY: number,
+  imgW: number,
+  imgH: number,
+  nativeImgW: number,
+  nativeImgH: number
+): void {
+  const lonSpan = Math.max(labelBounds.east - labelBounds.west, 1e-9)
+  const ySouth = webMercatorYFromLatDeg(labelBounds.south)
+  const yNorth = webMercatorYFromLatDeg(labelBounds.north)
+  const ySpan = Math.max(yNorth - ySouth, 1e-12)
+  const fontSize = 8
+  const insetX = (MAPBOX_STATIC_IMAGE_PADDING_PX / nativeImgW) * imgW
+  const insetY = (MAPBOX_STATIC_IMAGE_PADDING_PX / nativeImgH) * imgH
+  const innerW = Math.max(imgW - 2 * insetX, 1e-6)
+  const innerH = Math.max(imgH - 2 * insetY, 1e-6)
+
+  for (const m of markers) {
+    if (!m.label) continue
+    const u = (m.lon - labelBounds.west) / lonSpan
+    const yPt = webMercatorYFromLatDeg(m.lat)
+    const v = (yPt - ySouth) / ySpan
+    if (u < -0.02 || u > 1.02 || v < -0.02 || v > 1.02) continue
+    const cx = imgX + insetX + u * innerW
+    const cy = imgY + insetY + v * innerH
+    const textW = font.widthOfTextAtSize(m.label, fontSize)
+    const box = Math.max(14, textW + 5)
+    page.drawRectangle({
+      x: cx - box / 2,
+      y: cy - box / 2,
+      width: box,
+      height: box,
+      color: CAP_TOWER_RED,
+    })
+    page.drawText(m.label, {
+      x: cx - textW / 2,
+      y: cy - fontSize / 2 + 1,
+      size: fontSize,
+      font,
+      color: rgb(1, 1, 1),
     })
   }
 }
@@ -777,7 +828,10 @@ export async function generateAirForceReportPdf(
         width: scaled.width,
         height: scaled.height,
       })
-      if (mapStatic.bounds && mapStatic.waypointMarkers.length > 0) {
+      if (
+        mapStatic.bounds &&
+        (mapStatic.waypointMarkers.length > 0 || mapStatic.towerMarkers.length > 0)
+      ) {
         const labelBounds = staticImageLabelBounds(
           mapStatic.bounds,
           mapStatic.width,
@@ -789,6 +843,18 @@ export async function generateAirForceReportPdf(
           helvetica,
           labelBounds,
           mapStatic.waypointMarkers,
+          mx,
+          my,
+          scaled.width,
+          scaled.height,
+          mapStatic.width,
+          mapStatic.height
+        )
+        drawTowerLabelsOnMissionMap(
+          page,
+          helvetica,
+          labelBounds,
+          mapStatic.towerMarkers,
           mx,
           my,
           scaled.width,

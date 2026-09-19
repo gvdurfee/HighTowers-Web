@@ -17,7 +17,8 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 **How to use this document**
 
-- **NARRATION** — read as voiceover (edit wording to your Wing’s SOP).
+- **TITLE CARD NARRATION** — ElevenLabs clip `00` on the navy chapter card (not the body VO). Spoken numbers for **0** must be spelled **zero**; Flash reads `Chapter 0.` as “Chapter O.” The on-screen card still shows the digit (`Chapter 0.`). Source of the spoken strings: `~/Movies/HighTowers/Aircrew-Training/playwright/generate-chapters-00-02.py` (`title_text`).
+- **NARRATION** — read as voiceover (edit wording to your Wing’s SOP). Body beats live in `ch0N-beats.json`.
 - **ON-SCREEN** — what the viewer should see; align your cursor and pauses here.
 - **PAUSE** — hold 2–3 seconds for editors or live narration breathing room.
 
@@ -38,6 +39,10 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ## Chapter 0 — Introduction (optional, 30–45 s)
 
+**TITLE CARD NARRATION**  
+“Chapter zero. Introduction.”  
+On-screen: **Chapter 0.** / Introduction
+
 **ON-SCREEN** — Workflow Guide; slow pan down the numbered steps. Point at the coordinator sentence under the title if it is visible.
 
 **NARRATION**  
@@ -49,15 +54,19 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ## Chapter 1 — Orientation and sidebar (1–2 min)
 
+**TITLE CARD NARRATION**  
+“Chapter 1. Orientation and sidebar.”  
+On-screen: **Chapter 1.** / Orientation and sidebar
+
 **ON-SCREEN** — Left sidebar fully expanded; point at **Getting Started** → **Workflow Guide**.
 
 **NARRATION**  
-“With the Workflow Guide, every function can be branched to in the left sidebar. **Workflow Guide** is your checklist. Under **Mission Planning** you’ll use **Flight Plans** — and from there, pilots will create the flight plan for the sortie. If sortie teams are required, wing coordinators open **Coordinator Console** from the same sidebar section for sortie what-if planning; this may be needed if the training route has very wide cooridors. **Mission Execution** is **Tower Data Analysis** and **Map View**. Under **Reporting** you’ll use the **Air Force Report Form** and **Export Reported Data**. Content-pack close-out after the flight lives on **Export Reported Data**, not a separate sidebar item. Hints appear as numbered lightbulbs — optional help; you can reset them from individual pages if you want them back. But reading hints first are not a limitation if you already know how to use the tools in any section; you can just go forward and use the functionality without dismissing any help instructions first.”
+“With the Workflow Guide, every function can be branched to in the left sidebar. **Workflow Guide** is your checklist. Under **Mission Planning** you’ll use **Flight Plans** — and from there, pilots will create the flight plan for the sortie. If sortie teams are required, wing coordinators open **Coordinator Console** from the same sidebar section for sortie what-if planning; this may be needed if the training route has very wide cooridors. Coordinators load the published MTR in the console, assign aircraft and Mission Pilots when they are available, then email each sortie **.fpl** to that aircraft’s Mission Pilot. **Mission Execution** is **Tower Data Analysis** and **Map View**. **Map View** is where you compare the planned route with ForeFlight, and later confirm each saved tower marker sits on the structure. Under **Reporting** you’ll use the **Air Force Report Form** and **Export Reported Data**. Content-pack close-out after the flight lives on **Export Reported Data**, not a separate sidebar item.”
 
-**ON-SCREEN** — Sidebar **Mission Planning**: point at **Flight Plans**, then **Coordinator Console**.
+**ON-SCREEN** — Spotlight each sidebar item as it is named, once: **Workflow Guide**, **Flight Plans**, **Coordinator Console** (hold through the coordinator staffing line), **Tower Data Analysis**, **Map View**, **Air Force Report Form**, **Export Reported Data**. Use a light highlight so the label stays readable. Then spotlight **Clear All Data** at the bottom (do not click it). Do not return to Coordinator Console.
 
 **NARRATION**  
-“Coordinators load the published MTR in the console, assign aircraft and Mission Pilots when they are available, then email each sortie **.fpl** to that aircraft’s Mission Pilot.”
+“At the bottom of the sidebar, **Clear All Data** removes saved flight plans, towers, and missions from this browser. Use it only when you want a clean training or demo start. It cannot be undone.”
 
 **NARRATION**  
 “You can collapse the sidebar for more section space; expand it when you need to move between sections.”
@@ -70,14 +79,23 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ## Chapter 2 — Flight planning and G1000 export (5–8 min)
 
+**TITLE CARD NARRATION**  
+“Chapter 2. Flight planning and G1000 export.”  
+On-screen: **Chapter 2.** / Flight planning and G1000 export
+
 Demo route: **SR213** with **Waypoint sequence** (the more detailed of the two load methods). Use **KABQ** departure and **KAEG** destination. **SR213 Hotel** is usually missing from the public waypoint source, so the detail page will ask for coordinates.
 
-**ON-SCREEN** — **Flight Plans** → **New Flight Plan**. Work top to bottom on this form. Do not skip fields.
+**ON-SCREEN** — **Flight Plans** → **New Flight Plan**. Work top to bottom on this form. Do not skip fields. Numbered lightbulb tips **1–4** stay visible on this page (Name, airports, waypoint loading, Create).
 
 **NARRATION**  
 “We start with a flight plan that matches what you will fly in ForeFlight and program in the G1000. This chapter uses Waypoint sequence, the more detailed of the two load methods, on route Sierra Romeo 213. Work from the top of this page to the bottom.”
 
-**ON-SCREEN** — Name: `SR213 Training Demo`.
+**ON-SCREEN** — Open the numbered lightbulb next to **Name** so the hint popover is visible.
+
+**NARRATION**  
+“Hints appear as numbered lightbulbs — optional help; you can reset them from individual pages if you want them back. But reading hints first is not a limitation if you already know how to use the tools in any section; you can just go forward and use the functionality without dismissing any help instructions first.”
+
+**ON-SCREEN** — Dismiss the hint (Got it or Not now). Name: `SR213 Training Demo`.
 
 **NARRATION**  
 “Name the plan the way you name it in ForeFlight, so the saved plan and the exported file stay easy to recognize.”
@@ -97,7 +115,7 @@ Demo route: **SR213** with **Waypoint sequence** (the more detailed of the two l
 **NARRATION**  
 “You must press Create Flight Plan to save before you leave this page. Otherwise you will have to start again.”
 
-**ON-SCREEN** — Flight plan detail: ForeFlight vs G1000 columns. The list starts at Alpha; Hotel is pending. Point out that ForeFlight actually begins with Golf, SR214H, Golf.
+**ON-SCREEN** — Flight plan detail: ForeFlight vs G1000 columns. Open numbered lightbulb **5** next to **Waypoints**. The list starts at Alpha; Hotel is pending. Point out that ForeFlight actually begins with Golf, SR214H, Golf.
 
 **NARRATION**  
 “The next page lists ForeFlight-style names beside G1000 names so you can cross-check the chart and the navigator. If the ForeFlight plan starts with Golf, Sierra Romeo 214 Hotel, Golf, those points are missing here. Do not delete the plan and start over. Use Correct waypoint sequence.”
@@ -112,12 +130,12 @@ Demo route: **SR213** with **Waypoint sequence** (the more detailed of the two l
 **NARRATION**  
 “Hotel still needs coordinates. In ForeFlight, tap that waypoint in your flight plan and copy latitude and longitude from the popup, in degrees and minutes. You can also take them from the AP/1B. Enter them here, then press Supply Coordinates.”
 
-**ON-SCREEN** — Sidebar **Map View**. Select **SR213 Training Demo** if it is not already selected. Hold on the route line. Point at **Return to Flight Plan** without using it for a second correction.
+**ON-SCREEN** — Sidebar **Map View**. Select **SR213 Training Demo** if it is not already selected. Open numbered lightbulb **1** next to **Map View** (compare with ForeFlight). Hold on the route line. Dismiss the hint, then point at **Return to Flight Plan** without using it for a second correction.
 
 **NARRATION**  
 “Before you export, open Map View and compare this graphical flight plan with your ForeFlight map. If the two pictures match, you have a visual confirmation that the waypoint list is right. If you see a mistake, press Return to Flight Plan and use Correct waypoint sequence on that page, otherwise press Return to Flight Plan in order to load the SD card.”
 
-**ON-SCREEN** — Click **Return to Flight Plan**. Scroll to **Full flight plan** → **Export full route (.fpl)** → Export. Show the download if the browser shows it.
+**ON-SCREEN** — Click **Return to Flight Plan**. Open numbered lightbulb **6** next to **Export full route (.fpl)** (hint body is the SD-card paragraph only; do not include the Coordinator Console closer). Then **Export full route (.fpl)** → Export. Show the download if the browser shows it.
 
 **NARRATION**  
 “Export full route downloads the complete FPL, every waypoint in the plan. Copy that file to the root of a FAT32 SD card, then eject the card before you remove it from the reader, so the file is not corrupted. Insert the card in the top slot of the MFD before you power up the MFD. Otherwise the panel may say there is no flight plan to import. Sortie fragments and team assignment files are issued from **Coordinator Console**, not from this page.”
@@ -127,6 +145,10 @@ Demo route: **SR213** with **Waypoint sequence** (the more detailed of the two l
 ---
 
 ## Chapter 3 — Air Force Report Form (3–5 min)
+
+**TITLE CARD NARRATION**  
+“Chapter 3. Air Force Report Form.”  
+On-screen: **Chapter 3.** / Air Force Report Form
 
 **ON-SCREEN** — Sidebar → **Air Force Report Form**. Leave Date, Point of Contact, and Mission Information empty at first so **Save Mission Changes** is disabled. Numbered lightbulbs on this form match the same rules if you want a reminder.
 
@@ -151,12 +173,12 @@ Demo route: **SR213** with **Waypoint sequence** (the more detailed of the two l
 **ON-SCREEN** — Scroll to a tower row populated from Tower Data Analysis (coordinates and **See Notes** heights). Leave **Structure Type** and **Lighting** on Select until analysis is finished.
 
 **NARRATION**  
-“When a tower was **not found on the map** but you measured height from a nearby photo position, **Height AGL** and **Height MSL** show the estimated values with **See Notes** — for example `176 ft. - See Notes` and `5561 ft. - See Notes` — so the customer sees approximate heights without crowding the **Notes** field. **Notes** carry the explanation and true bearing and distance from the route waypoint.”
+“When a tower was **not found on the map** but you measured height from a nearby photo position, **Height AGL** and **Height MSL** show the estimated values with **See Notes** — for example `176 ft. - See the Notes for AGL` and `5561 ft. - See the Notes for MSL` — so the customer sees approximate heights without crowding the **Notes** field. **Notes** carry the explanation and true bearing and distance from the route waypoint.”
 
 **ON-SCREEN** — Set Tower 1 **Structure Type** to **Cell / Microwave** and **Lighting** to **Strobes**.
 
 **NARRATION**  
-“After Tower Data Analysis is finished, come back and set Structure Type and Lighting. Coordinates and heights fill from analysis; type and lighting do not.”
+“After Tower Data Analysis is finished, don't forget come back and set Structure Type and Lighting, since this only applies to towers being reported. Coordinates and heights fill from analysis; type and lighting do not.”
 
 **ON-SCREEN** — Scroll to **Additional Notes**.
 
@@ -168,6 +190,10 @@ Demo route: **SR213** with **Waypoint sequence** (the more detailed of the two l
 ---
 
 ## Chapter 4 — Tower Data Analysis (5–8 min)
+
+**TITLE CARD NARRATION**  
+“Chapter 4. Tower Data Analysis.”  
+On-screen: **Chapter 4.** / Tower Data Analysis
 
 **ON-SCREEN** — Sidebar → **Tower Data Analysis**.
 
@@ -190,6 +216,10 @@ Demo route: **SR213** with **Waypoint sequence** (the more detailed of the two l
 ---
 
 ## Chapter 5 — Map check, then export for the customer (4–6 min)
+
+**TITLE CARD NARRATION**  
+“Chapter 5. Export and customer deliverable.”  
+On-screen: **Chapter 5.** / Export and customer deliverable
 
 Demo continues **SR213** / mission **26-1-4224**. The PDF must show the same tower work from Chapters 3 and 4 — not a blank form. One surveyed tower is enough for this chapter.
 
@@ -229,6 +259,10 @@ Demo continues **SR213** / mission **26-1-4224**. The PDF must show the same tow
 
 ## Chapter 6 — ForeFlight content pack **close-out** (next season’s data) (4–6 min)
 
+**TITLE CARD NARRATION**  
+“Chapter 6. ForeFlight content pack close-out.”  
+On-screen: **Chapter 6.** / ForeFlight content pack close-out
+
 **ON-SCREEN** — Stay on **Export Reported Data**. Select a **mission** that has tower work. Scroll to **ForeFlight content pack (optional)**.
 
 **NARRATION**  
@@ -249,6 +283,11 @@ Demo continues **SR213** / mission **26-1-4224**. The PDF must show the same tow
 ---
 
 ## Chapter 7 — Wrap-up and recurring operations (1–2 min)
+
+**TITLE CARD NARRATION**  
+“Chapter 7. Wrap-up and recurring operations.”  
+On-screen: **Chapter 7.** / Wrap-up and recurring operations  
+*(Not yet in `generate-chapters-00-02.py`; chapters 0–6 are the current TTS set.)*
 
 **ON-SCREEN** — Return to **Workflow Guide**; highlight crew steps; optionally flash **Coordinator Console** in the sidebar.
 
@@ -400,3 +439,8 @@ Demo continues **SR213** / mission **26-1-4224**. The PDF must show the same tow
 | 2026-08-31 | Project doc | Chapter 2 rewritten for SR213 Waypoint sequence (top-to-bottom form, correct-sequence return, Hotel coords from ForeFlight, SD card). |
 | 2026-09-05 | Project doc | Aligned to sidebar Coordinator Console, two Flight Plan load methods, full-route-only aircrew export, pack prep on the console card / Wing folder, pack close-out on Export Reported Data. Kept chapter numbers 0–2 and 6–10. |
 | 2026-09-07 | Project doc | Renumbered former Chapters 6–10 to 3–7. Chapter 3: fill Date / POC / Mission Information to enable Save Mission Changes; return after analysis for Structure Type and Lighting. |
+| 2026-09-18 | Project doc | Documented title-card VO (ElevenLabs clip `00`) for chapters 0–7. Chapter 0 spoken as “Chapter zero” so TTS does not say “O.” |
+| 2026-09-18 | Project doc | Chapter 1: spotlight Flight Plans and Air Force Report Form; lighter sidebar highlight; add Clear All Data. Moved lightbulb-hint VO to Chapter 2 (first exposure). |
+| 2026-09-18 | Project doc | Chapter 1: coordinator staffing VO on first Console stop (no second pass); short Map View role. Chapter 2 detail page: numbered hints 5 (Waypoints) and 6 (Export full route). |
+| 2026-09-18 | Project doc | Hint 6 body is the SD-card paragraph only; Coordinator Console closer stays in VO after the popover. |
+| 2026-09-18 | Project doc | Chapter 2: numbered tips 1–4 visible on New Flight Plan; Map View route-check hint 1 (tower-marker hint becomes 2). |

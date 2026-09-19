@@ -303,10 +303,27 @@ export function MissionMapPage() {
     <div className="flex flex-col flex-1 min-h-0 h-full min-h-[320px]">
       <div className="shrink-0 p-4 border-b border-white/15 bg-black/25 backdrop-blur-sm flex items-center gap-4 flex-wrap text-white">
         <h1 className="text-xl font-bold text-white tracking-tight">Map View</h1>
+        <GuidedHint
+          hintId="mapView.routeCheck"
+          stepNumber={1}
+          title="Compare with ForeFlight"
+          body={
+            <>
+              Compare this graphical flight plan with your ForeFlight map. If the two pictures match,
+              you have a visual confirmation that the waypoint list is right. If you see a mistake,
+              press <strong>Return to Flight Plan</strong> and use{' '}
+              <strong>Correct waypoint sequence</strong>. Otherwise press Return to Flight Plan in
+              order to load the SD card.
+            </>
+          }
+          isSeen={isSeen('mapView.routeCheck')}
+          onDismiss={markSeen}
+          surface="dark"
+        />
         {(towerOverlayData ?? []).length > 0 && (
           <GuidedHint
             hintId="mapView.towerMarkers"
-            stepNumber={1}
+            stepNumber={2}
             title="Tower markers and zoom"
             body={
               <>

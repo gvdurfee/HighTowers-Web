@@ -2,8 +2,9 @@
  * Mapbox Static Images API — mission route + tower markers for PDF export.
  * Requires VITE_MAPBOX_ACCESS_TOKEN (same as Map View).
  *
- * Uses pin overlays for towers (shorter URLs than many GeoJSON points) and
- * no @2x suffix so dimensions stay within Mapbox limits (max 1280 per side).
+ * Route line is a GeoJSON overlay. Tower T-numbers are drawn in the PDF
+ * (same T1, T2… labels as Map View), not Mapbox pins.
+ * No @2x suffix so dimensions stay within Mapbox limits (max 1280 per side).
  */
 import { db } from '@/db/schema'
 import type { AirportRecord, FlightPlanRecord, WaypointRecord } from '@/db/schema'
@@ -41,6 +42,12 @@ export type MissionMapStaticResult = {
   width: number
   height: number
   waypointMarkers: MissionMapWaypointMarker[]
+  towerMarkers: MissionMapWaypointMarker[]
+}
+
+/** Same T1, T2… sequence as Map View overlay. */
+export function towerMarkerLabelForPdf(index: number): string {
+  return `T${index + 1}`
 }
 
 /**
@@ -179,13 +186,13 @@ function warnMapExport(msg: string): void {
 }
 
 /**
- * Build comma-separated static API overlay: optional route geojson + Mapbox pins for towers.
+ * Build static API overlay: route line, or a zero-opacity stub so a towers-only
+ * bbox request still has a valid overlay path for the API proxy.
  */
 function buildOverlayPath(
   routeCoords: [number, number][],
   towerPoints: { lon: number; lat: number }[]
 ): string {
-  const parts: string[] = []
   if (routeCoords.length >= 2) {
     const lineFeature = {
       type: 'Feature',
@@ -199,12 +206,28 @@ function buildOverlayPath(
         coordinates: routeCoords,
       },
     }
-    parts.push(`geojson(${encodeURIComponent(JSON.stringify(lineFeature))})`)
+    return `geojson(${encodeURIComponent(JSON.stringify(lineFeature))})`
   }
-  for (const p of towerPoints) {
-    parts.push(`pin-s+db0029(${roundCoord(p.lon)},${roundCoord(p.lat)})`)
+  if (towerPoints.length > 0) {
+    const p = towerPoints[0]
+    const stub = {
+      type: 'Feature',
+      properties: {
+        stroke: '#000000',
+        'stroke-width': 1,
+        'stroke-opacity': 0,
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [p.lon, p.lat],
+          [p.lon + 1e-4, p.lat],
+        ],
+      },
+    }
+    return `geojson(${encodeURIComponent(JSON.stringify(stub))})`
   }
-  return parts.join(',')
+  return ''
 }
 
 function mapboxStaticUrl(
@@ -349,6 +372,7 @@ export async function fetchMissionMapStaticPng(missionId: string): Promise<Missi
     width: IMG_W,
     height: IMG_H,
     waypointMarkers: [],
+    towerMarkers: [],
   }
   if (!isMapboxConfigured()) return empty
 
@@ -404,34 +428,27 @@ export async function fetchMissionMapStaticPng(missionId: string): Promise<Missi
       lat: wp.latitude,
       label: waypointMarkerLabelForPdf(wp, primaryKey),
     }))
+  const towerMarkers: MissionMapWaypointMarker[] = towerPoints.map((p, i) => ({
+    lon: p.lon,
+    lat: p.lat,
+    label: towerMarkerLabelForPdf(i),
+  }))
+  const labeled = { waypointMarkers, towerMarkers }
 
   let overlayPath = buildOverlayPath(routeCoords, towerPoints)
 
   let bytes = await fetchMapboxStaticPng(overlayPath, bounds)
   if (bytes?.length) {
-    return { imageBytes: bytes, bounds, width: IMG_W, height: IMG_H, waypointMarkers }
+    return { imageBytes: bytes, bounds, width: IMG_W, height: IMG_H, ...labeled }
   }
 
-  // Long URLs (414): drop route detail, keep endpoints + towers (same geographic bounds for labels)
+  // Long URLs (414): drop route detail, keep endpoints (same geographic bounds for labels)
   if (routeCoords.length > 2 && towerPoints.length > 0) {
     const ends: [number, number][] = [routeCoords[0], routeCoords[routeCoords.length - 1]]
-    const lineFeature = {
-      type: 'Feature',
-      properties: {
-        stroke: '#0E2B8D',
-        'stroke-width': 4,
-        'stroke-opacity': 0.95,
-      },
-      geometry: { type: 'LineString', coordinates: ends },
-    }
-    const shortParts = [`geojson(${encodeURIComponent(JSON.stringify(lineFeature))})`]
-    for (const p of towerPoints) {
-      shortParts.push(`pin-s+db0029(${roundCoord(p.lon)},${roundCoord(p.lat)})`)
-    }
-    overlayPath = shortParts.join(',')
+    overlayPath = buildOverlayPath(ends, towerPoints)
     bytes = await fetchMapboxStaticPng(overlayPath, bounds)
     if (bytes?.length) {
-      return { imageBytes: bytes, bounds, width: IMG_W, height: IMG_H, waypointMarkers }
+      return { imageBytes: bytes, bounds, width: IMG_W, height: IMG_H, ...labeled }
     }
   }
 
@@ -440,7 +457,7 @@ export async function fetchMissionMapStaticPng(missionId: string): Promise<Missi
     overlayPath = buildOverlayPath([], towerPoints)
     bytes = await fetchMapboxStaticPng(overlayPath, bounds)
     if (bytes?.length) {
-      return { imageBytes: bytes, bounds, width: IMG_W, height: IMG_H, waypointMarkers }
+      return { imageBytes: bytes, bounds, width: IMG_W, height: IMG_H, ...labeled }
     }
   }
 
@@ -448,8 +465,8 @@ export async function fetchMissionMapStaticPng(missionId: string): Promise<Missi
   overlayPath = buildOverlayPath(routeCoords, towerPoints)
   bytes = await fetchMapboxStaticPng(overlayPath, bounds, 800, 450)
   if (bytes?.length) {
-    return { imageBytes: bytes, bounds, width: 800, height: 450, waypointMarkers }
+    return { imageBytes: bytes, bounds, width: 800, height: 450, ...labeled }
   }
 
-  return { ...empty, waypointMarkers }
+  return { ...empty, ...labeled }
 }
