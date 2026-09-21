@@ -39,3 +39,7 @@ pnpm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# API keys and secrets (RTF docs containing keys)
+ElevenLabs Key.rtf
+*Key.rtf
