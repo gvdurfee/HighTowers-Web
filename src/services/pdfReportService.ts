@@ -27,9 +27,11 @@ import {
   type MissionMapWaypointMarker,
 } from '@/utils/missionMapStaticImage'
 import type { TowerEntry } from '@/types/reportForm'
+import { defaultTowerEntries } from '@/types/reportForm'
 import {
   ADDITIONAL_NOTES_MAX_LENGTH,
   additionalNotesForPdf,
+  NO_NEW_TOWERS_NOTES,
 } from '@/constants/reportCopy'
 
 /** US Letter landscape for tower photos and mission map appendix */
@@ -619,21 +621,38 @@ export interface ReportFormData {
   towerEntries: TowerEntry[]
 }
 
+export type AirForceReportPdfOptions = {
+  /**
+   * Mission identification and Additional Notes only.
+   * Tower rows, photos, and the mission-map appendix are omitted.
+   */
+  noNewTowers?: boolean
+}
+
 export async function generateAirForceReportPdf(
   missionId: string,
-  formData: ReportFormData
+  formData: ReportFormData,
+  options?: AirForceReportPdfOptions
 ): Promise<Uint8Array> {
+  const noNewTowers = options?.noNewTowers === true
   const mission = await db.missions.get(missionId)
   if (!mission) throw new Error('Mission not found')
 
-  const reports = await db.towerReports
-    .where('missionId')
-    .equals(missionId)
-    .sortBy('reportDate')
+  const reports = noNewTowers
+    ? []
+    : await db.towerReports.where('missionId').equals(missionId).sortBy('reportDate')
 
   const locations = await Promise.all(
     reports.map((r) => db.towerLocations.get(r.towerLocationId))
   )
+
+  const pdfFormData: ReportFormData = noNewTowers
+    ? {
+        ...formData,
+        additionalNotes: NO_NEW_TOWERS_NOTES,
+        towerEntries: defaultTowerEntries(),
+      }
+    : formData
 
   let waypoints: WaypointRecord[] = []
   if (mission.flightPlanId) {
@@ -658,7 +677,7 @@ export async function generateAirForceReportPdf(
   const mappings = buildFieldMappings(
     reports,
     locations,
-    formData,
+    pdfFormData,
     waypoints
   )
 
@@ -697,21 +716,37 @@ export async function generateAirForceReportPdf(
   }
 
   const rowNotesForForce: string[] = ['', '', '', '', '', '']
-  for (let i = 0; i < Math.min(6, reports.length, formData.towerEntries.length); i++) {
-    const loc = locations[i]
-    const e = formData.towerEntries[i]
-    const computed = formatDistanceBearingNotes(loc, waypoints)
-    const manual = (e?.notes ?? '').trim()
-    rowNotesForForce[i] =
-      loc && towerHeightsUseSeeNotes(loc)
-        ? manual
-        : mergeBearingNotesWithManual(computed, manual)
+  if (!noNewTowers) {
+    for (let i = 0; i < Math.min(6, reports.length, pdfFormData.towerEntries.length); i++) {
+      const loc = locations[i]
+      const e = pdfFormData.towerEntries[i]
+      const computed = formatDistanceBearingNotes(loc, waypoints)
+      const manual = (e?.notes ?? '').trim()
+      rowNotesForForce[i] =
+        loc && towerHeightsUseSeeNotes(loc)
+          ? manual
+          : mergeBearingNotesWithManual(computed, manual)
+    }
   }
   forceTowerNotesIntoPdfFields(form, rowNotesForForce)
 
-  applyBlankRouteSurveyStructureLightingCheckboxes(form, reports, formData.towerEntries)
+  if (noNewTowers) {
+    try {
+      const notesField = form.getTextField('NotesRow1')
+      notesField.setFontSize(8)
+      notesField.setText(NO_NEW_TOWERS_NOTES)
+    } catch {
+      /* template notes cell missing */
+    }
+  }
+
+  applyBlankRouteSurveyStructureLightingCheckboxes(form, reports, pdfFormData.towerEntries)
 
   form.updateFieldAppearances()
+
+  if (noNewTowers) {
+    return pdfDoc.save()
+  }
 
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)

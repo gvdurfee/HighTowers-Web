@@ -57,6 +57,8 @@ export function ExportDataPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   /** When true, hide ForeFlight pack upload (PDF-only close-out). */
   const [noContentPackUpdate, setNoContentPackUpdate] = useState(false)
+  /** Header-only Air Force PDF: mission ID plus a no-towers note; no photos or map. */
+  const [noNewTowers, setNoNewTowers] = useState(false)
 
   const selectedMission = selectedMissionId
     ? (missions ?? []).find((m) => m.id === selectedMissionId)
@@ -128,7 +130,9 @@ export function ExportDataPage() {
     setIsGenerating(true)
     setErrorMessage(null)
     try {
-      const pdfBytes = await generateAirForceReportPdf(selectedMissionId, formData)
+      const pdfBytes = await generateAirForceReportPdf(selectedMissionId, formData, {
+        noNewTowers,
+      })
       const mission = await db.missions.get(selectedMissionId)
       const name = mission?.name ?? 'Report'
       const dateStr = formData.date.replace(/\//g, '-')
@@ -178,6 +182,7 @@ export function ExportDataPage() {
               onChange={(e) => {
                 setSelectedMissionId(e.target.value || null)
                 setFormData(null)
+                setNoNewTowers(false)
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg"
             >
@@ -206,9 +211,33 @@ export function ExportDataPage() {
         <section className="space-y-4">
           <h2 className="text-lg font-semibold text-gray-900">Air Force report (PDF)</h2>
           <p className="text-sm text-gray-600">
-            Includes a mission map (route and towers) when Mapbox is configured. Tower photos use a
-            CAP-style location overlay and are compressed to ~500KB each for email sharing.
+            {noNewTowers
+              ? 'The PDF will include mission identification and a note that no new towers were found. Tower rows, photos, and the mission map are left out.'
+              : 'Includes a mission map (route and towers) when Mapbox is configured. Tower photos use a CAP-style location overlay and are compressed to ~500KB each for email sharing.'}
           </p>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={noNewTowers}
+              onChange={(e) => {
+                const checked = e.target.checked
+                setNoNewTowers(checked)
+                if (checked) setNoContentPackUpdate(true)
+              }}
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-cap-ultramarine focus:ring-cap-ultramarine"
+            />
+            <span className="text-sm text-gray-800">
+              <span className="font-medium text-gray-900">
+                No new towers found on this mission
+              </span>
+              <span className="block text-gray-600 mt-0.5">
+                Check this when the Air Force still needs a report but there is nothing new to
+                chart. The first row&apos;s Notes column will read &ldquo;No new towers were found
+                on this mission.&rdquo; Mission number, route, date, and contact fields stay filled
+                in. Tower checkboxes, photos, and the mission map are left blank.
+              </span>
+            </span>
+          </label>
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               type="button"

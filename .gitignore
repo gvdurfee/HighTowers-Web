@@ -18,6 +18,10 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Local API keys — never commit
+ElevenLabs Key.rtf
+Eleven Labs Key.rtf
+
 # Logs
 logs
 *.log

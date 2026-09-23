@@ -1,6 +1,9 @@
 /** Shown in the Report Form textarea by default and in the PDF when the user leaves notes blank. */
 export const ADDITIONAL_NOTES_DEFAULT = 'Nothing additional to report.'
 
+/** Header-only Air Force PDF when the sortie found no new towers to report. */
+export const NO_NEW_TOWERS_NOTES = 'No new towers were found on this mission.'
+
 /** AcroForm + app textarea cap so PDF fill and UI stay aligned (tower row fields stay at 240 in the PDF layer). */
 export const ADDITIONAL_NOTES_MAX_LENGTH = 1500
 
