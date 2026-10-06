@@ -30,7 +30,7 @@ Navigate to: **GitHub → gvdurfee/HighTowers-Web → Settings → Secrets and v
 
 | Name | Required | Purpose | Example Value |
 |------|----------|---------|---------------|
-| `VITE_API_BASE_URL` | Optional* | Node API origin for MTR/imagery | `https://hightowers-api.fly.dev` (no trailing slash) |
+| `VITE_API_BASE_URL` | Optional* | Node API origin for MTR/imagery | `https://hightowers-api.up.railway.app` (no trailing slash) |
 
 \* **Optional for initial deploy:** If `VITE_API_BASE_URL` is blank, the app will deploy in "frontend-only" mode. Users can still create flight plans and tower reports, but MTR waypoint lookup, NAIP imagery, and Content Pack features require the API.
 
@@ -58,7 +58,7 @@ Navigate to: **GitHub → gvdurfee/HighTowers-Web → Settings → Secrets and v
 
 ## P1-2: Deploy Node.js API
 
-**Who can do this:** Developer with access to deploy external services (Fly.io, Render, or Railway account)
+**Who can do this:** Developer with access to deploy external services (Railway or Render account)
 
 ### Prerequisites
 
@@ -69,25 +69,28 @@ Navigate to: **GitHub → gvdurfee/HighTowers-Web → Settings → Secrets and v
 
 ### Deployment options (choose one)
 
-#### Option A: Fly.io (recommended for production)
-
-**Pros:** Docker-based, explicit VM, easy handoff to wing IT  
-**Docs:** `docs/API_HOSTING.md` § Fly.io
+Set these environment variables on whichever host you use:
 
 ```bash
-cd server
-fly launch  # Follow prompts, use existing Dockerfile
-fly secrets set \
-  CORS_ORIGINS=https://gvdurfee.github.io \
-  VITE_MAPBOX_ACCESS_TOKEN=<your-token> \
-  CONTENT_PACK_API_KEY=<your-32-char-key> \
-  CONTENT_PACK_ADMIN_PIN=<your-pin> \
-  CONTENT_PACK_ADMIN_SECRET=<your-16-char-secret>
-
-# Note the public URL (e.g. https://hightowers-api.fly.dev)
+CORS_ORIGINS=https://gvdurfee.github.io
+VITE_MAPBOX_ACCESS_TOKEN=<your-token>
+CONTENT_PACK_API_KEY=<your-32-char-key>
+CONTENT_PACK_ADMIN_PIN=<your-pin>
+CONTENT_PACK_ADMIN_SECRET=<your-16-char-secret>
 ```
 
-#### Option B: Render (simplest for first deploy)
+#### Option A: Railway (current training host)
+
+**Pros:** Fast GitHub deploy, good for temporary training hosting  
+**Docs:** `docs/API_HOSTING.md` § Railway (full walkthrough)
+
+1. [railway.com](https://railway.com) → New Project → Deploy from GitHub
+2. Root directory: `server`
+3. Environment variables from the block above
+4. Add Volume: `/app/.mtr-cache` (persists FAA NASR downloads)
+5. Generate Domain → note public URL
+
+#### Option B: Render
 
 **Pros:** No CLI needed, connect GitHub, auto-deploy  
 **Docs:** `docs/API_HOSTING.md` § Render
@@ -98,19 +101,8 @@ fly secrets set \
    - **Root Directory:** `server`
    - **Build Command:** `npm ci`
    - **Start Command:** `npm start`
-4. Environment Variables (same as Fly.io above)
+4. Environment variables from the block above
 5. Deploy and note the public URL
-
-#### Option C: Railway (interim training)
-
-**Pros:** Fast GitHub deploy, good for temporary training hosting  
-**Docs:** `docs/API_HOSTING.md` § Railway (full walkthrough)
-
-1. [railway.com](https://railway.com) → New Project → Deploy from GitHub
-2. Root directory: `server`
-3. Environment Variables (same as Fly.io above)
-4. Add Volume: `/app/.mtr-cache` (persists FAA NASR downloads)
-5. Generate Domain → note public URL
 
 ### After deployment
 
@@ -118,7 +110,7 @@ fly secrets set \
 
    ```bash
    # Replace with your deployed URL
-   export API_BASE=https://YOUR-API-HOST.fly.dev
+   export API_BASE=https://YOUR-API-HOST.up.railway.app
    
    # Test cycle endpoint (no auth)
    curl -sS "$API_BASE/api/mtr/cycle"
@@ -132,7 +124,7 @@ fly secrets set \
 
 2. **Update GitHub Pages:**
    - GitHub → Settings → Secrets and variables → Actions → **Variables**
-   - Set `VITE_API_BASE_URL` = `https://YOUR-API-HOST.fly.dev` (origin only, no `/api` suffix)
+   - Set `VITE_API_BASE_URL` = `https://YOUR-API-HOST.up.railway.app` (origin only, no `/api` suffix)
    - Actions → Deploy to GitHub Pages → Run workflow
 
 3. **Test end-to-end:**
@@ -186,9 +178,8 @@ This ensures all 77 tests pass before deploying to Pages.
 
 **Add to `docs/API_HOSTING.md` or Wing administrator guide:**
 
-- Fly.io: `fly volumes snapshots` or daily cron backup
-- Render: export SQLite + copy `data/content-packs/` to S3/Dropbox
 - Railway: volume backups or external storage
+- Render: export SQLite + copy `data/content-packs/` to S3/Dropbox
 - Critical: back up `data/content-packs/` directory (SQLite + ZIPs) together
 
 ---

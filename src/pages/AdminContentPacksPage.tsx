@@ -268,7 +268,7 @@ export function AdminContentPacksPage() {
               <p>
                 Sign-in and content packs need the Node server, not GitHub Pages alone. On GitHub: Settings → Secrets and
                 variables → Actions → Variables → set <strong>VITE_API_BASE_URL</strong> to your API origin (e.g.{' '}
-                <code className="text-xs bg-white/80 px-1 rounded">https://your-api.fly.dev</code>), then run the Pages
+                <code className="text-xs bg-white/80 px-1 rounded">https://your-api.up.railway.app</code>), then run the Pages
                 workflow again. Put <strong>CONTENT_PACK_ADMIN_PIN</strong> and <strong>CORS_ORIGINS</strong> on that
                 server. See <code className="text-xs">docs/API_HOSTING.md</code>.
               </p>

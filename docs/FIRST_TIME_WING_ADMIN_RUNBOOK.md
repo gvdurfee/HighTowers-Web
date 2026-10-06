@@ -15,7 +15,7 @@ Plain-language checklist for hosting the crew app on **GitHub Pages**, deploying
 | Crew app (GitHub Pages) | https://gvdurfee.github.io/HighTowers-Web/ |
 | Wing Administrator Console | https://gvdurfee.github.io/HighTowers-Web/admin/content-packs |
 
-Replace API hostnames below with your deployed origin (for example `https://hightowers-api.fly.dev`).
+Replace API hostnames below with your deployed origin (for example `https://hightowers-api.up.railway.app`).
 
 ---
 
@@ -41,7 +41,7 @@ flowchart LR
 | Piece | What it does | Where you configure it |
 |-------|----------------|------------------------|
 | GitHub Pages | Serves the built React app | Push to `main`; workflow [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) |
-| Node API | Content packs, admin PIN, MTR, map proxy | Fly.io, Render, Railway, or wing host; [API_HOSTING.md](./API_HOSTING.md) |
+| Node API | Content packs, admin PIN, MTR, map proxy | Railway, Render, or a later wing host; [API_HOSTING.md](./API_HOSTING.md) |
 | `VITE_API_BASE_URL` | Bakes API origin into the Pages build | GitHub → Settings → Secrets and variables → Actions → **Variables** |
 | `CONTENT_PACK_ADMIN_PIN` | Human sign-in for admin console | **API server only** (not GitHub) |
 | `CONTENT_PACK_API_KEY` | Authorizes `/api/content-packs/*` | **API server** + **this browser** (see Part 3) |
@@ -53,9 +53,8 @@ flowchart LR
 
 ### 1.1 Choose a host
 
-- **Recommended:** [Fly.io](https://fly.io) using [`server/Dockerfile`](../server/Dockerfile) — see [API_HOSTING.md](./API_HOSTING.md).
-- **Alternative:** [Render](https://render.com) — Web Service, repository root directory **`server`**, build `npm ci`, start `npm start`.
-- **Alternative (interim training):** [Railway](https://railway.com) — deploy from GitHub, root directory **`server`**, start `npm start`, volume on `/app/.mtr-cache` — full steps in [API_HOSTING.md](./API_HOSTING.md#railway-example).
+- **Current training host:** [Railway](https://railway.com) — deploy from GitHub, root directory **`server`**, start `npm start`, volume on `/app/.mtr-cache` — full steps in [API_HOSTING.md](./API_HOSTING.md#railway-example).
+- **Alternate:** [Render](https://render.com) — Web Service, repository root directory **`server`**, build `npm ci`, start `npm start`.
 
 ### 1.2 Create secrets (store in a password manager)
 
@@ -90,7 +89,7 @@ curl -sS -H "X-API-Key: YOUR_CONTENT_PACK_API_KEY" \
   "https://YOUR-API-HOST/api/content-packs"
 ```
 
-(Replace `YOUR-API-HOST` with your Fly, Render, or Railway HTTPS origin, e.g. `hightowers-api.fly.dev` or `hightowers-api.up.railway.app`.)
+(Replace `YOUR-API-HOST` with your Railway or Render HTTPS origin, e.g. `hightowers-api.up.railway.app`.)
 
 Expect JSON like `{ "packs": [ ... ] }` (possibly an empty list), not a connection or auth error.
 
@@ -110,7 +109,7 @@ Repository: **gvdurfee/HighTowers-Web**
 
    **Variable (API):**
 
-   - `VITE_API_BASE_URL` = `https://YOUR-API-HOST` (e.g. `https://hightowers-api.fly.dev` or `https://hightowers-api.up.railway.app`)
+   - `VITE_API_BASE_URL` = `https://YOUR-API-HOST` (e.g. `https://hightowers-api.up.railway.app`)
    - **Origin only** — no `/api` suffix, no trailing path.
 
 2. **Settings → Pages**
@@ -240,7 +239,7 @@ The admin UI does not include a **Download** button. Use the pack **id** from In
 
 ```bash
 export API_KEY='YOUR_CONTENT_PACK_API_KEY'
-export API_BASE='https://YOUR-API-HOST.fly.dev'
+export API_BASE='https://YOUR-API-HOST.up.railway.app'
 export PACK_ID='paste-full-uuid-from-inventory'
 
 curl -fsSL -H "X-API-Key: $API_KEY" \

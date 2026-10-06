@@ -163,7 +163,7 @@ VITE_BASE_PATH=/HighTowers-Web/ npm run preview
 4. Verify Pages deploys successfully
 
 **Priority 2: API Deployment (P1-2)**
-1. Follow `docs/API_HOSTING.md` (Fly.io/Render/Railway)
+1. Follow `docs/API_HOSTING.md` (Railway or Render)
 2. Set `CORS_ORIGINS=https://gvdurfee.github.io`
 3. Configure Mapbox, API key, and admin PIN
 4. Update `VITE_API_BASE_URL` in GitHub variables

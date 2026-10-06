@@ -164,7 +164,7 @@ export function ExportDataPage() {
 
   return (
     <div className="app-page-shell overflow-auto">
-      <div className="app-panel max-w-2xl mx-auto p-6 md:p-8 space-y-8">
+      <div className="app-panel w-full p-6 md:p-8 space-y-8">
         <header>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Export Reported Data</h1>
           <p className="text-gray-600">
@@ -175,7 +175,7 @@ export function ExportDataPage() {
         </header>
 
         {!selectedMissionId && (missions ?? []).length > 0 && (
-          <div>
+          <div className="max-w-md">
             <label className="block text-sm font-medium text-gray-700 mb-2">Select mission</label>
             <select
               value={selectedMissionId ?? ''}
@@ -196,6 +196,8 @@ export function ExportDataPage() {
           </div>
         )}
 
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        <div className="space-y-8">
         {selectedMission && formData && (
           <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
             <h2 className="font-semibold text-gray-900 mb-2">{selectedMission.name}</h2>
@@ -262,6 +264,7 @@ export function ExportDataPage() {
             <p className="text-sm text-gray-500">Loading mission data…</p>
           )}
         </section>
+        </div>
 
         {selectedMission && (
           <section className="space-y-4">
@@ -297,6 +300,7 @@ export function ExportDataPage() {
             )}
           </section>
         )}
+        </div>
       </div>
     </div>
   )

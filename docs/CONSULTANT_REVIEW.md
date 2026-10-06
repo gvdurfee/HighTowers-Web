@@ -20,7 +20,7 @@ HighTowers-Web is a **well-architected, production-ready** Civil Air Patrol towe
 - **🟡 GitHub Pages deployment ready** — workflow configured, needs secrets verification
 - **🔴 P0 Security issue** — `ElevenLabs Key.rtf` committed to git (likely contains API key)
 - **🟡 Dependency vulnerabilities** — 22 npm audit issues (3 low, 7 moderate, 10 high, 2 critical)
-- **🟡 Deployment environment verification needed** — API hosting requires external setup (Fly.io/Railway/Render)
+- **🟡 Deployment environment verification needed** — API hosting requires external setup (Railway/Render)
 
 **Ship-readiness verdict:** The app is **80% ready to ship**. Address the P0 security issue immediately, verify GitHub secrets, and complete the deployment checklist. No major architectural changes required.
 
@@ -74,7 +74,7 @@ curl -sI https://gvdurfee.github.io/HighTowers-Web/
 
 **Fix:** Navigate to GitHub → Settings → Secrets and variables → Actions:
 - **Secret:** `VITE_MAPBOX_ACCESS_TOKEN` = your Mapbox token
-- **Variable:** `VITE_API_BASE_URL` = deployed API origin (e.g., `https://hightowers-api.fly.dev`)
+- **Variable:** `VITE_API_BASE_URL` = deployed API origin (e.g., `https://hightowers-api.up.railway.app`)
 
 **Smoke test checklist:** Follow `docs/SMOKE_TEST.md` Section A after confirming secrets.
 
@@ -87,7 +87,7 @@ curl -sI https://gvdurfee.github.io/HighTowers-Web/
 - NAIP imagery overlay (Survey Location)
 - ForeFlight Content Pack library (optional)
 
-**Status:** API must be deployed separately to Fly.io, Render, Railway, or wing infrastructure. Documentation is comprehensive, but no evidence of live deployment.
+**Status:** API must be deployed separately to Railway, Render, or later wing infrastructure. Documentation is comprehensive, but no evidence of live deployment.
 
 **Fix:** Follow `docs/API_HOSTING.md` to deploy `server/` and set:
 ```env
@@ -195,7 +195,6 @@ Impact: Minor CSS/JS compatibility. Run before next deploy.
 **Issue:** SQLite database and ZIP blobs stored in `./data/content-packs` (configurable via `CONTENT_PACK_DATA_DIR`). No automated backup documented.
 
 **Recommendation:** Document backup strategy in `docs/API_HOSTING.md`:
-- Fly.io: use volumes with snapshots
 - Railway: persistent volumes
 - Render: external storage (S3)
 
@@ -321,7 +320,7 @@ Impact: Minor CSS/JS compatibility. Run before next deploy.
 ### Node API (server/)
 
 **Pre-deployment:**
-- [ ] Choose hosting platform (Fly.io, Render, Railway, or wing infrastructure)
+- [ ] Choose hosting platform (Railway, Render, or later wing infrastructure)
 - [ ] Set environment variables:
   ```env
   CORS_ORIGINS=https://gvdurfee.github.io
@@ -417,7 +416,7 @@ Impact: Minor CSS/JS compatibility. Run before next deploy.
 The docs/ directory is **exceptionally thorough** and operationally focused:
 
 1. **`FIRST_TIME_WING_ADMIN_RUNBOOK.md`** — Step-by-step GitHub Pages + API setup
-2. **`API_HOSTING.md`** — Fly.io, Render, Railway deployment guides
+2. **`API_HOSTING.md`** — Railway and Render deployment guides
 3. **`CONTENT_PACK_ADMIN.md`** — Wing administrator operations (PIN, backups, bulk import)
 4. **`CONTENT_PACK_API.md`** — API contract documentation
 5. **`SMOKE_TEST.md`** — Post-deploy verification checklist
@@ -477,7 +476,7 @@ Then trigger workflow: **Actions → Deploy to GitHub Pages → Run workflow**
 
 ### 4. Deploy Node API (P1-2)
 
-Follow `docs/API_HOSTING.md` to deploy `server/` to Fly.io, Render, or Railway:
+Follow `docs/API_HOSTING.md` to deploy `server/` to Railway or Render:
 - Set `CORS_ORIGINS=https://gvdurfee.github.io`
 - Set `VITE_MAPBOX_ACCESS_TOKEN`, `CONTENT_PACK_API_KEY`, `CONTENT_PACK_ADMIN_PIN`
 - Configure persistent volumes for `.mtr-cache` and `data/content-packs/`

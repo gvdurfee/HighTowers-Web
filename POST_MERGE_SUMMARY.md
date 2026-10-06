@@ -67,7 +67,7 @@
 
 2. **Deploy Node API (P1-2)** - 15-30 minutes  
    - Follow: `docs/DEPLOYMENT_VERIFICATION_CHECKLIST.md`
-   - Platform options: Fly.io (recommended), Render, or Railway
+   - Platform options: Railway (current training host) or Render
    - Set environment variables (CORS, tokens, API keys)
 
 3. **Run Full Smoke Tests** - 5 minutes
@@ -135,7 +135,7 @@ Use this to track remaining deployment tasks:
 - ⬜ Verify Pages deploys successfully
 
 **API Deployment:**
-- ⬜ Choose hosting platform (Fly.io/Render/Railway)
+- ⬜ Choose hosting platform (Railway or Render)
 - ⬜ Set CORS_ORIGINS environment variable
 - ⬜ Set API keys and admin PIN
 - ⬜ Configure persistent volumes
@@ -168,7 +168,7 @@ npm run build
 npm run preview  # Open http://localhost:4173/HighTowers-Web/
 
 # Smoke test API (after deployment)
-export API_BASE=https://YOUR-API-HOST.fly.dev
+export API_BASE=https://YOUR-API-HOST.up.railway.app
 curl -sS "$API_BASE/api/mtr/cycle"
 ```
 

@@ -198,12 +198,12 @@ On-screen: **Chapter 4.** / Tower Data Analysis
 **ON-SCREEN** — Sidebar → **Tower Data Analysis**.
 
 **NARRATION**  
-“Here each tower gets a photo, a map position, and a height workflow. This is where you spend most of your airborne or post-flight time per structure.”
+“Here each tower uses a photo image, a map position, and a tower height for this workflow. This is where you spend most of your airborne or post-flight time per structure. The detail on how to use this capability follows. But, you start by selecting a tower image to measure, by pressing the "Select Image' button, and pick the JPEG file of the photo on your computer that you want to analyze.”
 
-**ON-SCREEN** — Select a tower photo; show **Look for Tower on Map** and placing the marker. If demoing estimated placement, check **Tower not visible on map** before **Record Location**.
+**ON-SCREEN** — Select a tower photo , using the "Select Image" button on-screen, from the files you loaded on to the computer you're using for the report; show **Look for Tower on Map** and placing the marker. If demoing estimated placement, check **Tower not visible on map** before **Record Location**.
 
 **NARRATION**  
-“Use **Look for Tower on Map** to drop the tower on the satellite image so latitude and longitude match what you measured. If the structure isn’t visible on the imagery, check **Tower not visible on map** before you record — you can still place a best-effort position nearby and run the height sliders.”
+“Use **Look for Tower on Map** to identify the vicinity of the tower base on the satellite image, so that finding the actual location can start with what you recorded on the fly over. A useful techinque during the flight, is to fly over the tower you're going to take a picture of, and when the pilot indicates the aircraft is crossing over the tower, the aircreww member in the right seat presses in the range knob on the G1000 Multi Function Display; this will capture the coordinates for the flyover location when the button was pressed. These coordinates can be written down, or the aircrew member can take a picture of the panel for use when the Tower Data Analysis is done for the tower. These coordinates are what's used to populate the "Lat and Lon" text under the map segment. This feature provides a small, movable section of the aerial map that's used for the tower base location to be identified with the cross inside the blue circle; since the map segment is moveable, the user can zoom and move the map until the tower base is right under the cross. This location is recorded for use in the Tower Data Analysis.  If the structure isn’t visible on the map imagery, check **Tower not visible on map** before you record — you can still place a best-effort position nearby by moving the map until the estimated spot is covered by the cross in the blue circle, based on terrain comparison with the map and the photo; press "Record Location", then you can run the height sliders.”
 
 **ON-SCREEN** — After **Record Location**, animate red then blue onto the locked pose (tip / pad-and-shadow) and hold. Then play the height VO over that still; **Save Tower**.
 
@@ -226,7 +226,7 @@ Demo continues **SR213** / mission **26-1-4224**. The PDF must show the same tow
 **ON-SCREEN** — Sidebar → **Map View**. Flight plan **SR213 Training Demo**. Mission **26-1-4224** so surveyed towers draw. Hold the full-route fit: red leader from the nearest waypoint to the tower.
 
 **NARRATION**  
-“After analysis, come back to **Map View** before you email anything. With the flight plan and this mission selected, each reported tower draws as a marker on a line from the nearest route waypoint. That is your check that the point you saved actually sits on the structure.”
+“If no new towers were discovered, check the box indicating this; the Airforce customer still needs a record of the survey results. The Air Force Report form is filled out with the note hat no new towers were found. Additionally, there is no need to modify the ForeFlight Content pack for the same reason But for missions that resulted with new towers found, the following is followed: After analysis, come back to **Map View** before you email anything. With the flight plan and this mission selected, each reported tower draws as a marker on a line from the nearest route waypoint. That is your check that the point you saved actually sits on the structure.”
 
 **ON-SCREEN** — Picture-first: zoom in on the one SR213 tower marker until the arrowhead locks on the base; hold that pose, then VO.
 
@@ -292,13 +292,13 @@ On-screen: **Chapter 7.** / Wrap-up and recurring operations
 **ON-SCREEN** — Return to **Workflow Guide**; highlight crew steps; optionally flash **Coordinator Console** in the sidebar.
 
 **NARRATION**  
-“For aircrew: plan and export the full-route G1000 file from **Flight Plans**, confirm the route on **Map View**, execute towers in **Tower Data Analysis**, finish the **Air Force Report Form**, then use **Export Reported Data** for the customer PDF and, when needed, an updated content-pack ZIP.”
+“For wing coordinators: plan and export the full-route G1000 file from **Flight Plans**, confirm the route on **Map View**, execute towers in **Tower Data Analysis**, finish the **Air Force Report Form**, then use **Export Reported Data** for the customer PDF and, when needed, an updated content-pack ZIP.”
 
 **NARRATION**  
 “For wing coordinators: open **Coordinator Console** from the sidebar, load the published route, set corridor tracks in **Scenario**, compare one, two, or three teams with optional **staged refuel**, export sortie **.fpl** files, and **email each file to that aircraft’s Mission Pilot** before the sortie. Before the season, issue the baseline ForeFlight pack from the Wing folder — the console card reminds you; after the survey, close out the pack on **Export Reported Data**.”
 
 **NARRATION**  
-“Questions go to your Wing’s training officer or whoever owns the ForeFlight API key and admin PIN.”
+“Questions go to your Wing’s training officer.”
 
 **PAUSE** — fade or end card.
 
