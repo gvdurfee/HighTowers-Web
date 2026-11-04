@@ -9,6 +9,11 @@ import type {
   PendingWaypoint,
   FlightPlanCreationLoadMethod,
 } from '@/db/schema'
+import { G1000Service } from '@/services/g1000'
+import { assignG1000WaypointNames } from '@/utils/g1000WaypointName'
+import { sortie2Explanation } from '@/services/offsetRouteFpl'
+import { parseWaypointCode } from '@/utils/mtrWaypointCode'
+import { routeCurveSide } from '@survey-planning/offsetRoutePlan.js'
 
 function creationLoadMethodLabel(m: FlightPlanCreationLoadMethod): string {
   switch (m) {
@@ -17,13 +22,11 @@ function creationLoadMethodLabel(m: FlightPlanCreationLoadMethod): string {
     case 'sequenceLibrary':
       return 'G1000 user waypoint library'
     case 'coordinatorSurvey':
-      return 'Coordinator Console'
+      return 'Team Dispatch'
     default:
       return 'Waypoint sequence'
   }
 }
-import { G1000Service } from '@/services/g1000'
-import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
 import { GuidedHint } from '@/components/GuidedHint'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
@@ -36,6 +39,28 @@ type LocationState = { skippedWaypoints?: string[]; message?: string } | null
 type DisplayItem =
   | { type: 'waypoint'; sequence: number; waypoint: WaypointRecord }
   | { type: 'pending'; sequence: number; pending: PendingWaypoint }
+
+function orderedPlanItems(waypoints: WaypointRecord[], pending: PendingWaypoint[]): DisplayItem[] {
+  const displayList: DisplayItem[] = []
+  const wpBySeq = new Map(waypoints.map((w) => [w.sequence, w]))
+  const pendingBySeq = new Map(pending.map((p) => [p.sequence, p]))
+  const allSeqs = [...new Set([...wpBySeq.keys(), ...pendingBySeq.keys()])].sort((a, b) => a - b)
+  for (const seq of allSeqs) {
+    const wp = wpBySeq.get(seq)
+    const pend = pendingBySeq.get(seq)
+    if (wp) displayList.push({ type: 'waypoint', sequence: seq, waypoint: wp })
+    else if (pend) displayList.push({ type: 'pending', sequence: seq, pending: pend })
+  }
+  return displayList
+}
+
+function g1000NamesFor(items: DisplayItem[]) {
+  return assignG1000WaypointNames(
+    items.map((item) => ({
+      originalName: item.type === 'waypoint' ? item.waypoint.originalName : item.pending.code,
+    }))
+  )
+}
 
 function WaypointColumnHeaders() {
   return (
@@ -198,6 +223,13 @@ export function FlightPlanDetailPage() {
     if (!plan) return
     const dep = departure ? { identifier: departure.identifier, name: departure.name, latitude: departure.latitude, longitude: departure.longitude, elevation: departure.elevation } : undefined
     const dest = destination ? { identifier: destination.identifier, name: destination.name, latitude: destination.latitude, longitude: destination.longitude, elevation: destination.elevation } : undefined
+    const items = orderedPlanItems(waypoints, plan.pendingWaypoints ?? [])
+    const named = g1000NamesFor(items)
+    if (named.error) return
+    const nameById = new Map<string, string>()
+    items.forEach((item, index) => {
+      if (item.type === 'waypoint') nameById.set(item.waypoint.id, named.names[index].g1000Name)
+    })
     const xml = G1000Service.generateFlightPlan({
       ...plan,
       departureAirport: dep,
@@ -205,7 +237,7 @@ export function FlightPlanDetailPage() {
       waypoints: waypoints.map((w) => ({
         id: w.id,
         originalName: w.originalName,
-        g1000Name: w.g1000Name,
+        g1000Name: nameById.get(w.id) ?? '',
         latitude: w.latitude,
         longitude: w.longitude,
         routeType: w.routeType,
@@ -223,6 +255,13 @@ export function FlightPlanDetailPage() {
     a.click()
     URL.revokeObjectURL(url)
     setShowExport(false)
+  }
+
+  async function saveSortie1Side(side: 'inner' | 'outer') {
+    if (!plan) return
+    const dateModified = new Date().toISOString()
+    await db.flightPlans.update(plan.id, { sortie1Side: side, dateModified })
+    setPlan({ ...plan, sortie1Side: side, dateModified })
   }
 
   const setCoordForPending = (
@@ -258,19 +297,10 @@ export function FlightPlanDetailPage() {
       (!!navState?.message?.trim() || pendingWaypoints.length > 0))
 
   // Merge waypoints and pending into display order by sequence
-  const displayList: DisplayItem[] = []
-  const wpBySeq = new Map(waypoints.map((w) => [w.sequence, w]))
-  const pendingBySeq = new Map(pendingWaypoints.map((p) => [p.sequence, p]))
-  const allSeqs = [
-    ...new Set([...wpBySeq.keys(), ...pendingBySeq.keys()]),
-  ].sort((a, b) => a - b)
-  for (const seq of allSeqs) {
-    const wp = wpBySeq.get(seq)
-    const pend = pendingBySeq.get(seq)
-    if (wp) displayList.push({ type: 'waypoint', sequence: seq, waypoint: wp })
-    else if (pend)
-      displayList.push({ type: 'pending', sequence: seq, pending: pend })
-  }
+  const displayList = orderedPlanItems(waypoints, pendingWaypoints)
+  const g1000Named = g1000NamesFor(displayList)
+  const g1000Names = g1000Named.names
+  const g1000NameError = g1000Named.error
 
   const waypointSplit = Math.ceil(displayList.length / 2)
   const waypointColumns = [
@@ -327,7 +357,8 @@ export function FlightPlanDetailPage() {
     setSupplyingCode(code)
     try {
       const name = code.trim().toUpperCase()
-      const g1000Name = convertWaypointNameToG1000(name)
+      const named = assignG1000WaypointNames([{ originalName: name }])
+      const g1000Name = named.names[0]?.g1000Name ?? ''
       const routeType = name.startsWith('IR') ? 'IR' : name.startsWith('SR') ? 'SR' : 'VR'
       await db.waypoints.add({
         id: generateId(),
@@ -362,6 +393,18 @@ export function FlightPlanDetailPage() {
   }
 
   const isAnchorPlan = isCoordinatorSurveyAnchor(plan)
+  const sortieCurve = routeCurveSide(
+    [...waypoints]
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((waypoint) => ({
+        lat: waypoint.latitude,
+        lon: waypoint.longitude,
+        ptIdent:
+          parseWaypointCode(waypoint.originalName)?.waypointLetter ??
+          waypoint.g1000Name ??
+          waypoint.originalName,
+      }))
+  )
 
   return (
     <div className="app-page-shell overflow-auto">
@@ -400,7 +443,7 @@ export function FlightPlanDetailPage() {
         <div className="mb-4 p-4 rounded-lg border border-gray-200 bg-slate-50 text-sm text-gray-800">
           <p>
             This route was loaded for coordinator survey planning. Continue staffing from{' '}
-            <strong>Coordinator Console</strong> in the sidebar (Mission Planning).
+            <strong>Team Dispatch</strong> in the sidebar (Mission Planning).
           </p>
         </div>
       )}
@@ -458,11 +501,43 @@ export function FlightPlanDetailPage() {
             {!departure && !destination && (
               <p className="text-gray-600">
                 {isAnchorPlan
-                  ? 'Not set — choose departures in Coordinator Console.'
+                  ? 'Not set — choose departures in Team Dispatch.'
                   : 'No airports set'}
               </p>
             )}
           </dl>
+        </section>
+
+        <section
+          className={`p-4 bg-white rounded-lg border ${plan.sortie1Side ? 'border-gray-200' : 'border-cap-yellow'}`}
+        >
+          <h2 className="font-semibold text-gray-900 mb-2">Sortie 1 side</h2>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="sortie1Side"
+                className="accent-cap-ultramarine"
+                checked={plan.sortie1Side === 'inner'}
+                onChange={() => void saveSortie1Side('inner')}
+              />
+              Inner (inside the route&apos;s curve)
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="sortie1Side"
+                className="accent-cap-ultramarine"
+                checked={plan.sortie1Side === 'outer'}
+                onChange={() => void saveSortie1Side('outer')}
+              />
+              Outer (outside the route&apos;s curve)
+            </label>
+          </div>
+          {waypoints.length >= 2 && sortieCurve.note && (
+            <p className="text-sm text-gray-700 mt-2">{sortieCurve.note}</p>
+          )}
+          <p className="text-sm text-cap-ultramarine mt-2">{sortie2Explanation(departure?.identifier)}</p>
         </section>
 
         <section className="p-4 bg-white rounded-lg border border-gray-200">
@@ -492,30 +567,40 @@ export function FlightPlanDetailPage() {
             {!departure && isAnchorPlan && (
               <>
                 {' '}
-                Set departure on a pilot flight plan when crews are ready; coordinator routes use Coordinator Console for airports.
+                Set departure on a pilot flight plan when crews are ready; coordinator routes use Team Dispatch for airports.
               </>
             )}
           </p>
           <button
             type="button"
             onClick={() => setShowExport(true)}
-            disabled={!departure}
+            disabled={!departure || Boolean(g1000NameError)}
             className="px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
           >
             Export full route (.fpl)
           </button>
+          {g1000NameError ? (
+            <p className="text-sm text-cap-pimento mt-2">{g1000NameError}</p>
+          ) : null}
           {!departure && isAnchorPlan && (
             <p className="text-xs text-gray-500 mt-2">
-              Full-route export needs a departure airport. Use Coordinator Console sortie exports after choosing teams, or
+              Full-route export needs a departure airport. Use Team Dispatch sortie exports after choosing teams, or
               create a separate pilot flight plan with airports.
             </p>
           )}
-          <p className="text-xs text-gray-500 mt-2">
-            Sortie fragments and ForeFlight content packs are issued from the{' '}
-            <strong>Coordinator Console</strong> (Mission Planning in the sidebar). After staffing, email each
-            sortie <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> to that aircraft&apos;s
-            Mission Pilot.
-          </p>
+          {isAnchorPlan ? (
+            <p className="text-xs text-gray-500 mt-2">
+              Sortie fragments and ForeFlight content packs are issued from the{' '}
+              <strong>Team Dispatch</strong> (Mission Planning in the sidebar). After staffing, email each
+              sortie <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> to that aircraft&apos;s
+              Mission Pilot.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500 mt-2">
+              Offset sortie files are downloaded from Map View. Email each sortie{' '}
+              <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> to that aircraft&apos;s Mission Pilot.
+            </p>
+          )}
         </section>
         </div>
 
@@ -549,6 +634,9 @@ export function FlightPlanDetailPage() {
               Correct waypoint sequence
             </Link>
           </div>
+          {g1000NameError ? (
+            <p className="text-sm text-cap-pimento mb-3">{g1000NameError}</p>
+          ) : null}
           {displayList.length === 0 ? (
             <p className="text-gray-500 text-sm">No waypoints</p>
           ) : (
@@ -576,7 +664,7 @@ export function FlightPlanDetailPage() {
                                   <span className="min-w-[5rem]">{item.waypoint.originalName}</span>
                                   <span className="text-gray-400 w-4 text-center shrink-0">→</span>
                                   <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
-                                    {item.waypoint.g1000Name}
+                                    {g1000NameError ? '—' : g1000Names[i]?.g1000Name}
                                   </span>
                                   {editingWaypointId !== item.waypoint.id ? (
                                     <button
@@ -627,7 +715,7 @@ export function FlightPlanDetailPage() {
                                   <span className="min-w-[5rem]">{item.pending.code}</span>
                                   <span className="text-gray-400 w-4 text-center shrink-0">→</span>
                                   <span className="px-2 py-0.5 bg-cap-pimento/30 text-cap-pimento rounded text-xs">
-                                    {convertWaypointNameToG1000(item.pending.code)}
+                                    {g1000NameError ? '—' : g1000Names[i]?.g1000Name}
                                   </span>
                                 </div>
                                 <DegMinEditor

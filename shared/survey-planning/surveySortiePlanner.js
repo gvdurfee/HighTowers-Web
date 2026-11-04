@@ -6,10 +6,12 @@
 import { parseWidthTexts, halfWidthNmForLeg } from './mtrWidthParser.js'
 import {
   parallelOffsetsForHalfWidth,
+  offsetsInsidePublishedWidth,
   chainLengthNm,
   closestWaypointIndex,
   nauticalMilesBetween,
   DEFAULT_PARALLEL_TRACK_POLICY,
+  NO_PUBLISHED_WIDTH_NOTE,
 } from './surveyGeometry.js'
 import { findSpanTrackEntryForLeg } from './corridorTrackPlan.js'
 import { packSortiesForTeam, bestSortiePlan } from './surveySortiePacker.js'
@@ -72,8 +74,23 @@ export { DEFAULT_PARALLEL_TRACK_POLICY }
  * @property {number | null} rightNm
  * @property {number[]} leftOffsets
  * @property {number[]} rightOffsets
+ * @property {string | null} leftNote
+ * @property {string | null} rightNote
  * @property {number} chainNm
  */
+
+/**
+ * @param {number[] | undefined} explicitOffsets
+ * @param {number | null} widthNm
+ * @param {Partial<import('./surveyGeometry.js').ParallelTrackPolicy>} policy
+ */
+function plannedSideOffsets(explicitOffsets, widthNm, policy, useExplicit) {
+  if (widthNm == null || !Number.isFinite(widthNm) || widthNm <= 0) {
+    return { offsets: [], note: NO_PUBLISHED_WIDTH_NOTE }
+  }
+  const source = useExplicit ? (explicitOffsets ?? []) : parallelOffsetsForHalfWidth(widthNm, policy)
+  return offsetsInsidePublishedWidth(source, widthNm)
+}
 
 /**
  * Build per-leg width and offset lists.
@@ -103,25 +120,17 @@ export function buildLegWidthSummaries(input, options = {}) {
     const rightNm =
       trackEntry?.rightNm ??
       halfWidthNmForLeg(spans, fromPt, toPt, 'right', routePtIdents)
-    const leftOffsets =
-      trackEntry?.leftOffsets?.length > 0
-        ? [...trackEntry.leftOffsets]
-        : leftNm != null
-          ? parallelOffsetsForHalfWidth(leftNm, policy)
-          : []
-    const rightOffsets =
-      trackEntry?.rightOffsets?.length > 0
-        ? [...trackEntry.rightOffsets]
-        : rightNm != null
-          ? parallelOffsetsForHalfWidth(rightNm, policy)
-          : []
+    const leftPlan = plannedSideOffsets(trackEntry?.leftOffsets, leftNm, policy, Boolean(trackEntry))
+    const rightPlan = plannedSideOffsets(trackEntry?.rightOffsets, rightNm, policy, Boolean(trackEntry))
     legs.push({
       fromPt,
       toPt,
       leftNm,
       rightNm,
-      leftOffsets,
-      rightOffsets,
+      leftOffsets: leftPlan.offsets,
+      rightOffsets: rightPlan.offsets,
+      leftNote: leftPlan.note,
+      rightNote: rightPlan.note,
       chainNm: chainLengthNm(wps, i, i + 1),
     })
   }

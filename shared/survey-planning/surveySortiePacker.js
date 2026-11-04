@@ -7,6 +7,7 @@ import {
   chainLengthNm,
   nauticalMilesBetween,
   estimateSortieNm,
+  formatOffsetsPerSide,
 } from './surveyGeometry.js'
 
 /**
@@ -328,5 +329,15 @@ export function packSortiesForTeam(wps, legs, team, budgetNm, stagedRefuel = nul
     )
   }
 
-  return raw.map((s, i) => ({ sortieNumber: i + 1, ...s }))
+  return raw.map((s, i) => {
+    const leg = legs[s.startIdx]
+    const left = team.side === 'left' ? s.offsets : (leg?.leftOffsets ?? [])
+    const right = team.side === 'right' ? s.offsets : (leg?.rightOffsets ?? [])
+    return {
+      sortieNumber: i + 1,
+      side: team.side,
+      offsetsPerSide: formatOffsetsPerSide(left, right),
+      ...s,
+    }
+  })
 }

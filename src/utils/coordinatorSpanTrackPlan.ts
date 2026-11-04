@@ -32,8 +32,11 @@ export function formatWidthTextDisplay(text: string): string {
   return `CORRIDORS ARE ${trimmed}`
 }
 
-export function spanTrackRowsFromWidthTexts(widthTexts: string[]): SpanTrackRowState[] {
-  return defaultSpanTrackPlanFromWidthTexts(widthTexts).map(entryToRow)
+export function spanTrackRowsFromWidthTexts(
+  widthTexts: string[],
+  policy?: { firstOffsetNm?: number; stepNm?: number }
+): SpanTrackRowState[] {
+  return defaultSpanTrackPlanFromWidthTexts(widthTexts, policy).map(entryToRow)
 }
 
 function entryToRow(entry: SpanTrackPlanEntry): SpanTrackRowState {
@@ -62,8 +65,8 @@ export function spanTrackPlanFromRows(rows: SpanTrackRowState[]): SpanTrackPlanE
     toPt: row.toPt,
     leftNm: Number(row.leftNm),
     rightNm: Number(row.rightNm),
-    leftOffsets: parseOffsetsListInput(row.leftOffsetsText),
-    rightOffsets: parseOffsetsListInput(row.rightOffsetsText),
+    leftOffsets: row.leftOffsetsText.trim() ? parseOffsetsListInput(row.leftOffsetsText) : [],
+    rightOffsets: row.rightOffsetsText.trim() ? parseOffsetsListInput(row.rightOffsetsText) : [],
     rawText: row.displayText.replace(/^CORRIDORS ARE\s+/i, ''),
   }))
 }
@@ -78,21 +81,31 @@ export function validateSpanTrackRows(rows: SpanTrackRowState[]): string | null 
   }
 }
 
-/** Recompute offset lists from current half-widths using wing default policy. */
-export function resetRowOffsetsToDefault(row: SpanTrackRowState): SpanTrackRowState {
+/** Recompute offset lists from the current half-widths and spacing. A side with no width stays blank. */
+export function resetRowOffsetsToDefault(
+  row: SpanTrackRowState,
+  policy?: { firstOffsetNm?: number; stepNm?: number }
+): SpanTrackRowState {
   const leftNm = Number(row.leftNm)
   const rightNm = Number(row.rightNm)
   return {
     ...row,
     leftOffsetsText:
       Number.isFinite(leftNm) && leftNm > 0
-        ? formatOffsetsList(parallelOffsetsForHalfWidth(leftNm))
-        : row.leftOffsetsText,
+        ? formatOffsetsList(parallelOffsetsForHalfWidth(leftNm, policy))
+        : '',
     rightOffsetsText:
       Number.isFinite(rightNm) && rightNm > 0
-        ? formatOffsetsList(parallelOffsetsForHalfWidth(rightNm))
-        : row.rightOffsetsText,
+        ? formatOffsetsList(parallelOffsetsForHalfWidth(rightNm, policy))
+        : '',
   }
+}
+
+export function applySpacingToRows(
+  rows: SpanTrackRowState[],
+  policy?: { firstOffsetNm?: number; stepNm?: number }
+): SpanTrackRowState[] {
+  return rows.map((row) => resetRowOffsetsToDefault(row, policy))
 }
 
 export { parseOffsetsListInput, formatOffsetsList }

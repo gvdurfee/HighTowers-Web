@@ -22,7 +22,7 @@ export function SortiePilotCard({ brief, isOpen, onClose }: SortiePilotCardProps
         </h2>
         <p className="text-sm text-gray-600 mb-4">
           G1000 <code className="bg-gray-100 px-1 rounded text-xs">{brief.filename}</code> downloaded.
-          Use this card for parallel-track setup before flying.
+          The file already contains each offset lane. Fly the loaded route.
         </p>
 
         <dl className="text-sm space-y-2 mb-4">
@@ -70,19 +70,17 @@ export function SortiePilotCard({ brief, isOpen, onClose }: SortiePilotCardProps
 
         <div className="space-y-3 text-sm text-gray-700 leading-relaxed border-t border-gray-100 pt-4">
           <section>
-            <h3 className="font-semibold text-gray-900 mb-1">Parallel track</h3>
+            <h3 className="font-semibold text-gray-900 mb-1">Offset lanes</h3>
             <p>
-              Before each directed leg, activate <strong>Parallel Track</strong> in the flight plan menu at the
-              matching offset (left or right per this sortie). Offsets for this sortie:{' '}
+              Each lane is its own user waypoints at the offset coordinates. Load the route and fly it.
+              Lane spacing for this sortie:{' '}
               <strong className="font-mono">{brief.offsetsLabel}</strong> NM.
             </p>
           </section>
           <section>
-            <h3 className="font-semibold text-gray-900 mb-1">Heading mode (&gt;120° turns)</h3>
+            <h3 className="font-semibold text-gray-900 mb-1">Sharp turns</h3>
             <p>
-              When a turn exceeds about 120°, parallel track may drop and GPS will proceed direct to the next fix.
-              Use <strong>Heading</strong> mode to hold offset manually, then re-enable parallel track in the flight
-              plan menu and return to <strong>GPS</strong> navigation.
+              The route follows the offset through each turn. Stay on the loaded flight plan.
             </p>
           </section>
           <section>

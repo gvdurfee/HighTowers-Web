@@ -13,12 +13,12 @@ describe('sortieOffsetDefaults', () => {
     ).toBe('3')
   })
 
-  it('uses four offsets for 20 NM corridor', () => {
+  it('uses offsets inside a 20 NM corridor and drops the pass past the edge', () => {
     expect(
       defaultSortieOffsetsLabelFromWidthTexts([
         '20 NM EITHER SIDE OF CENTERLINE FROM A TO B',
       ])
-    ).toBe('3, 9, 15, 21')
+    ).toBe('3, 9, 15')
   })
 
   it('fragment on 5 NM route uses 3 for N→F sub-range', () => {

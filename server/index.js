@@ -25,6 +25,8 @@ import { createContentPacksRouter } from './routes/contentPacks.js'
 import { createAdminRouter } from './routes/admin.js'
 import { logAdminConfigStatus } from './lib/adminAuth.js'
 import { contentPackAuth, logContentPackAuthStatus } from './lib/contentPackAuth.js'
+import { assembleWidthClauses } from '../shared/survey-planning/mtrWidthParser.js'
+import { assignG1000WaypointNames } from '../shared/survey-planning/g1000Names.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '..', '.env') })
@@ -207,10 +209,11 @@ async function downloadMtrCsv(effectiveDate) {
   return { csvPath, widthCsvPath, effectiveDate: actualDate }
 }
 
-/** WIDTH_TEXT lines for a route from MTR_WDTH.csv */
+/** WIDTH_TEXT clauses for a route from MTR_WDTH.csv. Rows are grouped, ordered, and joined. */
 async function getWidthTextsFromCsv(widthCsvPath, routeType, routeNumber) {
   const rt = routeType.toUpperCase()
-  const texts = []
+  /** @type {Map<string, { seq: number, text: string }[]>} */
+  const groups = new Map()
   const parser = createReadStream(widthCsvPath).pipe(
     parse({ columns: true, skip_empty_lines: true, relax_column_count: true })
   )
@@ -219,9 +222,20 @@ async function getWidthTextsFromCsv(widthCsvPath, routeType, routeNumber) {
     const rid = (row.ROUTE_ID ?? '').replace(/"/g, '').trim()
     if (rtc !== rt || !routeIdsMatch(rid, routeNumber)) continue
     const text = (row.WIDTH_TEXT ?? '').replace(/"/g, '').trim()
-    if (text) texts.push(text)
+    if (!text) continue
+    const artcc = (row.ARTCC ?? '').replace(/"/g, '').trim()
+    const seq = parseInt(String(row.WIDTH_SEQ_NO ?? '').replace(/"/g, ''), 10) || 0
+    const key = `${rtc}|${rid}|${artcc}`
+    const bucket = groups.get(key) ?? []
+    bucket.push({ seq, text })
+    groups.set(key, bucket)
   }
-  return texts
+  const clauses = []
+  for (const rows of groups.values()) {
+    rows.sort((a, b) => a.seq - b.seq)
+    clauses.push(...assembleWidthClauses(rows.map((row) => row.text)))
+  }
+  return clauses
 }
 
 // Parse MTR_PT.csv and return waypoints for a route
@@ -260,12 +274,12 @@ async function getWaypointsFromCsv(csvPath, routeType, routeNumber, entryLetter,
   rows.sort((a, b) => a.seq - b.seq)
 
   if (!entryLetter && !exitLetter) {
-    return rows.map((r) => formatWaypoint(r, routeType, routeNumber))
+    return nameRows(rows, routeType, routeNumber)
   }
 
   const entry = (entryLetter ?? '').toUpperCase().trim()
   const exit = (exitLetter ?? '').toUpperCase().trim()
-  if (!entry && !exit) return rows.map((r) => formatWaypoint(r, routeType, routeNumber))
+  if (!entry && !exit) return nameRows(rows, routeType, routeNumber)
 
   const byPt = new Map()
   for (const r of rows) {
@@ -286,45 +300,28 @@ async function getWaypointsFromCsv(csvPath, routeType, routeNumber, entryLetter,
     cur = rec.nxPoint?.trim() || null
   }
 
-  return segment.map((r) => formatWaypoint(r, routeType, routeNumber))
+  return nameRows(segment, routeType, routeNumber)
 }
 
-function formatWaypoint(r, routeType, routeNumber) {
+function nameRows(rows, routeType, routeNumber) {
+  const named = assignG1000WaypointNames(
+    rows.map((r) => ({ originalName: `${routeType}${routeNumber}-${r.ptIdent}` }))
+  )
+  return rows.map((r, index) =>
+    formatWaypoint(r, routeType, routeNumber, named.error ? '' : named.names[index].g1000Name)
+  )
+}
+
+function formatWaypoint(r, routeType, routeNumber, g1000Name) {
   const originalName = `${routeType}${routeNumber}-${r.ptIdent}`
-  const g1000Name = toG1000Name(originalName)
   return {
     originalName,
-    g1000Name,
+    g1000Name: g1000Name ?? '',
     latitude: r.lat,
     longitude: r.lon,
     ptIdent: r.ptIdent,
     nxPoint: r.nxPoint,
   }
-}
-
-const G1000_USER_WAYPOINT_ID_MAX_LEN = 6
-
-/** Same compact parsing as `parseWaypointCode` in web: IR|SR|VR + digits + optional hyphen + suffix. */
-function parseMtrWaypointCompact(upper) {
-  if (!/^(IR|SR|VR)/i.test(upper)) return null
-  const rest = upper.slice(2)
-  const m = rest.match(/^(\d+)(?:-)?([A-Z0-9]+)$/i)
-  if (!m) return null
-  return { routeNumber: m[1], waypointLetter: m[2].toUpperCase() }
-}
-
-function toG1000Name(original) {
-  const upper = String(original).trim().toUpperCase()
-  const mHyphen = upper.match(/^(IR|SR|VR)(\d+)-([A-Z0-9]+)$/i)
-  if (mHyphen) {
-    const [, , num, suffix] = mHyphen
-    return (suffix + num).slice(0, G1000_USER_WAYPOINT_ID_MAX_LEN)
-  }
-  const compact = parseMtrWaypointCompact(upper)
-  if (compact) {
-    return (compact.waypointLetter + compact.routeNumber).slice(0, G1000_USER_WAYPOINT_ID_MAX_LEN)
-  }
-  return upper.replace(/[^A-Z0-9]/gi, '').slice(0, G1000_USER_WAYPOINT_ID_MAX_LEN)
 }
 
 // In-memory cache of resolved NASR cycle files. Re-checked on a TTL so long-running

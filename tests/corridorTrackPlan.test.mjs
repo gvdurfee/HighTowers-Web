@@ -16,9 +16,9 @@ describe('corridorTrackPlan', () => {
   it('builds default span rows from NASR width text', () => {
     const plan = defaultSpanTrackPlanFromWidthTexts(VR114_WIDTH)
     expect(plan).toHaveLength(2)
-    expect(plan[0].leftOffsets).toEqual([3, 9, 15, 21])
+    expect(plan[0].leftOffsets).toEqual([3, 9, 15])
     expect(plan[1].leftOffsets).toEqual([3, 9])
-    expect(plan[1].rightOffsets).toEqual([3, 9, 15, 21])
+    expect(plan[1].rightOffsets).toEqual([3, 9, 15])
   })
 
   it('finds B→M1 span for intermediate leg B→C', () => {
@@ -88,7 +88,7 @@ describe('corridorTrackPlan', () => {
     expect(customResult.totalWingNm).toBeLessThan(defaultResult.totalWingNm ?? Infinity)
   })
 
-  it('validateSpanTrackPlan catches empty offset lists', () => {
+  it('allows an empty offset list so a side with nothing inside the width can be planned as none', () => {
     const err = validateSpanTrackPlan([
       {
         fromPt: 'A',
@@ -99,6 +99,29 @@ describe('corridorTrackPlan', () => {
         rightOffsets: [3, 9],
       },
     ])
-    expect(err).toMatch(/Inner offsets/)
+    expect(err).toBeNull()
+  })
+
+  it('drops a typed offset that is past the published width', () => {
+    const wps = ['A', 'B', 'C', 'M1'].map((ptIdent, i) => ({
+      ptIdent,
+      lat: 35 + i * 0.1,
+      lon: -103 - i * 0.1,
+    }))
+    const spanTrackPlan = defaultSpanTrackPlanFromWidthTexts(VR114_WIDTH)
+    spanTrackPlan[0].leftOffsets = [3, 9, 15, 21]
+    spanTrackPlan[0].rightOffsets = [3, 9, 15, 21]
+    const legs = buildLegWidthSummaries({
+      routeType: 'VR',
+      routeNumber: '114',
+      waypoints: wps,
+      widthTexts: VR114_WIDTH,
+      teams: [],
+      spanTrackPlan,
+    })
+    const ab = legs.find((leg) => leg.fromPt === 'A' && leg.toPt === 'B')
+    expect(ab?.leftOffsets).toEqual([3, 9, 15])
+    expect(ab?.rightOffsets).toEqual([3, 9, 15])
+    expect(ab?.leftNote).toMatch(/past the corridor edge/)
   })
 })

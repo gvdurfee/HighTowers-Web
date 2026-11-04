@@ -1,11 +1,5 @@
-import {
-  buildSortieFplExportInput,
-  formatSortieFplFilename,
-  sliceFragmentWaypoints,
-} from '@survey-planning/surveySortieFplRoute.js'
 import { parseWaypointCode } from '@/utils/mtrWaypointCode'
 import type { AirportRecord, WaypointRecord } from '@/db/schema'
-import { G1000Service } from '@/services/g1000'
 
 export type SortieFplSortie = {
   sortieNumber: number
@@ -15,6 +9,7 @@ export type SortieFplSortie = {
   waypointFrom: string
   waypointTo: string
   offsets: number[]
+  routeSequence?: string[]
   ferryInLabel?: string
   ferryOutLabel?: string
 }
@@ -38,25 +33,6 @@ function waypointPtIdent(originalName: string): string {
   return parsed?.waypointLetter ?? originalName
 }
 
-function mapFragmentWaypoints(slice: WaypointRecord[]) {
-  return slice.map((w) => ({
-    ptIdent: waypointPtIdent(w.originalName),
-    g1000Name: w.g1000Name,
-    lat: w.latitude,
-    lon: w.longitude,
-  }))
-}
-
-function airportFromRecord(a: AirportRecord) {
-  return {
-    identifier: a.identifier,
-    name: a.name,
-    lat: a.latitude,
-    lon: a.longitude,
-    elevation: a.elevation,
-  }
-}
-
 export function buildSortieFplFromWaypoints(opts: {
   waypoints: WaypointRecord[]
   sortie: SortieFplSortie
@@ -65,70 +41,10 @@ export function buildSortieFplFromWaypoints(opts: {
   routeLabel: string
   teamLabel: string
   side: string
+  created?: Date
 }): { xml: string; brief: SortieFplPilotBrief } {
-  const slice = sliceFragmentWaypoints(opts.waypoints, opts.sortie.startIdx, opts.sortie.endIdx) as WaypointRecord[]
-  const fragmentWaypoints = mapFragmentWaypoints(slice)
-  const exportInput = buildSortieFplExportInput({
-    sortie: opts.sortie,
-    fragmentWaypoints,
-    teamDeparture: airportFromRecord(opts.teamDeparture),
-    routeLabel: opts.routeLabel,
-  })
-
-  const dep = exportInput.teamDeparture
-  const destRecord = opts.destinationAirport ?? opts.teamDeparture
-  const airportInput = {
-    identifier: dep.identifier,
-    name: dep.name,
-    latitude: dep.latitude,
-    longitude: dep.longitude,
-    elevation: dep.elevation,
-  }
-  const destInput = {
-    identifier: destRecord.identifier,
-    name: destRecord.name,
-    latitude: destRecord.latitude,
-    longitude: destRecord.longitude,
-    elevation: destRecord.elevation,
-  }
-
-  const xml = G1000Service.generateSortieFlightPlan({
-    routeLabel: exportInput.routeLabel,
-    sortieNumber: exportInput.sortieNumber,
-    departureAirport: airportInput,
-    destinationAirport: destInput,
-    fragmentWaypoints: exportInput.fragmentWaypoints.map((wp) => ({
-      g1000Name: wp.g1000Name,
-      latitude: wp.lat,
-      longitude: wp.lon,
-    })),
-    routeSequence: exportInput.routeSequence,
-  })
-
-  const filename = formatSortieFplFilename({
-    dep: dep.identifier,
-    routeName: opts.routeLabel,
-    from: opts.sortie.waypointFrom,
-    to: opts.sortie.waypointTo,
-    sortieNumber: opts.sortie.sortieNumber,
-  })
-
-  return {
-    xml,
-    brief: {
-      teamLabel: opts.teamLabel,
-      side: opts.side,
-      rangeLabel: `${opts.sortie.waypointFrom}→${opts.sortie.waypointTo}`,
-      startAt: opts.sortie.startAt,
-      passCount: opts.sortie.offsets.length,
-      offsetsLabel: opts.sortie.offsets.join(', '),
-      ferryInLabel: opts.sortie.ferryInLabel ?? dep.identifier,
-      ferryOutLabel: opts.sortie.ferryOutLabel ?? destRecord.identifier,
-      warnRoutePointLimit: exportInput.warnRoutePointLimit,
-      routePointCount: exportInput.routePointCount,
-      filename,
-    },
-  }
+  void opts
+  throw new Error('Sortie files use offset-lane waypoints. The centerline sortie export is not available.')
 }
 
 export function downloadSortieFpl(xml: string, filename: string): void {

@@ -88,7 +88,7 @@ export function buildSerpentineRouteSequence(fragment, startAt, offsets) {
     throw new Error('Sortie fragment must span at least two waypoints.')
   }
   if (!Array.isArray(offsets) || offsets.length === 0) {
-    throw new Error('Sortie requires at least one parallel-track offset.')
+    throw new Error('Sortie requires at least one lane offset.')
   }
 
   const n = fragment.length
@@ -134,8 +134,16 @@ export function buildSortieFplExportInput({
   teamDeparture,
   routeLabel,
 }) {
-  const { routeSequence, routePointCount, warnRoutePointLimit } =
-    buildSerpentineRouteSequence(fragmentWaypoints, sortie.startAt, sortie.offsets)
+  const provided = Array.isArray(sortie.routeSequence)
+    ? sortie.routeSequence.filter((name) => name)
+    : []
+  const { routeSequence, routePointCount, warnRoutePointLimit } = provided.length
+    ? {
+        routeSequence: provided,
+        routePointCount: provided.length,
+        warnRoutePointLimit: provided.length > SORTIE_FPL_ROUTE_POINT_WARN,
+      }
+    : buildSerpentineRouteSequence(fragmentWaypoints, sortie.startAt, sortie.offsets)
 
   return {
     routeLabel,

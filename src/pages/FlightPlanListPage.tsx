@@ -28,9 +28,10 @@ export function FlightPlanListPage() {
     const plan = await db.flightPlans.get(id)
     if (!plan) return
     const waypoints = await db.waypoints.where('flightPlanId').equals(id).toArray()
-    await db.transaction('rw', db.waypoints, db.flightPlans, async () => {
+    await db.transaction('rw', db.waypoints, db.flightPlans, db.offsetPlans, async () => {
       for (const wp of waypoints) await db.waypoints.delete(wp.id)
       await db.flightPlans.delete(id)
+      await db.offsetPlans.delete(id)
     })
   }
 

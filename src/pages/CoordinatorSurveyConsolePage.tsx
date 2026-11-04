@@ -6,6 +6,11 @@ import { parseWaypointCode } from '@/utils/mtrWaypointCode'
 import { fetchMtrWidthTexts } from '@/services/surveyPlanningApi'
 import { apiService, type AirportResult } from '@/services/api'
 import {
+  airportLookupMessage,
+  cleanAirportId,
+  FAA_AIRPORT_SERVICE_MESSAGE,
+} from '@/services/airportLookup'
+import {
   planSurveyScenario,
   planSingleTeamBothSides,
   planThreeTeamGeographicScenario,
@@ -14,6 +19,19 @@ import {
   buildLegWidthSummaries,
 } from '@survey-planning/surveySortiePlanner.js'
 import {
+  planTeamSegmentDay,
+  teamNeedsRefuel,
+  validateTeamSegments,
+} from '@survey-planning/segmentAssignment.js'
+import {
+  assignmentEditsForOption,
+  compareSurveyPlans,
+  expandPlanningRoute,
+  type ComparisonOption,
+  type PlanningInsert,
+} from '@survey-planning/planComparison.js'
+import { ComparePlansPanel } from '@/components/ComparePlansPanel'
+import {
   GuidedHint,
   GuidedHintDismissActions,
   GuidedHintTriggerFace,
@@ -21,7 +39,7 @@ import {
 } from '@/components/GuidedHint'
 import type { AirportRecord, WaypointRecord } from '@/db/schema'
 import {
-  exportSortieFplDownload,
+  downloadSortieFpl,
   type SortieFplPilotBrief,
   type SortieFplSortie,
 } from '@/services/sortieFplExport'
@@ -29,6 +47,12 @@ import { SortiePilotCard } from '@/components/SortiePilotCard'
 import { FlightPlanContentPackCard } from '@/components/FlightPlanContentPackCard'
 import { SortieFragmentExportCard } from '@/components/SortieFragmentExportCard'
 import { CoordinatorRouteLoadForm } from '@/components/CoordinatorRouteLoadForm'
+import { CoordinatorOffsetPlans } from '@/components/CoordinatorOffsetPlans'
+import { crewOffsetAirports } from '@/services/coordinatorOffsetExport'
+import type { SortieSide } from '@/services/offsetRouteFpl'
+import { draftTeamPlan, type TeamPlanAirport, type TeamRoutePoint } from '@/services/teamPlanRecord'
+import { buildNamedOffsetSortieFile } from '@/services/teamPlanSortieDownload'
+import { routeCurveSide } from '@survey-planning/offsetRoutePlan.js'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
 import {
@@ -37,6 +61,7 @@ import {
 import {
   spanTrackRowsFromWidthTexts,
   spanTrackPlanFromRows,
+  applySpacingToRows,
   validateSpanTrackRows,
   type SpanTrackRowState,
 } from '@/utils/coordinatorSpanTrackPlan'
@@ -92,11 +117,91 @@ function waypointPtIdent(originalName: string): string {
 
 type TeamCount = 1 | 2 | 3
 
-function formatSurveySide(side: string) {
+function formatSurveySide(
+  side: string,
+  curve: { innerSide: 'left' | 'right'; outerSide: 'left' | 'right' } | null
+) {
   if (side === 'both') return 'both sides'
-  if (side === 'left') return 'inner'
-  if (side === 'right') return 'outer'
+  if (side === 'inner' || side === 'outer') return side
+  if (curve && side === curve.innerSide) return 'inner'
+  if (curve && side === curve.outerSide) return 'outer'
   return side
+}
+
+function RefuelStopField({
+  value,
+  shared,
+  onChange,
+}: {
+  value: AirportResult | null
+  shared: AirportResult | null
+  onChange: (airport: AirportResult | null) => void
+}) {
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const choices = [shared, value].filter((airport, index, list): airport is AirportResult => {
+    if (!airport) return false
+    return list.findIndex((item) => item?.identifier === airport.identifier) === index
+  })
+  return (
+    <div>
+      <select
+        aria-label="Refuel stop"
+        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm"
+        value={value?.identifier ?? ''}
+        onChange={(event) => {
+          const ident = event.target.value
+          if (!ident) {
+            onChange(null)
+            return
+          }
+          const found = choices.find((airport) => airport.identifier === ident)
+          if (found) onChange(found)
+        }}
+      >
+        <option value="">None</option>
+        {choices.map((airport) => (
+          <option key={airport.identifier} value={airport.identifier}>
+            {airport.identifier}
+          </option>
+        ))}
+      </select>
+      <div className="mt-1 flex gap-1">
+        <input
+          aria-label="Refuel airport ident"
+          value={code}
+          onChange={(event) => setCode(event.target.value.toUpperCase())}
+          placeholder="Ident"
+          className="w-16 rounded border border-gray-300 px-1 py-0.5 text-xs font-mono"
+        />
+        <button
+          type="button"
+          disabled={busy || !cleanAirportId(code)}
+          onClick={() => {
+            setBusy(true)
+            setErr(null)
+            void apiService
+              .fetchAirport(code)
+              .then((result) => {
+                if (result.status !== 'found') {
+                  setErr(airportLookupMessage(result))
+                  return
+                }
+                onChange(result.airport)
+                setCode('')
+              })
+              .catch(() => setErr(FAA_AIRPORT_SERVICE_MESSAGE))
+              .finally(() => setBusy(false))
+          }}
+          className="rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+        >
+          {busy ? '…' : 'Look up'}
+        </button>
+      </div>
+      {err ? <p className="mt-1 text-xs text-red-700">{err}</p> : null}
+    </div>
+  )
 }
 
 type FerryMode = 'return-home' | 'staged-refuel'
@@ -122,6 +227,9 @@ type CompareBundle =
 type SortieExportContext = {
   waypoints: WaypointRecord[]
   routeLabel: string
+  points: TeamRoutePoint[]
+  legWidths: Array<{ leftNm: number; rightNm: number } | null> | null
+  policy: { firstOffsetNm: number; stepNm: number }
   resolveTeamAirport: (teamLabel: string) => AirportRecord | null
   resolveAirportByIdent: (ident: string) => AirportRecord | null
 }
@@ -133,6 +241,8 @@ type PlannerSortie = SortieFplSortie & {
   totalNm: number
   overBudget?: boolean
   returnHomeOnly?: boolean
+  side?: 'left' | 'right'
+  offsetsPerSide?: string
 }
 
 function CoordinatorConsoleGuide() {
@@ -184,18 +294,19 @@ function CoordinatorConsoleGuide() {
         </div>
 
         <div>
-          <h3 className="font-semibold text-gray-900 mb-2">Corridor &amp; parallel tracks (Scenario)</h3>
+          <h3 className="font-semibold text-gray-900 mb-2">Corridor and lane spacing (Scenario)</h3>
           <p className="mb-2">
-            NASR <strong>CORRIDORS ARE</strong> lines load automatically. The coordinator sets how many G1000 parallel
-            tracks and at what NM spacing each side needs — not every wing flies the full default 3 → 9 → 15 → 21 set.
-            Adjust offsets and re-run Compare or Run planner to see sortie impact.
+            NASR <strong>CORRIDORS ARE</strong> lines load automatically. The coordinator sets how many offset
+            lanes and at what NM spacing each side needs. The sortie file places a waypoint on each lane. A pass
+            past that side&apos;s published width is not flown. Adjust the list and re-run Compare or Run planner
+            to see sortie impact.
           </p>
           <ul className="space-y-1 list-disc pl-5 text-xs text-gray-600">
             <li>
-              <strong>Inner offsets</strong> — left of centerline (Team 1 / inner crew).
+              <strong>Left offsets</strong> — left of the centerline as flown.
             </li>
             <li>
-              <strong>Outer offsets</strong> — right of centerline (Team 2 / outer crew).
+              <strong>Right offsets</strong> — right of the centerline as flown.
             </li>
             <li>
               <strong>Reset offsets</strong> — restore wing default spacing from the span&apos;s NM half-widths.
@@ -264,15 +375,16 @@ function CoordinatorConsoleGuide() {
               <tr className="border-b border-gray-200 bg-white">
                 <th className="py-2 px-3 text-left font-semibold text-gray-700 w-36">Inner / Outer</th>
                 <td className="py-2 px-3">
-                  Left and right of MTR centerline. On asymmetric spans (e.g. VR114 B→M1: 10 NM inner / 20 NM outer),
-                  offset lists differ by side.
+                  Inner is the inside of the route's curve. Outer is the other side. Published widths stay
+                  left and right of the centerline as flown. Asymmetric spans keep a different list on each
+                  side (VR114 B→M1 is 10 NM left and 20 NM right).
                 </td>
               </tr>
               <tr className="border-b border-gray-200">
                 <th className="py-2 px-3 text-left font-semibold text-gray-700">Offsets (e.g. 3, 9)</th>
                 <td className="py-2 px-3 font-mono">
-                  G1000 parallel-track spacing (NM), inner → outer. Set per NASR span in Scenario; default wing policy
-                  is 3 → 9 → 15 → 21 for a 20 NM half-width unless the coordinator changes it.
+                  Lane spacing (NM), inner then outer. The sortie file places a waypoint on each lane. Set per
+                  NASR span in Scenario; default wing policy is 3 NM, then every 6 NM, and stops at the published width. A 20 NM side is 3, 9, 15. A pass past the edge is not flown.
                 </td>
               </tr>
               <tr className="border-b border-gray-200 bg-white">
@@ -338,6 +450,7 @@ function SurveyPlannerResults({
   showRefuelGuidance?: boolean
 }) {
   const [exportErr, setExportErr] = useState<string | null>(null)
+  const curve = exportCtx?.points?.length ? routeCurveSide(exportCtx.points) : null
 
   const handleExportSortie = (
     team: PlannerResult['teams'][0],
@@ -364,16 +477,52 @@ function SurveyPlannerResults({
         setExportErr(`No destination airport for sortie (${destIdent}).`)
         return
       }
-      const brief = exportSortieFplDownload({
-        waypoints: exportCtx.waypoints,
-        sortie,
-        teamDeparture: dep,
-        destinationAirport: dest,
+      if (!exportCtx.legWidths) {
+        setExportErr('No published width for this segment.')
+        return
+      }
+      const curve = routeCurveSide(exportCtx.points)
+      const side: SortieSide = sortie.side === curve.outerSide ? 'outer' : 'inner'
+      const homeIdent = team.label.replace(/ \((left|right)\)$/i, '').trim()
+      const file = buildNamedOffsetSortieFile({
+        points: exportCtx.points,
+        legWidths: exportCtx.legWidths,
+        fromPt: sortie.waypointFrom,
+        toPt: sortie.waypointTo,
+        side,
+        departure: {
+          identifier: dep.identifier,
+          name: dep.name,
+          latitude: dep.latitude,
+          longitude: dep.longitude,
+          elevation: dep.elevation,
+        },
+        landing: {
+          identifier: dest.identifier,
+          name: dest.name,
+          latitude: dest.latitude,
+          longitude: dest.longitude,
+          elevation: dest.elevation,
+        },
         routeLabel: exportCtx.routeLabel,
-        teamLabel: depIdent,
-        side: formatSurveySide(team.side),
+        sortieNumber: sortie.sortieNumber === 2 ? 2 : 1,
+        homeIdent,
+        policy: exportCtx.policy,
       })
-      onPilotBrief?.(brief)
+      downloadSortieFpl(file.xml, file.filename)
+      onPilotBrief?.({
+        teamLabel: depIdent,
+        side: formatSurveySide(side, curve),
+        rangeLabel: `${sortie.waypointFrom}→${sortie.waypointTo}`,
+        startAt: sortie.startAt,
+        passCount: sortie.offsets.length,
+        offsetsLabel: sortie.offsets.join(', '),
+        ferryInLabel: dep.identifier,
+        ferryOutLabel: dest.identifier,
+        warnRoutePointLimit: false,
+        routePointCount: (file.xml.match(/<waypoint-type>USER WAYPOINT<\/waypoint-type>/g) ?? []).length,
+        filename: file.filename,
+      })
     } catch (e) {
       setExportErr(e instanceof Error ? e.message : 'Failed to export sortie .fpl')
     }
@@ -406,7 +555,7 @@ function SurveyPlannerResults({
           <ul className="space-y-1 text-gray-700">
             {result.teams.map((t) => (
               <li key={t.label}>
-                {t.label} ({formatSurveySide(t.side)}): {t.sortieCount} sortie{t.sortieCount === 1 ? '' : 's'},{' '}
+                {t.label} ({formatSurveySide(t.side, curve)}): {t.sortieCount} sortie{t.sortieCount === 1 ? '' : 's'},{' '}
                 {t.totalNm} NM
               </li>
             ))}
@@ -430,7 +579,7 @@ function SurveyPlannerResults({
       {result.teams.map((t) => (
         <div key={t.label} className="mb-6 last:mb-0">
           <p className="text-sm text-gray-700 mb-2">
-            <strong>{t.label}</strong> ({formatSurveySide(t.side)}): entry {t.entryWaypoint ?? '—'}, ferry in ~{' '}
+            <strong>{t.label}</strong> ({formatSurveySide(t.side, curve)}): entry {t.entryWaypoint ?? '—'}, ferry in ~{' '}
             {t.ferryInNm} NM
             {t.sortieCount != null && (
               <>
@@ -479,7 +628,7 @@ function SurveyPlannerResults({
                     </td>
                     <td className="py-2 pr-3 font-mono">{sortie.returnHomeOnly ? '—' : sortie.startAt}</td>
                     <td className="py-2 pr-3 font-mono text-xs">
-                      {sortie.returnHomeOnly ? '—' : sortie.offsets.join(', ')}
+                      {sortie.returnHomeOnly ? '—' : sortie.offsetsPerSide || sortie.offsets.join(', ') || '—'}
                     </td>
                     <td className="py-2 pr-3 tabular-nums">
                       {sortie.ferryInNm}
@@ -581,10 +730,26 @@ export function CoordinatorSurveyConsolePage() {
   const [widthErr, setWidthErr] = useState<string | null>(null)
   const [widthBusy, setWidthBusy] = useState(false)
   const [spanTrackRows, setSpanTrackRows] = useState<SpanTrackRowState[]>([])
+  const [firstOffsetNm, setFirstOffsetNm] = useState(3)
+  const [stepNm, setStepNm] = useState(6)
+  const spacingRef = useRef({ firstOffsetNm: 3, stepNm: 6 })
+  spacingRef.current = { firstOffsetNm, stepNm }
   const [plannerResult, setPlannerResult] = useState<PlannerResult | null>(null)
   const [compareBundle, setCompareBundle] = useState<CompareBundle | null>(null)
   const [pilotBrief, setPilotBrief] = useState<SortieFplPilotBrief | null>(null)
+  const [crewSides, setCrewSides] = useState<Record<string, SortieSide | null>>({})
+  const [segmentEdits, setSegmentEdits] = useState<Record<string, { from: string; to: string }> | null>(null)
+  const [appliedInsert, setAppliedInsert] = useState<PlanningInsert | null>(null)
+  const [refuelEdits, setRefuelEdits] = useState<Record<string, AirportResult | null> | null>(null)
+  const [useSuggestedSegments, setUseSuggestedSegments] = useState(false)
+  const [teamPlanNotice, setTeamPlanNotice] = useState<string | null>(null)
+  const teamPlanRestored = useRef<string | null>(null)
   const { isSeen, markSeen } = useHintsSeen()
+
+  const savedTeamPlan = useLiveQuery(
+    () => (planId ? db.teamPlans.get(planId) : undefined),
+    [planId]
+  )
 
   const planBundle = useLiveQuery(async () => {
     if (!planId) return null
@@ -622,22 +787,90 @@ export function CoordinatorSurveyConsolePage() {
       if (refuelAirport?.identifier.toUpperCase() === code) return airportResultToRecord(refuelAirport)
       if (team2Airport?.identifier.toUpperCase() === code) return airportResultToRecord(team2Airport)
       if (team3Airport?.identifier.toUpperCase() === code) return airportResultToRecord(team3Airport)
+      for (const airport of Object.values(refuelEdits ?? {})) {
+        if (airport?.identifier.toUpperCase() === code) return airportResultToRecord(airport)
+      }
+      for (const team of savedTeamPlan?.teams ?? []) {
+        if (team.refuelStop?.identifier.toUpperCase() === code) {
+          return {
+            id: team.refuelStop.identifier,
+            identifier: team.refuelStop.identifier,
+            name: team.refuelStop.name,
+            latitude: team.refuelStop.latitude,
+            longitude: team.refuelStop.longitude,
+            elevation: team.refuelStop.elevation,
+          }
+        }
+      }
       return null
     }
+    let waypoints = planBundle.waypoints
+    if (appliedInsert) {
+      const idents = waypoints.map((waypoint) => waypointPtIdent(waypoint.originalName))
+      const index = idents.indexOf(appliedInsert.afterIdent)
+      if (index >= 0) {
+        const inserted = {
+          id: `wp-${appliedInsert.point.ptIdent}`,
+          flightPlanId: planBundle.plan.id,
+          originalName: appliedInsert.point.originalName || appliedInsert.point.ptIdent,
+          g1000Name: appliedInsert.point.g1000Name || appliedInsert.point.ptIdent,
+          latitude: appliedInsert.point.lat,
+          longitude: appliedInsert.point.lon,
+          routeType: waypoints[0].routeType,
+          sequence: index + 1,
+        }
+        waypoints = [
+          ...waypoints.slice(0, index + 1),
+          inserted,
+          ...waypoints.slice(index + 1).map((waypoint, offset) => ({ ...waypoint, sequence: index + 2 + offset })),
+        ]
+      }
+    }
+    const geometryPoints: TeamRoutePoint[] = waypoints.map((waypoint) => ({
+      ptIdent: waypointPtIdent(waypoint.originalName),
+      originalName: waypoint.originalName,
+      lat: waypoint.latitude,
+      lon: waypoint.longitude,
+      g1000Name: waypoint.g1000Name,
+    }))
+    let previewWidths: Array<{ leftNm: number; rightNm: number } | null> | null = null
+    if (routeMeta && spanTrackRows.length > 0 && widthTexts.length > 0) {
+      try {
+        const summaries = buildLegWidthSummaries({
+          routeType: routeMeta.routeType,
+          routeNumber: routeMeta.routeNumber,
+          waypoints: geometryPoints.map((point) => ({ ptIdent: point.ptIdent, lat: point.lat, lon: point.lon })),
+          widthTexts,
+          teams: [],
+          spanTrackPlan: spanTrackPlanFromRows(spanTrackRows),
+        })
+        previewWidths = summaries.map((leg) =>
+          leg.leftNm != null && leg.rightNm != null ? { leftNm: leg.leftNm, rightNm: leg.rightNm } : null
+        )
+      } catch {
+        previewWidths = null
+      }
+    }
     return {
-      waypoints: planBundle.waypoints,
+      waypoints,
       routeLabel,
+      points: geometryPoints,
+      legWidths: previewWidths,
+      policy: { firstOffsetNm, stepNm },
       resolveTeamAirport: (teamLabel: string) => {
         const base = teamLabel.replace(/ \((left|right)\)$/i, '').trim()
         return resolveAirportByIdent(base)
       },
       resolveAirportByIdent,
     }
-  }, [planBundle, routeMeta, refuelAirport, team1Airport, team2Airport, team3Airport])
+  }, [planBundle, routeMeta, refuelAirport, team1Airport, team2Airport, team3Airport, refuelEdits, savedTeamPlan, appliedInsert, firstOffsetNm, stepNm, spanTrackRows, widthTexts])
 
   const isAnchorPlan = Boolean(planBundle && isCoordinatorSurveyAnchor(planBundle.plan))
 
   useEffect(() => {
+    teamPlanRestored.current = null
+    setCrewSides({})
+    setTeamPlanNotice(null)
     setTeam1Code('')
     setTeam1Airport(null)
     setTeam1Err(null)
@@ -650,10 +883,14 @@ export function CoordinatorSurveyConsolePage() {
     setRefuelCode('')
     setRefuelAirport(null)
     setRefuelErr(null)
+    setSegmentEdits(null)
+    setRefuelEdits(null)
+    setUseSuggestedSegments(false)
+    setAppliedInsert(null)
   }, [planId])
 
   useEffect(() => {
-    if (!planBundle || isAnchorPlan) return
+    if (!planBundle || isAnchorPlan || savedTeamPlan === undefined || savedTeamPlan) return
     const destId = planBundle.destination?.identifier ?? ''
     const depId = planBundle.departure?.identifier ?? ''
     if (destId && destId !== depId) {
@@ -676,7 +913,50 @@ export function CoordinatorSurveyConsolePage() {
       })
       setRefuelErr(null)
     }
-  }, [planBundle?.plan.id, planBundle?.destination?.identifier, planBundle?.departure?.identifier, isAnchorPlan])
+  }, [planBundle?.plan.id, planBundle?.destination?.identifier, planBundle?.departure?.identifier, isAnchorPlan, savedTeamPlan])
+
+  useEffect(() => {
+    if (!planId || savedTeamPlan === undefined) return
+    if (savedTeamPlan && savedTeamPlan.flightPlanId !== planId) return
+    if (teamPlanRestored.current === planId) return
+    teamPlanRestored.current = planId
+    if (!savedTeamPlan) return
+    const count = Math.min(3, Math.max(1, savedTeamPlan.teams.length)) as TeamCount
+    setTeamCount(count)
+    setRunMode('single')
+    const apply = (
+      airport: TeamPlanAirport | null,
+      setCode: (value: string) => void,
+      setAirport: (value: AirportResult | null) => void
+    ) => {
+      if (!airport) return
+      setCode(airport.identifier)
+      setAirport({
+        identifier: airport.identifier,
+        name: airport.name,
+        latitude: airport.latitude,
+        longitude: airport.longitude,
+        elevation: airport.elevation,
+      })
+    }
+    const byId = (id: string) => savedTeamPlan.teams.find((team) => team.id === id)
+    apply(byId('team1')?.departure ?? null, setTeam1Code, setTeam1Airport)
+    apply(byId('team2')?.departure ?? null, setTeam2Code, setTeam2Airport)
+    apply(byId('team3')?.departure ?? null, setTeam3Code, setTeam3Airport)
+    const sides: Record<string, SortieSide | null> = {}
+    for (const team of savedTeamPlan.teams) {
+      sides[team.id] = team.sorties.find((sortie) => sortie.number === 1)?.side ?? null
+    }
+    setCrewSides(sides)
+    if (savedTeamPlan.firstOffsetNm != null && savedTeamPlan.firstOffsetNm > 0) {
+      setFirstOffsetNm(savedTeamPlan.firstOffsetNm)
+    }
+    if (savedTeamPlan.stepNm != null && savedTeamPlan.stepNm > 0) {
+      setStepNm(savedTeamPlan.stepNm)
+    }
+    setAppliedInsert(savedTeamPlan.routeInsert ?? null)
+    setTeamPlanNotice('Saved team plan loaded.')
+  }, [planId, savedTeamPlan])
 
   const loadWidth = useCallback(async () => {
     if (!routeMeta || (routeMeta.routeType !== 'IR' && routeMeta.routeType !== 'VR')) {
@@ -706,10 +986,16 @@ export function CoordinatorSurveyConsolePage() {
       setSpanTrackRows([])
       return
     }
-    setSpanTrackRows(spanTrackRowsFromWidthTexts(widthTexts))
+    setSpanTrackRows(spanTrackRowsFromWidthTexts(widthTexts, spacingRef.current))
     setPlannerResult(null)
     setCompareBundle(null)
   }, [widthTexts])
+
+  useEffect(() => {
+    setSpanTrackRows((rows) =>
+      rows.length === 0 ? rows : applySpacingToRows(rows, { firstOffsetNm, stepNm })
+    )
+  }, [firstOffsetNm, stepNm])
 
   useEffect(() => {
     setPlannerResult(null)
@@ -747,22 +1033,21 @@ export function CoordinatorSurveyConsolePage() {
     setBusy: (b: boolean) => void,
     onSuccess?: () => void
   ) => {
-    const trimmed = code.trim()
-    if (!trimmed) return
+    if (!cleanAirportId(code)) return
     setBusy(true)
     setErr(null)
     try {
-      const airport = await apiService.fetchAirport(trimmed)
-      if (!airport) {
+      const result = await apiService.fetchAirport(code)
+      if (result.status !== 'found') {
         setAirport(null)
-        setErr(`Could not find airport: ${trimmed}`)
+        setErr(airportLookupMessage(result))
         return
       }
-      setAirport(airport)
+      setAirport(result.airport)
       onSuccess?.()
     } catch {
       setAirport(null)
-      setErr(`Could not find airport: ${trimmed}`)
+      setErr(FAA_AIRPORT_SERVICE_MESSAGE)
     } finally {
       setBusy(false)
     }
@@ -870,6 +1155,7 @@ export function CoordinatorSurveyConsolePage() {
       widthTexts,
       sortieBudgetNm,
       spanTrackPlan,
+      trackPolicy: { firstOffsetNm, stepNm },
       ferryMode,
       recoveryAirport:
         ferryMode === 'staged-refuel' && refuelAirport
@@ -961,6 +1247,359 @@ export function CoordinatorSurveyConsolePage() {
   const team1Ready = isAnchorPlan ? Boolean(team1Airport) : Boolean(planBundle?.departure)
   const needsTeam2 = runMode !== 'single' || teamCount >= 2
   const needsTeam3 = runMode === 'compare-2-3' || (runMode === 'single' && teamCount === 3)
+  const offsetCrews = useMemo(() => {
+    if (!planBundle) return []
+    const planDestination = planBundle.destination ?? null
+    const specs: Array<{ id: string; label: string; airport: AirportResult | null; fallback: AirportRecord | null }> = [
+      { id: 'team1', label: 'Team 1', airport: team1Airport, fallback: planBundle.departure ?? null },
+    ]
+    if (needsTeam2) specs.push({ id: 'team2', label: 'Team 2', airport: team2Airport, fallback: null })
+    if (needsTeam3) specs.push({ id: 'team3', label: 'Team 3', airport: team3Airport, fallback: null })
+    return specs.map((crew) => ({
+      id: crew.id,
+      label: crew.label,
+      ...crewOffsetAirports({
+        crewDeparture: crew.airport ? airportResultToRecord(crew.airport) : null,
+        planDeparture: crew.fallback,
+        planDestination,
+      }),
+    }))
+  }, [planBundle, needsTeam2, needsTeam3, team1Airport, team2Airport, team3Airport])
+
+  const routePointIdents = useMemo(() => {
+    const idents = planBundle?.waypoints.map((waypoint) => waypointPtIdent(waypoint.originalName)) ?? []
+    if (!appliedInsert) return idents
+    const index = idents.indexOf(appliedInsert.afterIdent)
+    if (index < 0) return idents
+    return [...idents.slice(0, index + 1), appliedInsert.point.ptIdent, ...idents.slice(index + 1)]
+  }, [planBundle, appliedInsert])
+
+  const geographicPlan = useMemo(() => {
+    if (teamCount !== 3 || !planBundle) return null
+    const assignments =
+      plannerResult && 'segmentAssignments' in plannerResult ? plannerResult.segmentAssignments : null
+    const suggestionFor = (ident: string | null | undefined) => {
+      const assigned = assignments?.find((item) => item.teamLabel.toUpperCase() === (ident ?? '').toUpperCase())
+      return assigned?.waypointFrom && assigned.waypointTo
+        ? { from: assigned.waypointFrom, to: assigned.waypointTo }
+        : null
+    }
+    const crews: Array<{ id: 'team1' | 'team2' | 'team3'; ident: string | null; airport: AirportResult | null }> = [
+      {
+        id: 'team1',
+        ident: team1Airport?.identifier ?? planBundle.departure?.identifier ?? null,
+        airport: team1Airport ?? (planBundle.departure
+          ? {
+              identifier: planBundle.departure.identifier,
+              name: planBundle.departure.name,
+              latitude: planBundle.departure.latitude,
+              longitude: planBundle.departure.longitude,
+              elevation: planBundle.departure.elevation,
+            }
+          : null),
+      },
+      { id: 'team2', ident: team2Airport?.identifier ?? null, airport: team2Airport },
+      { id: 'team3', ident: team3Airport?.identifier ?? null, airport: team3Airport },
+    ]
+    const basePoints = planBundle.waypoints.map((waypoint) => ({
+      ptIdent: waypointPtIdent(waypoint.originalName),
+      lat: waypoint.latitude,
+      lon: waypoint.longitude,
+      g1000Name: waypoint.g1000Name,
+    }))
+    const baseWidths =
+      plannerResult && 'legs' in plannerResult
+        ? plannerResult.legs.map((leg) =>
+            leg.leftNm != null && leg.rightNm != null ? { leftNm: leg.leftNm, rightNm: leg.rightNm } : null
+          )
+        : null
+    const expanded = expandPlanningRoute(basePoints, baseWidths ?? [], appliedInsert)
+    const points = expanded.points
+    const legWidths = baseWidths ? expanded.widths : null
+    const curve = routeCurveSide(points)
+    const rows = crews.map((crew) => {
+      const saved = savedTeamPlan?.teams.find((team) => team.id === crew.id)
+      const suggested = suggestionFor(crew.ident)
+      const segment = useSuggestedSegments
+        ? suggested ?? { from: '', to: '' }
+        : segmentEdits?.[crew.id] ??
+          (saved?.segmentFrom && saved.segmentTo
+            ? { from: saved.segmentFrom, to: saved.segmentTo }
+            : suggested ?? { from: '', to: '' })
+      const home = crew.airport
+      const bare =
+        home && legWidths && segment.from && segment.to
+          ? planTeamSegmentDay({
+              points,
+              legWidths,
+              fromPt: segment.from,
+              toPt: segment.to,
+              home: { lat: home.latitude, lon: home.longitude, identifier: home.identifier },
+              refuel: null,
+              sortie1Side: crewSides[crew.id] === 'outer' ? curve.outerSide : curve.innerSide,
+              policy: { firstOffsetNm, stepNm },
+              budgetNm: sortieBudgetNm,
+            })
+          : null
+      let refuel: AirportResult | null = null
+      if (refuelEdits && crew.id in refuelEdits) refuel = refuelEdits[crew.id]
+      else if (!useSuggestedSegments && saved && 'refuelStop' in saved) {
+        const stop = saved.refuelStop
+        refuel = stop
+          ? {
+              identifier: stop.identifier,
+              name: stop.name,
+              latitude: stop.latitude,
+              longitude: stop.longitude,
+              elevation: stop.elevation,
+            }
+          : null
+      } else if (
+        ferryMode === 'staged-refuel' &&
+        refuelAirport &&
+        bare &&
+        teamNeedsRefuel(bare, sortieBudgetNm)
+      ) {
+        refuel = refuelAirport
+      }
+      const day =
+        refuel && home && legWidths && segment.from && segment.to
+          ? planTeamSegmentDay({
+              points,
+              legWidths,
+              fromPt: segment.from,
+              toPt: segment.to,
+              home: { lat: home.latitude, lon: home.longitude, identifier: home.identifier },
+              refuel: { lat: refuel.latitude, lon: refuel.longitude, identifier: refuel.identifier },
+              sortie1Side: crewSides[crew.id] === 'outer' ? curve.outerSide : curve.innerSide,
+              policy: { firstOffsetNm, stepNm },
+              budgetNm: sortieBudgetNm,
+            })
+          : bare
+      return {
+        id: crew.id,
+        label: crew.ident ?? crew.id,
+        from: segment.from,
+        to: segment.to,
+        refuel,
+        day,
+      }
+    })
+    const validation = validateTeamSegments(
+      routePointIdents,
+      rows.map((row) => ({ label: row.label, from: row.from, to: row.to }))
+    )
+    const planned = rows.filter((row) => row.day)
+    const totalWingNm =
+      Math.round(planned.reduce((sum, row) => sum + (row.day?.totalNm ?? 0), 0) * 10) / 10
+    const totalSorties = planned.reduce((sum, row) => sum + (row.day?.sorties.length ?? 0), 0)
+    return { rows, validation, totalWingNm, totalSorties }
+  }, [
+    teamCount,
+    planBundle,
+    plannerResult,
+    savedTeamPlan,
+    useSuggestedSegments,
+    segmentEdits,
+    refuelEdits,
+    team1Airport,
+    team2Airport,
+    team3Airport,
+    crewSides,
+    firstOffsetNm,
+    stepNm,
+    sortieBudgetNm,
+    ferryMode,
+    refuelAirport,
+    routePointIdents,
+    appliedInsert,
+  ])
+
+  const teamSegments = useMemo(() => {
+    const letters = routePointIdents
+    const full =
+      letters.length >= 2 ? { from: letters[0], to: letters[letters.length - 1], start: letters[0] } : null
+    if (geographicPlan) {
+      return {
+        team1: geographicPlan.rows[0]?.from
+          ? { from: geographicPlan.rows[0].from, to: geographicPlan.rows[0].to, start: geographicPlan.rows[0].from }
+          : null,
+        team2: geographicPlan.rows[1]?.from
+          ? { from: geographicPlan.rows[1].from, to: geographicPlan.rows[1].to, start: geographicPlan.rows[1].from }
+          : null,
+        team3: geographicPlan.rows[2]?.from
+          ? { from: geographicPlan.rows[2].from, to: geographicPlan.rows[2].to, start: geographicPlan.rows[2].from }
+          : null,
+      }
+    }
+    return { team1: full, team2: full, team3: full }
+  }, [geographicPlan, routePointIdents])
+
+  const geographicDetail = useMemo(() => {
+    if (!geographicPlan || !plannerResult || !('teams' in plannerResult)) return null
+    const teams = geographicPlan.rows.map((row) => {
+      const over = row.day?.sorties.filter((sortie) => sortie.overBudget) ?? []
+      const note =
+        over.length > 0
+          ? over.map((sortie) => `Sortie ${sortie.number} is over the ${sortieBudgetNm} NM budget.`).join(' ')
+          : null
+      return {
+        label: `${row.label} — ${row.from || '?'}→${row.to || '?'}`,
+        side: 'both' as const,
+        waypointFrom: row.from,
+        waypointTo: row.to,
+        entryWaypoint: row.day?.sorties[0]?.startAt ?? null,
+        entryIndex: row.day?.sorties[0]?.startIdx ?? null,
+        ferryInNm: row.day?.sorties[0]?.ferryInNm ?? 0,
+        sorties: (row.day?.sorties ?? []).map((sortie) => ({
+          sortieNumber: sortie.number,
+          startIdx: sortie.startIdx,
+          endIdx: sortie.endIdx,
+          startAt: sortie.startAt ?? row.from,
+          waypointFrom: sortie.waypointFrom,
+          waypointTo: sortie.waypointTo,
+          offsets: sortie.offsets,
+          offsetsPerSide: sortie.offsets.join(', '),
+          routeSequence: sortie.routeSequence,
+          ferryInNm: sortie.ferryInNm,
+          alongRouteNm: Math.round(sortie.alongRouteNm * 10) / 10,
+          ferryOutNm: sortie.ferryOutNm,
+          ferryInLabel: sortie.departureIdent,
+          ferryOutLabel: sortie.landingIdent,
+          totalNm: sortie.distanceNm,
+          overBudget: sortie.overBudget,
+          side: sortie.surveySide,
+        })),
+        sortieCount: row.day?.sorties.length ?? 0,
+        totalNm: row.day?.totalNm ?? 0,
+        note,
+      }
+    })
+    return {
+      ...plannerResult,
+      teams,
+      totalSorties: geographicPlan.totalSorties,
+      totalWingNm: geographicPlan.totalWingNm,
+    }
+  }, [geographicPlan, plannerResult, sortieBudgetNm])
+
+  const rememberSides = useCallback((sides: Record<string, SortieSide | null>) => {
+    setCrewSides(sides)
+  }, [])
+
+  const planComparison = useMemo(() => {
+    if (!planBundle || !plannerResult || !('legs' in plannerResult)) return null
+    const points = planBundle.waypoints.map((waypoint) => ({
+      ptIdent: waypointPtIdent(waypoint.originalName),
+      lat: waypoint.latitude,
+      lon: waypoint.longitude,
+      g1000Name: waypoint.g1000Name,
+    }))
+    const legWidths = plannerResult.legs.map((leg) =>
+      leg.leftNm != null && leg.rightNm != null ? { leftNm: leg.leftNm, rightNm: leg.rightNm } : null
+    )
+    if (legWidths.some((leg) => leg == null)) return null
+    const homes = [team1Airport, team2Airport, team3Airport].filter((airport): airport is AirportResult => Boolean(airport))
+    if (homes.length < 2) return null
+    const refuel =
+      refuelAirport ?? savedTeamPlan?.teams.find((team) => team.refuelStop)?.refuelStop ?? null
+    const saved =
+      savedTeamPlan && savedTeamPlan.flightPlanId === planId
+        ? savedTeamPlan.teams
+            .filter((team) => team.departure && team.segmentFrom && team.segmentTo)
+            .map((team) => ({
+              identifier: team.departure!.identifier,
+              from: team.segmentFrom!,
+              to: team.segmentTo!,
+              refuel: Boolean(team.refuelStop),
+            }))
+        : undefined
+    return compareSurveyPlans({
+      points,
+      legWidths,
+      homes,
+      refuel,
+      saved,
+      policy: { firstOffsetNm, stepNm },
+      budgetNm: sortieBudgetNm,
+    })
+  }, [
+    planBundle,
+    plannerResult,
+    team1Airport,
+    team2Airport,
+    team3Airport,
+    refuelAirport,
+    savedTeamPlan,
+    planId,
+    firstOffsetNm,
+    stepNm,
+    sortieBudgetNm,
+  ])
+
+  const applyComparison = (option: ComparisonOption) => {
+    setUseSuggestedSegments(false)
+    const crews = [
+      { id: 'team1', identifier: team1Airport?.identifier ?? '' },
+      { id: 'team2', identifier: team2Airport?.identifier ?? '' },
+      { id: 'team3', identifier: team3Airport?.identifier ?? '' },
+    ].filter((crew) => crew.identifier)
+    const edits = assignmentEditsForOption(option, crews)
+    setSegmentEdits(edits.segments)
+    setRefuelEdits(edits.refuels)
+    setAppliedInsert(edits.insertedPoint)
+    setTeamPlanNotice('Comparison loaded into Geographic assignment. Save team plan when you want Map View to use it.')
+  }
+
+  const saveTeamPlan = async () => {
+    if (!planId) return
+    if (geographicPlan && !geographicPlan.validation.ok) {
+      setTeamPlanNotice(geographicPlan.validation.messages[0] ?? 'Fix the team segments before saving.')
+      return
+    }
+    const airportOf = (airport: AirportResult | null): TeamPlanAirport | null =>
+      airport
+        ? {
+            identifier: airport.identifier,
+            name: airport.name || airport.identifier,
+            latitude: airport.latitude,
+            longitude: airport.longitude,
+            elevation: airport.elevation,
+          }
+        : null
+    const plan = draftTeamPlan({
+      flightPlanId: planId,
+      savedAt: new Date().toISOString(),
+      crews: offsetCrews.map((crew) => ({
+        id: crew.id as 'team1' | 'team2' | 'team3',
+        label: crew.label,
+        departure: airportOf(
+          crew.id === 'team1' ? team1Airport : crew.id === 'team2' ? team2Airport : team3Airport
+        ) ?? (crew.departure
+          ? {
+              identifier: crew.departure.identifier,
+              name: crew.departure.name || crew.departure.identifier,
+              latitude: crew.departure.latitude,
+              longitude: crew.departure.longitude,
+              elevation: crew.departure.elevation,
+            }
+          : null),
+        landing: null,
+        refuelStop: airportOf(geographicPlan?.rows.find((row) => row.id === crew.id)?.refuel ?? null),
+      })),
+      sides: Object.fromEntries(
+        offsetCrews.map((crew) => [crew.id, crewSides[crew.id] ?? (geographicPlan ? 'inner' : null)])
+      ),
+      segments: teamSegments,
+      firstOffsetNm,
+      stepNm,
+    })
+    plan.routeInsert = appliedInsert
+    await db.teamPlans.put(plan)
+    setTeamPlanNotice('Team plan saved. Map View uses this plan.')
+  }
+  const offsetRouteKind =
+    routeMeta?.routeType === 'SR' ? 'sr' : routeMeta?.routeType === 'IR' || routeMeta?.routeType === 'VR' ? 'irvr' : 'other'
   const team2Ready = !needsTeam2 || Boolean(team2Airport)
   const team3Ready = !needsTeam3 || Boolean(team3Airport)
   const refuelReady = ferryMode !== 'staged-refuel' || Boolean(refuelAirport)
@@ -1110,6 +1749,10 @@ export function CoordinatorSurveyConsolePage() {
               <CorridorTrackPlanEditor
                 spanTrackRows={spanTrackRows}
                 onSpanTrackRowsChange={setSpanTrackRows}
+                firstOffsetNm={firstOffsetNm}
+                stepNm={stepNm}
+                onFirstOffsetNmChange={setFirstOffsetNm}
+                onStepNmChange={setStepNm}
                 widthBusy={widthBusy}
                 widthErr={widthErr}
                 spanTrackErr={spanTrackErr}
@@ -1133,7 +1776,7 @@ export function CoordinatorSurveyConsolePage() {
                   body={
                     <>
                       After corridor tracks are set in <strong>Scenario</strong>, choose planner mode, team
-                      departures, sortie budget, and ferry policy here. Changing parallel tracks in Scenario clears
+                      departures, sortie budget, and ferry policy here. Changing lane spacing in Scenario clears
                       results — run Compare or Run planner again to refresh sortie counts.
                       <br />
                       <br />
@@ -1622,6 +2265,15 @@ export function CoordinatorSurveyConsolePage() {
               }
               routeMeta={routeMeta}
               widthTexts={widthTexts}
+              legWidths={
+                legPreview
+                  ? legPreview.map((leg) =>
+                      leg.leftNm != null && leg.rightNm != null
+                        ? { leftNm: leg.leftNm, rightNm: leg.rightNm }
+                        : null
+                    )
+                  : null
+              }
               departureMissingMessage={
                 isAnchorPlan
                   ? 'Look up Team 1 departure airport above before exporting a sortie fragment.'
@@ -1629,6 +2281,46 @@ export function CoordinatorSurveyConsolePage() {
               }
               onPilotBrief={setPilotBrief}
             />
+            </div>
+
+            <div className="lg:col-span-2 xl:col-span-2">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => void saveTeamPlan()}
+                  disabled={Boolean(geographicPlan && !geographicPlan.validation.ok)}
+                  className="px-3 py-2 text-sm font-medium rounded-lg bg-cap-ultramarine text-white disabled:opacity-50"
+                >
+                  Save team plan
+                </button>
+                {geographicPlan && !geographicPlan.validation.ok && (
+                  <div role="alert">
+                    {geographicPlan.validation.messages.map((message) => (
+                      <p key={message} className="text-sm text-red-700">
+                        {message}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {teamPlanNotice && <p className="text-sm text-gray-700">{teamPlanNotice}</p>}
+              </div>
+              <CoordinatorOffsetPlans
+                key={planId}
+                routeLabel={
+                  routeMeta
+                    ? `${routeMeta.routeType}${routeMeta.routeNumber}`
+                    : planBundle.plan.name.replace(/\s+/g, '')
+                }
+                waypoints={planBundle.waypoints}
+                widthTexts={widthTexts}
+                widthBusy={widthBusy}
+                widthError={widthErr}
+                routeKind={offsetRouteKind}
+                onReloadWidths={() => void loadWidth()}
+                crews={offsetCrews}
+                savedTeams={savedTeamPlan?.teams}
+                onSidesChange={rememberSides}
+              />
             </div>
 
             {(compareBundle || plannerResult) && legsResult && (
@@ -1645,46 +2337,177 @@ export function CoordinatorSurveyConsolePage() {
                   ) : null}
                 </p>
 
-                {plannerResult &&
-                  'segmentAssignments' in plannerResult &&
-                  plannerResult.segmentAssignments &&
-                  plannerResult.segmentAssignments.length > 0 && (
+                {geographicPlan && (
                     <div className="mb-8 rounded-lg border-2 border-cap-ultramarine/40 bg-slate-50 p-4">
-                      <h3 className="text-base font-semibold text-gray-900 mb-2">Geographic assignment</h3>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="text-base font-semibold text-gray-900">Geographic assignment</h3>
+                        <button
+                          type="button"
+                          disabled={
+                            !(
+                              plannerResult &&
+                              'segmentAssignments' in plannerResult &&
+                              plannerResult.segmentAssignments?.length
+                            )
+                          }
+                          onClick={() => {
+                            setUseSuggestedSegments(true)
+                            setSegmentEdits(null)
+                            setRefuelEdits(null)
+                            setAppliedInsert(null)
+                          }}
+                          className="rounded-lg border border-cap-ultramarine px-3 py-1.5 text-sm font-medium text-cap-ultramarine disabled:opacity-50"
+                        >
+                          Reset to suggested split
+                        </button>
+                      </div>
                       <p className="text-sm text-gray-700 mb-3">
-                        Split boundaries at{' '}
-                        <strong>
-                          {plannerResult.geographicSplits
-                            ?.map((s: { boundaryPt: string }) => s.boundaryPt)
-                            .join(' and ') ?? '—'}
-                        </strong>
-                        . Each segment includes both corridor sides from the assigned departure.
+                        {useSuggestedSegments && plannerResult && 'geographicSplits' in plannerResult ? (
+                          <>
+                            Suggested split at{' '}
+                            <strong>
+                              {plannerResult.geographicSplits
+                                ?.map((split: { boundaryPt: string }) => split.boundaryPt)
+                                .join(' and ') ?? '—'}
+                            </strong>
+                            .{' '}
+                          </>
+                        ) : (
+                          <>Edited segments.{' '}
+                          </>
+                        )}
+                        Each team flies both corridor sides of its segment. Save stores these segments.
                       </p>
                       <table className="min-w-full text-sm">
                         <thead>
                           <tr className="border-b border-gray-300 text-left text-gray-600">
-                            <th className="py-2 pr-4">Team</th>
-                            <th className="py-2 pr-4">Segment</th>
-                            <th className="py-2 pr-4">Sorties</th>
-                            <th className="py-2">NM</th>
+                            <th className="py-2 pr-3">Team</th>
+                            <th className="py-2 pr-3">From</th>
+                            <th className="py-2 pr-3">To</th>
+                            <th className="py-2 pr-3">Refuel stop</th>
+                            <th className="py-2 pr-3">Sortie 1</th>
+                            <th className="py-2 pr-3">Sortie 2</th>
+                            <th className="py-2">Total</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {plannerResult.segmentAssignments.map((a) => (
-                              <tr key={`${a.teamLabel}-${a.waypointFrom}-${a.waypointTo}`} className="border-b border-gray-200">
-                                <td className="py-2 pr-4 font-medium">{a.teamLabel}</td>
-                                <td className="py-2 pr-4 font-mono">
-                                  {a.waypointFrom}→{a.waypointTo}
-                                </td>
-                                <td className="py-2 pr-4 tabular-nums">{a.sortieCount}</td>
-                                <td className="py-2 tabular-nums">{a.totalNm}</td>
-                              </tr>
-                            )
-                          )}
+                          {geographicPlan.rows.map((row) => (
+                            <tr key={row.id} className="border-b border-gray-200 align-top">
+                              <td className="py-2 pr-3 font-medium">{row.label}</td>
+                              <td className="py-2 pr-3">
+                                <select
+                                  aria-label={`${row.label} from`}
+                                  className="rounded border border-gray-300 bg-white px-2 py-1 font-mono"
+                                  value={row.from}
+                                  onChange={(event) => {
+                                    const value = event.target.value
+                                    setUseSuggestedSegments(false)
+                                    setSegmentEdits((current) => {
+                                      const base = Object.fromEntries(
+                                        geographicPlan.rows.map((item) => [item.id, { from: item.from, to: item.to }])
+                                      )
+                                      return {
+                                        ...(current ?? base),
+                                        [row.id]: { ...(current?.[row.id] ?? base[row.id]), from: value },
+                                      }
+                                    })
+                                  }}
+                                >
+                                  <option value="">—</option>
+                                  {routePointIdents.map((ident) => (
+                                    <option key={`${row.id}-from-${ident}`} value={ident}>
+                                      {ident}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-2 pr-3">
+                                <select
+                                  aria-label={`${row.label} to`}
+                                  className="rounded border border-gray-300 bg-white px-2 py-1 font-mono"
+                                  value={row.to}
+                                  onChange={(event) => {
+                                    const value = event.target.value
+                                    setUseSuggestedSegments(false)
+                                    setSegmentEdits((current) => {
+                                      const base = Object.fromEntries(
+                                        geographicPlan.rows.map((item) => [item.id, { from: item.from, to: item.to }])
+                                      )
+                                      return {
+                                        ...(current ?? base),
+                                        [row.id]: { ...(current?.[row.id] ?? base[row.id]), to: value },
+                                      }
+                                    })
+                                  }}
+                                >
+                                  <option value="">—</option>
+                                  {routePointIdents.map((ident) => (
+                                    <option key={`${row.id}-to-${ident}`} value={ident}>
+                                      {ident}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-2 pr-3">
+                                <RefuelStopField
+                                  value={row.refuel}
+                                  shared={refuelAirport}
+                                  onChange={(airport) => {
+                                    setRefuelEdits((current) => ({ ...(current ?? {}), [row.id]: airport }))
+                                  }}
+                                />
+                              </td>
+                              <td className="py-2 pr-3 tabular-nums">
+                                {row.day?.sorties[0] ? (
+                                  <span className={row.day.sorties[0].overBudget ? 'text-amber-800 font-medium' : ''}>
+                                    {row.day.sorties[0].distanceNm}
+                                    {row.day.sorties[0].overBudget ? ' ⚠' : ''}
+                                  </span>
+                                ) : (
+                                  '—'
+                                )}
+                              </td>
+                              <td className="py-2 pr-3 tabular-nums">
+                                {row.day?.sorties[1] ? (
+                                  <span className={row.day.sorties[1].overBudget ? 'text-amber-800 font-medium' : ''}>
+                                    {row.day.sorties[1].distanceNm}
+                                    {row.day.sorties[1].overBudget ? ' ⚠' : ''}
+                                  </span>
+                                ) : (
+                                  '—'
+                                )}
+                              </td>
+                              <td className="py-2 tabular-nums">{row.day?.totalNm ?? '—'}</td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
+                      {!geographicPlan.validation.ok && (
+                        <div className="mt-3" role="alert">
+                          {geographicPlan.validation.messages.map((message) => (
+                            <p key={message} className="text-sm text-red-700">
+                              {message}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      <p className="mt-3 text-sm text-gray-800">
+                        Wing total <strong>{geographicPlan.totalWingNm}</strong> NM · {geographicPlan.totalSorties}{' '}
+                        sorties
+                        {geographicPlan.rows.some((row) => row.day?.sorties.some((sortie) => sortie.overBudget))
+                          ? ' · one or more sorties exceed the budget'
+                          : ''}
+                      </p>
                     </div>
                   )}
+
+                {planComparison && planComparison.options.length > 0 && (
+                  <ComparePlansPanel
+                    options={planComparison.options}
+                    spacingNote={planComparison.spacingNote}
+                    onApply={applyComparison}
+                  />
+                )}
 
                 {compareBundle?.kind === '1-2' && (
                   <div className="mb-8 rounded-lg border-2 border-cap-ultramarine/40 bg-slate-50 p-4">
@@ -1850,9 +2673,9 @@ export function CoordinatorSurveyConsolePage() {
                   <thead>
                     <tr className="border-b border-gray-200 text-left text-gray-600">
                       <th className="py-2 pr-3">Leg</th>
-                      <th className="py-2 pr-3">Inner / Outer NM</th>
-                      <th className="py-2 pr-3">Offsets Inner</th>
-                      <th className="py-2 pr-3">Offsets Outer</th>
+                      <th className="py-2 pr-3">Left / Right NM</th>
+                      <th className="py-2 pr-3">Offsets left</th>
+                      <th className="py-2 pr-3">Offsets right</th>
                       <th className="py-2">Chain NM</th>
                     </tr>
                   </thead>
@@ -1865,8 +2688,14 @@ export function CoordinatorSurveyConsolePage() {
                         <td className="py-2 pr-3 tabular-nums">
                           {leg.leftNm ?? '—'} / {leg.rightNm ?? '—'}
                         </td>
-                        <td className="py-2 pr-3 font-mono text-xs">{leg.leftOffsets.join(', ') || '—'}</td>
-                        <td className="py-2 pr-3 font-mono text-xs">{leg.rightOffsets.join(', ') || '—'}</td>
+                        <td className="py-2 pr-3 font-mono text-xs">
+                          {leg.leftOffsets.join(', ') || '—'}
+                          {leg.leftNote ? <span className="block font-sans text-gray-600">{leg.leftNote}</span> : null}
+                        </td>
+                        <td className="py-2 pr-3 font-mono text-xs">
+                          {leg.rightOffsets.join(', ') || '—'}
+                          {leg.rightNote ? <span className="block font-sans text-gray-600">{leg.rightNote}</span> : null}
+                        </td>
                         <td className="py-2 tabular-nums">{leg.chainNm.toFixed(1)}</td>
                       </tr>
                     ))}
@@ -1908,9 +2737,9 @@ export function CoordinatorSurveyConsolePage() {
                     />
                   </>
                 ) : (
-                  plannerResult && (
+                  (geographicDetail ?? plannerResult) && (
                     <SurveyPlannerResults
-                      result={plannerResult}
+                      result={(geographicDetail ?? plannerResult)!}
                       exportCtx={sortieExportCtx}
                       onPilotBrief={setPilotBrief}
                       showRefuelGuidance={ferryMode === 'staged-refuel'}

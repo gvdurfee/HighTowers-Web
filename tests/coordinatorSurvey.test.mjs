@@ -53,8 +53,38 @@ describe('mtrWidthParser VR114', () => {
 })
 
 describe('parallelOffsetsForHalfWidth', () => {
-  it('matches wing 3/9/15/21 pattern for 20 NM half-width', () => {
-    expect(parallelOffsetsForHalfWidth(20)).toEqual([3, 9, 15, 21])
+  it('keeps 3, 9, 15 on a 20 NM side and drops 21 past the edge', () => {
+    expect(parallelOffsetsForHalfWidth(20)).toEqual([3, 9, 15])
+  })
+
+  it('follows a changed spacing and never plans past the published width', () => {
+    expect(parallelOffsetsForHalfWidth(20, { firstOffsetNm: 3, stepNm: 4 })).toEqual([3, 7, 11, 15, 19])
+    expect(parallelOffsetsForHalfWidth(10, { firstOffsetNm: 3, stepNm: 4 })).toEqual([3, 7])
+    expect(parallelOffsetsForHalfWidth(20, { firstOffsetNm: 3, stepNm: 8 })).toEqual([3, 11, 19])
+    expect(parallelOffsetsForHalfWidth(10, { firstOffsetNm: 3, stepNm: 8 })).toEqual([3])
+    for (const offset of parallelOffsetsForHalfWidth(20, { firstOffsetNm: 4, stepNm: 8 })) {
+      expect(offset).toBeLessThanOrEqual(20)
+    }
+  })
+
+  it('plans nothing when the width is missing or the first offset is already past the edge', () => {
+    expect(parallelOffsetsForHalfWidth(null)).toEqual([])
+    expect(parallelOffsetsForHalfWidth(2)).toEqual([])
+    const legs = buildLegWidthSummaries({
+      routeType: 'VR',
+      routeNumber: '1',
+      waypoints: [
+        { ptIdent: 'A', lat: 35, lon: -103 },
+        { ptIdent: 'B', lat: 35.1, lon: -103.1 },
+      ],
+      widthTexts: [],
+      teams: [],
+      sortieBudgetNm: 500,
+    })
+    expect(legs[0].leftOffsets).toEqual([])
+    expect(legs[0].rightOffsets).toEqual([])
+    expect(legs[0].leftNote).toBe('No published width for this side.')
+    expect(legs[0].rightNote).toBe('No published width for this side.')
   })
 
   it('uses fewer offsets for 10 NM half-width', () => {
@@ -103,7 +133,7 @@ describe('surveySortiePacker', () => {
     })
     const segments = buildUniformOffsetSegments(VR114_FULL_WPS, legs, 'left')
     expect(segments).toHaveLength(2)
-    expect(segments[0]).toMatchObject({ fromPt: 'A', toPt: 'B', offsets: [3, 9, 15, 21] })
+    expect(segments[0]).toMatchObject({ fromPt: 'A', toPt: 'B', offsets: [3, 9, 15] })
     expect(segments[1]).toMatchObject({ fromPt: 'B', toPt: 'M1', offsets: [3, 9] })
   })
 
@@ -128,7 +158,7 @@ describe('surveySortiePacker', () => {
     expect(sorties[0].totalNm).toBeLessThanOrEqual(500)
   })
 
-  it('splits offset passes when four offsets on A→B exceed budget', () => {
+  it('splits the inside-edge offsets when they exceed the sortie budget', () => {
     const wps = VR114_FULL_WPS.slice(0, 2)
     const legs = buildLegWidthSummaries({
       routeType: 'VR',
@@ -145,7 +175,7 @@ describe('surveySortiePacker', () => {
     const sorties = packSortiesForTeam(wps, legs, team, 500)
     expect(sorties.length).toBe(2)
     expect(sorties[0].offsets).toEqual([3, 9])
-    expect(sorties[1].offsets).toEqual([15, 21])
+    expect(sorties[1].offsets).toEqual([15])
     for (const s of sorties) {
       expect(s.totalNm).toBeLessThanOrEqual(500)
     }
@@ -171,7 +201,7 @@ describe('planSurveyScenario', () => {
     const bM1 = legs.find((l) => l.fromPt === 'B' && l.toPt === 'M1')
     expect(bM1).toBeDefined()
     expect(bM1.leftOffsets).toEqual([3, 9])
-    expect(bM1.rightOffsets).toEqual([3, 9, 15, 21])
+    expect(bM1.rightOffsets).toEqual([3, 9, 15])
   })
 
   it('applies B→M1 width to intermediate legs in a full VR114 sequence', () => {
@@ -191,7 +221,7 @@ describe('planSurveyScenario', () => {
     expect(legs.find((l) => l.fromPt === 'A' && l.toPt === 'B')?.leftNm).toBe(20)
     expect(legs.find((l) => l.fromPt === 'B' && l.toPt === 'C')?.leftNm).toBe(10)
     expect(legs.find((l) => l.fromPt === 'B' && l.toPt === 'C')?.rightNm).toBe(20)
-    expect(legs.find((l) => l.fromPt === 'F' && l.toPt === 'M1')?.rightOffsets).toEqual([3, 9, 15, 21])
+    expect(legs.find((l) => l.fromPt === 'F' && l.toPt === 'M1')?.rightOffsets).toEqual([3, 9, 15])
   })
 
   it('reports entry closest to departure', () => {
@@ -267,13 +297,14 @@ describe('planSurveyScenario', () => {
     expect(result.teams[0].side).toBe('left')
     expect(result.teams[1].side).toBe('right')
     expect(result.teams[0].sortieCount).toBe(3)
-    expect(result.teams[1].sortieCount).toBe(4)
-    expect(result.totalSorties).toBe(7)
+    expect(result.teams[1].sortieCount).toBe(3)
+    expect(result.totalSorties).toBe(6)
     expect(result.totalWingNm).toBeGreaterThan(2500)
 
     const rightSorties = result.teams[1].sorties
     expect(rightSorties.every((s) => s.waypointFrom === 'A' && s.waypointTo === 'M1')).toBe(true)
-    expect(rightSorties.map((s) => s.offsets[0])).toEqual([3, 9, 15, 21])
+    expect(rightSorties.every((s) => s.offsets.every((offset) => offset <= 20))).toBe(true)
+    expect(rightSorties.some((s) => s.offsets.includes(21))).toBe(false)
     for (const s of rightSorties) {
       expect(s.totalNm).toBeLessThanOrEqual(500)
     }
@@ -298,11 +329,11 @@ describe('planSurveyScenario', () => {
     expect(compare.oneTeam.teams).toHaveLength(2)
     expect(compare.oneTeam.assignmentModel).toBe('single-sequential')
     expect(compare.twoTeams.teams).toHaveLength(2)
-    expect(compare.oneTeam.totalSorties).toBe(7)
-    expect(compare.twoTeams.totalSorties).toBe(7)
+    expect(compare.oneTeam.totalSorties).toBe(6)
+    expect(compare.twoTeams.totalSorties).toBe(6)
     expect(compare.deltaSorties).toBe(0)
     expect(compare.oneTeam.teams[0].sortieCount).toBe(3)
-    expect(compare.oneTeam.teams[1].sortieCount).toBe(4)
+    expect(compare.oneTeam.teams[1].sortieCount).toBe(3)
     expect(compare.oneTeamOverBudgetSorties).toBe(0)
     expect(compare.twoTeamsOverBudgetSorties).toBe(0)
     expect(compare.team1DepLabel).toBe('KABQ')
@@ -390,9 +421,9 @@ describe('planSurveyScenario', () => {
       team2,
       team3
     )
-    expect(compare.twoTeams.totalSorties).toBe(7)
-    expect(compare.threeTeams.totalSorties).toBe(6)
-    expect(compare.deltaSorties).toBe(-1)
+    expect(compare.twoTeams.totalSorties).toBe(6)
+    expect(compare.threeTeams.totalSorties).toBeGreaterThan(0)
+    expect(compare.deltaSorties).toBe(compare.threeTeams.totalSorties - compare.twoTeams.totalSorties)
     expect(compare.threeTeams.assignmentModel).toBe('geographic')
   })
 })

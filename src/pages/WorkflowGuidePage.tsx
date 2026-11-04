@@ -50,7 +50,7 @@ export function WorkflowGuidePage() {
             Follow these steps in order to complete an Air Force Route Survey.
           </p>
           <p className="text-sm text-gray-600 max-w-2xl mx-auto mt-2">
-            Wing coordinators: open <strong>Coordinator Console</strong> under Mission Planning to load the
+            Wing coordinators: open <strong>Team Dispatch</strong> under Mission Planning to load the
             published MTR, staff teams, and email each sortie <code className="text-xs bg-gray-100 px-0.5 rounded">.fpl</code> to
             that aircraft&apos;s Mission Pilot.
           </p>

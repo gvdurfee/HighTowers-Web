@@ -1,4 +1,6 @@
 import Dexie, { type Table } from 'dexie'
+import type { SavedOffsetPlan } from '@/services/offsetPlanRecord'
+import type { SavedTeamPlan } from '@/services/teamPlanRecord'
 
 /** Airport (departure/destination for flight plan) */
 export interface AirportRecord {
@@ -55,6 +57,8 @@ export interface FlightPlanRecord {
   creationRouteInput?: string
   creationEntryWaypoint?: string
   creationExitWaypoint?: string
+  /** Sortie 1 flies this side. Sortie 2 flies the other side back to departure. */
+  sortie1Side?: 'inner' | 'outer'
 }
 
 /** Tower base location */
@@ -136,6 +140,8 @@ export class HighTowersDB extends Dexie {
   towerReports!: Table<TowerReportRecord, string>
   missions!: Table<MissionRecord, string>
   cachedServerContentPacks!: Table<CachedServerContentPackRecord, string>
+  offsetPlans!: Table<SavedOffsetPlan, string>
+  teamPlans!: Table<SavedTeamPlan, string>
 
   constructor() {
     super('HighTowersDB')
@@ -157,6 +163,30 @@ export class HighTowersDB extends Dexie {
       towerReports: 'id, missionId',
       missions: 'id',
       cachedServerContentPacks: 'id, cachedAt',
+    })
+    this.version(3).stores({
+      airports: 'id',
+      waypoints: 'id, flightPlanId',
+      flightPlans: 'id',
+      towerLocations: 'id',
+      cameraData: 'id',
+      towerReports: 'id, missionId',
+      missions: 'id',
+      cachedServerContentPacks: 'id, cachedAt',
+      offsetPlans: 'flightPlanId',
+    })
+    // Adds team plans only. Existing flight plan records are left as they are.
+    this.version(4).stores({
+      airports: 'id',
+      waypoints: 'id, flightPlanId',
+      flightPlans: 'id',
+      towerLocations: 'id',
+      cameraData: 'id',
+      towerReports: 'id, missionId',
+      missions: 'id',
+      cachedServerContentPacks: 'id, cachedAt',
+      offsetPlans: 'flightPlanId',
+      teamPlans: 'flightPlanId',
     })
   }
 }

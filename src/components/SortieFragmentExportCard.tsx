@@ -3,10 +3,12 @@ import type { AirportRecord, WaypointRecord } from '@/db/schema'
 import { parseWaypointCode } from '@/utils/mtrWaypointCode'
 import {
   buildManualSortieFromPtIdents,
-  exportSortieFplDownload,
+  downloadSortieFpl,
   parseOffsetsInput,
   type SortieFplPilotBrief,
 } from '@/services/sortieFplExport'
+import { buildNamedOffsetSortieFile } from '@/services/teamPlanSortieDownload'
+import type { SortieSide } from '@/services/offsetRouteFpl'
 import {
   defaultSortieOffsetsForFragment,
   defaultSortieOffsetsLabelFromWidthTexts,
@@ -29,6 +31,7 @@ type Props = {
   routeLabel: string
   routeMeta: RouteMeta
   widthTexts: string[]
+  legWidths: Array<{ leftNm: number; rightNm: number } | null> | null
   departureMissingMessage: string
   onPilotBrief: (brief: SortieFplPilotBrief) => void
 }
@@ -42,6 +45,7 @@ export function SortieFragmentExportCard({
   routeLabel,
   routeMeta,
   widthTexts,
+  legWidths,
   departureMissingMessage,
   onPilotBrief,
 }: Props) {
@@ -50,7 +54,8 @@ export function SortieFragmentExportCard({
   const [sortieFromPt, setSortieFromPt] = useState('')
   const [sortieToPt, setSortieToPt] = useState('')
   const [sortieStartAt, setSortieStartAt] = useState('')
-  const [sortieOffsets, setSortieOffsets] = useState('3, 9, 15, 21')
+  const [sortieSide, setSortieSide] = useState<SortieSide>('inner')
+  const [sortieOffsets, setSortieOffsets] = useState('')
   const [sortieOffsetsHint, setSortieOffsetsHint] = useState<string | null>(null)
   const sortieOffsetsUserEditedRef = useRef(false)
   const [sortieExportErr, setSortieExportErr] = useState<string | null>(null)
@@ -104,7 +109,9 @@ export function SortieFragmentExportCard({
 
     setSortieOffsets(label)
     setSortieOffsetsHint(
-      `From NASR corridor width for this route (${label} NM parallel-track spacing). Edit if your wing SOP differs.`
+      label
+        ? `From NASR corridor width for this route (${label} NM). A pass past the corridor edge is not included.`
+        : 'No published width for this side.'
     )
   }, [widthTexts, irVrMeta, surveyWaypoints, sortieFromPt, sortieToPt])
 
@@ -125,6 +132,10 @@ export function SortieFragmentExportCard({
     }
     setSortieExportErr(null)
     try {
+      if (!legWidths) {
+        setSortieExportErr('No published width for this segment.')
+        return
+      }
       const offsets = parseOffsetsInput(sortieOffsets)
       const sortie = buildManualSortieFromPtIdents({
         waypoints,
@@ -135,15 +146,38 @@ export function SortieFragmentExportCard({
         teamDeparture,
         routeLabel,
       })
-      const brief = exportSortieFplDownload({
-        waypoints,
-        sortie,
-        teamDeparture,
+      const file = buildNamedOffsetSortieFile({
+        points: waypoints.map((waypoint) => ({
+          ptIdent: waypointPtIdent(waypoint.originalName),
+          originalName: waypoint.originalName,
+          lat: waypoint.latitude,
+          lon: waypoint.longitude,
+          g1000Name: waypoint.g1000Name,
+        })),
+        legWidths,
+        fromPt: sortie.waypointFrom,
+        toPt: sortie.waypointTo,
+        side: sortieSide,
+        departure: teamDeparture,
+        landing: teamDeparture,
         routeLabel,
-        teamLabel: teamDeparture.identifier,
-        side: 'manual fragment',
+        sortieNumber: 1,
+        offsets,
       })
-      onPilotBrief(brief)
+      downloadSortieFpl(file.xml, file.filename)
+      onPilotBrief({
+        teamLabel: teamDeparture.identifier,
+        side: sortieSide,
+        rangeLabel: `${sortie.waypointFrom}→${sortie.waypointTo}`,
+        startAt: sortie.startAt,
+        passCount: offsets.length,
+        offsetsLabel: offsets.join(', '),
+        ferryInLabel: teamDeparture.identifier,
+        ferryOutLabel: teamDeparture.identifier,
+        warnRoutePointLimit: false,
+        routePointCount: (file.xml.match(/<waypoint-type>USER WAYPOINT<\/waypoint-type>/g) ?? []).length,
+        filename: file.filename,
+      })
       setShowSortieExport(false)
     } catch (e) {
       setSortieExportErr(e instanceof Error ? e.message : 'Failed to export sortie .fpl')
@@ -185,7 +219,7 @@ export function SortieFragmentExportCard({
           body={
             <>
               Use <strong>Export sortie .fpl</strong> here for one coordinator sortie: a serpentine
-              sub-route between your From/To waypoints with parallel-track offsets. After you run the
+              sub-route between your From/To waypoints. After you run the
               planner, each results row can also export a G1000 file for that assignment. Email each
               file to that aircraft&apos;s Mission Pilot (or copy it to an SD card). Aircrew full-route
               export stays on the flight plan detail page.
@@ -216,8 +250,8 @@ export function SortieFragmentExportCard({
       {showSortieExport && (
         <div className="mt-4 space-y-3 text-sm">
           <p className="text-gray-600">
-            Build a serpentine G1000 route for one coordinator sortie: team departure, waypoint
-            sub-range, and parallel-track offsets. Uses Team 1 or the plan departure (
+            Build a serpentine G1000 route for one coordinator sortie: team departure and waypoint
+            sub-range. Uses Team 1 or the plan departure (
             {teamDeparture?.identifier ?? 'not set'}) for ferry legs.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -271,7 +305,18 @@ export function SortieFragmentExportCard({
             </select>
           </label>
           <label className="block">
-            <span className="text-gray-700 font-medium">Offsets (NM)</span>
+            <span className="text-gray-700 font-medium">Side</span>
+            <select
+              value={sortieSide}
+              onChange={(e) => setSortieSide(e.target.value === 'outer' ? 'outer' : 'inner')}
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="inner">Inner</option>
+              <option value="outer">Outer</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-gray-700 font-medium">Lane spacing (NM)</span>
             <input
               type="text"
               value={sortieOffsets}
@@ -280,7 +325,7 @@ export function SortieFragmentExportCard({
                 setSortieOffsets(e.target.value)
                 setSortieOffsetsHint(null)
               }}
-              placeholder="3, 9, 15, 21"
+              placeholder="3, 9, 15"
               className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg font-mono"
             />
             {sortieOffsetsHint && (

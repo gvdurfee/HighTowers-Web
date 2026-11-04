@@ -21,6 +21,8 @@ type WaypointInput = {
 type FlightPlanInput = {
   id: string
   name: string
+  /** When set, this is the in-file route name instead of the airport pair. */
+  routeName?: string
   departureAirport?: AirportInput
   destinationAirport?: AirportInput
   waypoints: WaypointInput[]
@@ -37,6 +39,8 @@ export type SortieFlightPlanInput = {
   fragmentWaypoints: Pick<WaypointInput, 'g1000Name' | 'latitude' | 'longitude'>[]
   /** Ordered g1000 names including non-consecutive reuse for serpentine legs. */
   routeSequence: string[]
+  /** Fixed clock for a byte-identical export. Defaults to the current time. */
+  created?: Date
 }
 
 function escapeXml(s: string): string {
@@ -162,7 +166,7 @@ function fragmentWaypointsForTable(
 
 export const G1000Service = {
   generateSortieFlightPlan(input: SortieFlightPlanInput): string {
-    const created = formatDate(new Date())
+    const created = formatDate(input.created ?? new Date())
     const dep = input.departureAirport
     const dest = input.destinationAirport
     const tableWaypoints = fragmentWaypointsForTable(input.fragmentWaypoints)
@@ -212,12 +216,11 @@ export const G1000Service = {
       (a, b) => a.sequence - b.sequence
     )
     const created = formatDate(new Date())
-    const routeName = [
-      flightPlan.departureAirport?.identifier ?? '',
-      flightPlan.destinationAirport?.identifier ?? '',
-    ]
-      .join(' ')
-      .trim()
+    const routeName =
+      flightPlan.routeName?.trim() ||
+      [flightPlan.departureAirport?.identifier ?? '', flightPlan.destinationAirport?.identifier ?? '']
+        .join(' ')
+        .trim()
 
     const tableRows = buildWaypointTableRows(
       flightPlan.departureAirport,

@@ -20,6 +20,12 @@ export function parseWaypointCode(
   }
 }
 
+/** Published point letters only, for the blue centerline marker. */
+export function publishedPointLabel(originalName: string): string | null {
+  const letter = parseWaypointCode(originalName)?.waypointLetter
+  return letter || null
+}
+
 /** Stable key so SR213H and SR213-H match when correcting a saved sequence. */
 export function waypointIdentityKey(code: string): string {
   const parsed = parseWaypointCode(code)

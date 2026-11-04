@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { db } from '@/db/schema'
+import { confirmLeaveOffsetPlan } from '@/services/offsetPlanLeaveGuard'
 
 type DetailView =
   | 'workflow'
@@ -35,7 +36,9 @@ export function MainLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const nav = (view: DetailView) => {
-    navigate(routeMap[view])
+    const target = routeMap[view]
+    if (location.pathname !== target && !confirmLeaveOffsetPlan()) return
+    navigate(target)
   }
 
   const isActive = (view: DetailView) => {
@@ -126,7 +129,7 @@ export function MainLayout() {
                 className={navButton(isActive('coordinator-survey'))}
               >
                 <span aria-hidden>🧭</span>
-                {!sidebarCollapsed && <span>Coordinator Console</span>}
+                {!sidebarCollapsed && <span>Team Dispatch</span>}
               </button>
             </li>
             <li className="px-2 py-1">
@@ -179,7 +182,7 @@ export function MainLayout() {
                 type="button"
                 onClick={async () => {
                   if (!window.confirm('Clear all data? This cannot be undone.')) return
-                  await db.transaction('rw', ['towerReports', 'towerLocations', 'cameraData', 'missions', 'waypoints', 'airports', 'flightPlans'], async () => {
+                  await db.transaction('rw', ['towerReports', 'towerLocations', 'cameraData', 'missions', 'waypoints', 'airports', 'flightPlans', 'offsetPlans'], async () => {
                     await db.towerReports.clear()
                     await db.towerLocations.clear()
                     await db.cameraData.clear()
@@ -187,6 +190,7 @@ export function MainLayout() {
                     await db.waypoints.clear()
                     await db.airports.clear()
                     await db.flightPlans.clear()
+                    await db.offsetPlans.clear()
                   })
                 }}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-cap-pimento hover:bg-white/10 border border-transparent hover:border-cap-pimento/40"

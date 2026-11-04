@@ -6,6 +6,11 @@ import type { FlightPlanRecord, WaypointRecord, FlightPlanCreationLoadMethod } f
 import { generateId } from '@/utils/id'
 import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
 import { apiService, type AirportResult } from '@/services/api'
+import {
+  airportLookupMessage,
+  cleanAirportId,
+  FAA_AIRPORT_SERVICE_MESSAGE,
+} from '@/services/airportLookup'
 import { FlightPlanLoadMethodHelpModal } from '@/components/FlightPlanLoadMethodHelpModal'
 import { parseWaypointCode, waypointIdentityKey } from '@/utils/mtrWaypointCode'
 import {
@@ -187,34 +192,44 @@ export function NewFlightPlanPage() {
   }, [routeIdentifierWatch, waypointSequenceWatch, loadMethod])
 
   const fetchDepartureAirport = async () => {
-    const code = depCode?.trim()
-    if (!code) return
+    const code = depCode ?? ''
+    if (!cleanAirportId(code)) return
     setFetchingAirport('departure')
     setError(null)
     try {
-      const airport = await apiService.fetchAirport(code)
-      setDepartureAirport(airport)
-      // Fetch disables the button and drops focus; move keyboard users to destination next.
-      queueMicrotask(() => destinationCodeInputRef.current?.focus())
+      const result = await apiService.fetchAirport(code)
+      if (result.status === 'found') {
+        setDepartureAirport(result.airport)
+        // Fetch disables the button and drops focus; move keyboard users to destination next.
+        queueMicrotask(() => destinationCodeInputRef.current?.focus())
+        return
+      }
+      setDepartureAirport(null)
+      setError(airportLookupMessage(result))
     } catch {
       setDepartureAirport(null)
-      setError(`Could not find airport: ${code}`)
+      setError(FAA_AIRPORT_SERVICE_MESSAGE)
     } finally {
       setFetchingAirport(null)
     }
   }
 
   const fetchDestinationAirport = async () => {
-    const code = destCode?.trim()
-    if (!code) return
+    const code = destCode ?? ''
+    if (!cleanAirportId(code)) return
     setFetchingAirport('destination')
     setError(null)
     try {
-      const airport = await apiService.fetchAirport(code)
-      setDestinationAirport(airport)
+      const result = await apiService.fetchAirport(code)
+      if (result.status === 'found') {
+        setDestinationAirport(result.airport)
+        return
+      }
+      setDestinationAirport(null)
+      setError(airportLookupMessage(result))
     } catch {
       setDestinationAirport(null)
-      setError(`Could not find airport: ${code}`)
+      setError(FAA_AIRPORT_SERVICE_MESSAGE)
     } finally {
       setFetchingAirport(null)
     }
@@ -1064,17 +1079,22 @@ async function resolveAirportRecordId(input: {
   fetched: AirportResult | null
   existingAirportId?: string
 }): Promise<string | undefined> {
-  const code = input.code.trim().toUpperCase()
+  const code = cleanAirportId(input.code)
+  if (!code) return undefined
   if (input.existingAirportId) {
     const existing = await db.airports.get(input.existingAirportId)
-    if (existing && existing.identifier.toUpperCase() === code) {
+    if (existing && cleanAirportId(existing.identifier) === code) {
       return existing.id
     }
   }
-  const dep =
-    input.fetched?.identifier?.toUpperCase() === code
-      ? input.fetched
-      : await apiService.fetchAirport(input.code.trim())
+  const fetchedMatches = input.fetched && cleanAirportId(input.fetched.identifier) === code
+  const dep = fetchedMatches
+    ? input.fetched
+    : await (async () => {
+        const looked = await apiService.fetchAirport(input.code)
+        if (looked.status === 'unavailable') throw new Error(FAA_AIRPORT_SERVICE_MESSAGE)
+        return looked.status === 'found' ? looked.airport : null
+      })()
   if (!dep) return undefined
   const id = generateId()
   await db.airports.add({

@@ -38,32 +38,81 @@ export function nauticalMilesBetween(a, b) {
  * @typedef {object} ParallelTrackPolicy
  * @property {number} firstOffsetNm - First G1000 parallel offset (default 3)
  * @property {number} stepNm - Spacing between track centers (default 6)
- * @property {number} outerMarginNm - NM past published half-width on last track (default 1)
+ * @property {number} [outerMarginNm] - Kept for older callers. Passes stop at the published width.
  */
 
 export const DEFAULT_PARALLEL_TRACK_POLICY = {
   firstOffsetNm: 3,
   stepNm: 6,
-  outerMarginNm: 1,
+  outerMarginNm: 0,
 }
 
+export const NO_PUBLISHED_WIDTH_NOTE = 'No published width for this side.'
+export const NO_OFFSET_INSIDE_NOTE = 'No offset fits inside the published width.'
+export const OFFSET_PAST_EDGE_NOTE = 'Offsets past the corridor edge are not planned.'
+
 /**
- * G1000 parallel offsets for one side given published half-width (e.g. 20 NM → [3,9,15,21]).
- * @param {number} halfWidthNm
+ * Parallel offsets at or inside the published half-width.
+ * A 20 NM side at 3 NM / 6 NM spacing is 3, 9, 15. 21 is past the edge and is dropped.
+ * Nothing is added when the first offset is already past the width.
+ * @param {number | null | undefined} halfWidthNm
  * @param {Partial<ParallelTrackPolicy>} [policy]
  * @returns {number[]}
  */
 export function parallelOffsetsForHalfWidth(halfWidthNm, policy = {}) {
   const p = { ...DEFAULT_PARALLEL_TRACK_POLICY, ...policy }
-  const target = halfWidthNm + p.outerMarginNm
+  const width = Number(halfWidthNm)
+  if (!Number.isFinite(width) || width <= 0) return []
+  if (!Number.isFinite(p.firstOffsetNm) || p.firstOffsetNm <= 0) return []
+  if (!Number.isFinite(p.stepNm) || p.stepNm <= 0) return []
   const offsets = []
   let o = p.firstOffsetNm
-  while (o <= target + 1e-6) {
+  while (o <= width + 1e-6) {
     offsets.push(o)
     o += p.stepNm
   }
-  if (offsets.length === 0) offsets.push(p.firstOffsetNm)
   return offsets
+}
+
+/**
+ * Keep only offsets that sit on or inside the published width.
+ * A missing width plans nothing.
+ * @param {number[] | null | undefined} offsets
+ * @param {number | null | undefined} halfWidthNm
+ * @returns {{ offsets: number[], dropped: number[], note: string | null }}
+ */
+export function offsetsInsidePublishedWidth(offsets, halfWidthNm) {
+  const width = Number(halfWidthNm)
+  if (!Number.isFinite(width) || width <= 0) {
+    return { offsets: [], dropped: [], note: NO_PUBLISHED_WIDTH_NOTE }
+  }
+  const kept = []
+  const dropped = []
+  for (const offset of offsets ?? []) {
+    if (!Number.isFinite(offset) || offset <= 0) continue
+    if (offset <= width + 1e-6) kept.push(offset)
+    else dropped.push(offset)
+  }
+  if (kept.length === 0) {
+    return { offsets: [], dropped, note: NO_OFFSET_INSIDE_NOTE }
+  }
+  return {
+    offsets: kept,
+    dropped,
+    note: dropped.length > 0 ? OFFSET_PAST_EDGE_NOTE : null,
+  }
+}
+
+/**
+ * @param {number[]} leftOffsets
+ * @param {number[]} rightOffsets
+ * @returns {string}
+ */
+export function formatOffsetsPerSide(leftOffsets, rightOffsets) {
+  const parts = []
+  if (leftOffsets?.length) parts.push(`L ${leftOffsets.join(', ')}`)
+  if (rightOffsets?.length) parts.push(`R ${rightOffsets.join(', ')}`)
+  return parts.join(' / ')
 }
 
 /**

@@ -9,11 +9,23 @@
  */
 
 import { apiUrl } from '@/config/apiConfig'
-import { convertWaypointNameToG1000 } from '@/utils/g1000WaypointName'
+import { assignG1000WaypointNames } from '@/utils/g1000WaypointName'
 import { findRouteWaypoint } from '@/utils/mtrWaypointLookup'
+import {
+  fetchAirport as lookupAirport,
+  type AirportLookupResult,
+  type AirportResult,
+} from '@/services/airportLookup'
 
-const FAA_URL =
-  'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/US_Airport/FeatureServer/0/query'
+export type { AirportLookupResult, AirportResult }
+
+function applyCenterlineNames<T extends { originalName: string; g1000Name: string }>(waypoints: T[]): T[] {
+  const named = assignG1000WaypointNames(waypoints.map((wp) => ({ originalName: wp.originalName })))
+  return waypoints.map((wp, index) => ({
+    ...wp,
+    g1000Name: named.error ? '' : named.names[index].g1000Name,
+  }))
+}
 
 /** DISDI public MTR points/corridors (no token). Layers: IR=0, SR=1, VR=2. */
 const ARCGIS_BASE =
@@ -30,14 +42,6 @@ const routeCache = new Map<string, { originalName: string; g1000Name: string; la
 
 export type RouteType = 'IR' | 'SR' | 'VR'
 
-export interface AirportResult {
-  identifier: string
-  name: string
-  latitude: number
-  longitude: number
-  elevation?: number
-}
-
 interface ArcGisFeature {
   attributes: Record<string, unknown>
 }
@@ -45,22 +49,6 @@ interface ArcGisFeature {
 interface ArcGisResponse {
   features?: ArcGisFeature[]
   error?: { code?: number; message?: string }
-}
-
-function parseDms(dms: string): number | null {
-  if (typeof dms !== 'string') return null
-  const trimmed = dms.trim()
-  const num = Number(trimmed)
-  if (!Number.isNaN(num)) return num
-  const match = trimmed.match(/^(\d+)-(\d+)-([\d.]+)([NSEW])$/i)
-  if (!match) return null
-  const d = Number(match[1]) ?? 0
-  const m = Number(match[2]) ?? 0
-  const s = Number(match[3]) ?? 0
-  const hemi = match[4].toUpperCase()
-  let decimal = d + m / 60 + s / 3600
-  if (hemi === 'S' || hemi === 'W') decimal *= -1
-  return decimal
 }
 
 function getNum(obj: Record<string, unknown>, ...keys: string[]): number | null {
@@ -84,45 +72,8 @@ function getStr(obj: Record<string, unknown>, ...keys: string[]): string | null 
 }
 
 export const apiService = {
-  async fetchAirport(identifier: string): Promise<AirportResult | null> {
-    const id = identifier.trim().toUpperCase()
-    const params = new URLSearchParams({
-      where: `ICAO_ID='${id}' OR IDENT='${id}'`,
-      outFields: 'IDENT,NAME,LATITUDE,LONGITUDE,ICAO_ID,ELEVATION',
-      returnGeometry: 'false',
-      outSR: '4326',
-      f: 'json',
-    })
-    const res = await fetch(`${FAA_URL}?${params}`)
-    if (!res.ok) throw new Error(`FAA API error: ${res.status}`)
-    const data: ArcGisResponse = await res.json()
-    const feature = data.features?.[0]
-    if (!feature) return null
-    const attrs = feature.attributes
-
-    let lat: number | null = null
-    let lon: number | null = null
-
-    const latAttr = getStr(attrs, 'LATITUDE', 'latitude')
-    const lonAttr = getStr(attrs, 'LONGITUDE', 'longitude')
-    if (typeof latAttr === 'string') lat = parseDms(latAttr) ?? getNum(attrs, 'LATITUDE', 'latitude')
-    if (typeof lonAttr === 'string') lon = parseDms(lonAttr) ?? getNum(attrs, 'LONGITUDE', 'longitude')
-    if (lat == null) lat = getNum(attrs, 'WGS_DLAT', 'wgsDlat')
-    if (lon == null) lon = getNum(attrs, 'WGS_DLON', 'wgsDlong')
-
-    if (lat == null || lon == null) return null
-
-    const ident = getStr(attrs, 'ICAO_ID', 'IDENT', 'icaoId', 'ident') ?? identifier
-    const name = getStr(attrs, 'NAME', 'name') ?? ''
-    const elev = getNum(attrs, 'ELEVATION', 'elevation')
-
-    return {
-      identifier: ident,
-      name,
-      latitude: lat,
-      longitude: lon,
-      elevation: elev ?? undefined,
-    }
+  fetchAirport(identifier: string): Promise<AirportLookupResult> {
+    return lookupAirport(identifier)
   },
 
   async fetchRouteData(
@@ -195,7 +146,7 @@ export const apiService = {
         const originalName = `${routeType}${num}-${ptIdent}`
         results.push({
           originalName,
-          g1000Name: convertWaypointNameToG1000(originalName),
+          g1000Name: '',
           latitude: lat,
           longitude: lon,
           ptIdent,
@@ -218,7 +169,7 @@ export const apiService = {
   ): { originalName: string; g1000Name: string; latitude: number; longitude: number }[] {
     const entry = entryLetter.toUpperCase().trim()
     const exit = exitLetter.toUpperCase().trim()
-    if (!entry || !exit) return waypoints
+    if (!entry || !exit) return applyCenterlineNames(waypoints)
 
     const byPtIdent = new Map<string, typeof waypoints[0]>()
     for (const w of waypoints) {
@@ -244,12 +195,7 @@ export const apiService = {
       const nx = (rec.nxPoint ?? '').trim()
       current = nx || null
     }
-    return ordered.map(({ originalName, g1000Name, latitude, longitude }) => ({
-      originalName,
-      g1000Name,
-      latitude,
-      longitude,
-    }))
+    return applyCenterlineNames(ordered)
   },
 
   async fetchWaypointCoordinate(

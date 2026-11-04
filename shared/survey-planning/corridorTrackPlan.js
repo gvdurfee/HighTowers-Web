@@ -118,7 +118,9 @@ export function formatOffsetsList(offsets) {
  */
 export function defaultSpanTrackPlanFromWidthTexts(widthTexts, policy = {}) {
   const p = { ...DEFAULT_PARALLEL_TRACK_POLICY, ...policy }
-  const spans = parseWidthTexts(widthTexts ?? [])
+  const spans = parseWidthTexts(widthTexts ?? []).filter(
+    (span) => !span.allAlternates && !(span.alternatePoints?.length)
+  )
   return spans.map((span) => ({
     fromPt: span.fromPt,
     toPt: span.toPt,
@@ -148,14 +150,8 @@ export function validateSpanTrackPlan(plan) {
       return `Outer half-width must be positive for ${label}.`
     }
     try {
-      if (!entry.leftOffsets?.length) {
-        return `Inner offsets required for ${label}.`
-      }
-      if (!entry.rightOffsets?.length) {
-        return `Outer offsets required for ${label}.`
-      }
-      parseOffsetsListInput(formatOffsetsList(entry.leftOffsets))
-      parseOffsetsListInput(formatOffsetsList(entry.rightOffsets))
+      if (entry.leftOffsets?.length) parseOffsetsListInput(formatOffsetsList(entry.leftOffsets))
+      if (entry.rightOffsets?.length) parseOffsetsListInput(formatOffsetsList(entry.rightOffsets))
     } catch (err) {
       return err instanceof Error ? err.message : `Invalid offsets for ${label}.`
     }

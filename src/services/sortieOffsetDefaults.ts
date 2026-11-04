@@ -1,8 +1,11 @@
 import { parseWidthTexts } from '@survey-planning/mtrWidthParser.js'
-import { parallelOffsetsForHalfWidth } from '@survey-planning/surveyGeometry.js'
+import {
+  NO_PUBLISHED_WIDTH_NOTE,
+  parallelOffsetsForHalfWidth,
+} from '@survey-planning/surveyGeometry.js'
 import { buildLegWidthSummaries } from '@survey-planning/surveySortiePlanner.js'
 
-const FALLBACK_OFFSETS_LABEL = '3, 9, 15, 21'
+export { NO_PUBLISHED_WIDTH_NOTE }
 
 export type SortieOffsetWaypoint = {
   ptIdent: string
@@ -22,14 +25,14 @@ export function maxHalfWidthNmFromWidthTexts(widthTexts: string[]): number | nul
 }
 
 export function formatSortieOffsetsLabel(offsets: number[]): string {
-  if (offsets.length === 0) return FALLBACK_OFFSETS_LABEL
+  if (offsets.length === 0) return ''
   return offsets.join(', ')
 }
 
 /** Default parallel-track offsets for the whole route from NASR width text. */
 export function defaultSortieOffsetsLabelFromWidthTexts(widthTexts: string[]): string {
   const maxHalf = maxHalfWidthNmFromWidthTexts(widthTexts)
-  if (maxHalf == null) return FALLBACK_OFFSETS_LABEL
+  if (maxHalf == null) return ''
   return formatSortieOffsetsLabel(parallelOffsetsForHalfWidth(maxHalf))
 }
 

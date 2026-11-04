@@ -32,7 +32,7 @@ export function FlightPlanLoadMethodHelpModal({
           </p>
           <p className="text-xs text-gray-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
             <strong>Wing coordinators:</strong> load the published route in{' '}
-            <strong>Coordinator Console</strong> (Mission Planning in the sidebar), then email each
+            <strong>Team Dispatch</strong> (Mission Planning in the sidebar), then email each
             sortie <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> to that
             aircraft&apos;s Mission Pilot. This form is for aircrew flight plans with departure and
             destination.

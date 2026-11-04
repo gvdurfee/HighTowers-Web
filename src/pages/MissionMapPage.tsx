@@ -7,9 +7,44 @@ import { db } from '@/db/schema'
 import type { FlightPlanRecord, WaypointRecord, AirportRecord } from '@/db/schema'
 import { apiConfig } from '@/config/apiConfig'
 import { nearestWaypointInfo } from '@/utils/towerWaypointGeometry'
+import { parseWaypointCode, publishedPointLabel } from '@/utils/mtrWaypointCode'
 import { TowerLeaderMarker, TOWER_MAP_COLOR } from '@/components/TowerLeaderMarker'
 import { GuidedHint } from '@/components/GuidedHint'
+import { MapSortieSelector } from '@/components/MapSortieSelector'
+import { OffsetRoutePanel, type OffsetMapGeometry } from '@/components/OffsetRoutePanel'
+import { confirmLeaveOffsetPlan } from '@/services/offsetPlanLeaveGuard'
+import type { OffsetLegWidth } from '@survey-planning/offsetRoutePlan.js'
+import { expandPlanningRoute } from '@survey-planning/planComparison.js'
+import {
+  drawSavedTeam,
+  formatSortieHeader,
+  mapSortieButtons,
+  NO_TEAM_PLAN_NOTE,
+} from '@/services/teamPlanRecord'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
+import {
+  emptyCrewOverlay,
+  selectedCrewOverlay,
+  serpentineFromTracks,
+  sortieWaypointLine,
+  type CrewOverlayId,
+  type CrewSerpentine,
+} from '@/services/crewSerpentineOverlay'
+import {
+  airportsForSortie,
+  buildSerpentineDisplay,
+  crewAirportNotes,
+  DEFAULT_MAP_SORTIE,
+  labelPixelOffset,
+  labelPlacement,
+  legArrowSizePx,
+  MAP_ROUTE_BLUE,
+  passesForSortie,
+  SERPENTINE_YELLOW,
+  type LonLat,
+  type MapSortieNumber,
+  type TransitAirport,
+} from '@/services/serpentineDisplay'
 
 type TowerOverlayItem = {
   id: string
@@ -51,6 +86,89 @@ function buildRouteCoordinates(
   return coords
 }
 
+function lineFromPoints(points: { lon: number; lat: number }[] | undefined) {
+  if (!points || points.length < 2) return null
+  return lineFromCoordinates(points.map((point) => [point.lon, point.lat]))
+}
+
+function lineFromCoordinates(coordinates: [number, number][]) {
+  if (coordinates.length < 2) return null
+  return {
+    type: 'Feature' as const,
+    properties: {},
+    geometry: {
+      type: 'LineString' as const,
+      coordinates,
+    },
+  }
+}
+
+function shadeCollection(rings: LonLat[][]) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: rings
+      .filter((ring) => ring.length >= 3)
+      .map((ring) => ({
+        type: 'Feature' as const,
+        properties: {},
+        geometry: {
+          type: 'Polygon' as const,
+          coordinates: [[...ring, ring[0]]],
+        },
+      })),
+  }
+}
+
+function lineCollection(lines: LonLat[][]) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: lines
+      .filter((line) => line.length >= 2)
+      .map((coordinates) => ({
+        type: 'Feature' as const,
+        properties: {},
+        geometry: { type: 'LineString' as const, coordinates },
+      })),
+  }
+}
+
+function FlowArrow(props: {
+  lon: number
+  lat: number
+  bearing: number
+  label: string
+  small?: boolean
+}) {
+  const [ox, oy] = labelPixelOffset(props.bearing)
+  return (
+    <Marker longitude={props.lon} latitude={props.lat} anchor="center">
+      <div className="relative pointer-events-none">
+        <span
+          className="block leading-none font-black"
+          style={{
+            color: MAP_ROUTE_BLUE,
+            fontSize: props.small ? 15 : 22,
+            transform: `rotate(${props.bearing}deg)`,
+            textShadow: '0 0 2px #fff, 0 0 3px #fff',
+          }}
+        >
+          ▲
+        </span>
+        <span
+          className="absolute whitespace-nowrap rounded bg-cap-yellow px-1 text-[10px] font-semibold text-cap-ultramarine shadow"
+          style={{
+            left: '50%',
+            top: '50%',
+            transform: `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`,
+          }}
+        >
+          {props.label}
+        </span>
+      </div>
+    </Marker>
+  )
+}
+
 function computeBounds(coords: [number, number][]): [[number, number], [number, number]] | null {
   if (coords.length === 0) return null
   const lngs = coords.map((c) => c[0])
@@ -68,6 +186,11 @@ export function MissionMapPage() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null)
   const [mapReady, setMapReady] = useState(false)
+  const [offsetGeometry, setOffsetGeometry] = useState<OffsetMapGeometry | null>(null)
+  const [legWidths, setLegWidths] = useState<OffsetLegWidth[] | null>(null)
+  const [selectedCrew, setSelectedCrew] = useState<CrewOverlayId>('team1')
+  const [selectedSortie, setSelectedSortie] = useState<MapSortieNumber>(DEFAULT_MAP_SORTIE)
+  const [mapZoom, setMapZoom] = useState(7)
   const { isSeen, markSeen } = useHintsSeen()
 
   const plans = useLiveQuery(
@@ -186,56 +309,195 @@ export function MissionMapPage() {
     [planData]
   )
 
-  const routeGeoJSON = useMemo(() => {
-    if (routeCoords.length < 2) return null
-    return {
-      type: 'Feature' as const,
-      properties: {},
-      geometry: {
-        type: 'LineString' as const,
-        coordinates: routeCoords,
-      },
-    }
-  }, [routeCoords])
-
-  /** Ensure the route line layer sits above satellite / road layers after style updates. */
   useEffect(() => {
-    if (!mapReady || !routeGeoJSON) return
-    const map = mapRef.current?.getMap()
-    if (!map) return
-    const bringRouteToFront = () => {
-      try {
-        if (!map.getLayer('route-line')) return
-        const layers = map.getStyle()?.layers
-        if (!layers?.length) return
-        const topId = layers[layers.length - 1].id
-        if (topId === 'route-line') return
-        map.moveLayer('route-line')
-      } catch {
-        /* ignore ordering if style not ready */
+    setSelectedCrew('team1')
+  }, [selectedPlanId])
+
+  const savedTeamPlan = useLiveQuery(
+    () => (selectedPlanId ? db.teamPlans.get(selectedPlanId) : undefined),
+    [selectedPlanId]
+  )
+
+  useEffect(() => {
+    if (!savedTeamPlan || savedTeamPlan.teams.length === 0) return
+    if (savedTeamPlan.teams.some((team) => team.id === selectedCrew)) return
+    setSelectedCrew(savedTeamPlan.teams[0].id)
+  }, [savedTeamPlan, selectedCrew])
+
+  const routePoints = useMemo(
+    () =>
+      (planData?.waypoints ?? []).map((waypoint) => ({
+        ptIdent: parseWaypointCode(waypoint.originalName)?.waypointLetter ?? waypoint.originalName,
+        originalName: waypoint.originalName,
+        lat: waypoint.latitude,
+        lon: waypoint.longitude,
+        g1000Name: waypoint.g1000Name,
+      })),
+    [planData]
+  )
+
+  const planningRoute = useMemo(() => {
+    const expanded = expandPlanningRoute(routePoints, legWidths ?? [], savedTeamPlan?.routeInsert ?? null)
+    return {
+      points: expanded.points.map((point) => ({
+        ptIdent: point.ptIdent,
+        originalName: point.originalName || point.ptIdent,
+        lat: point.lat,
+        lon: point.lon,
+        g1000Name: point.g1000Name,
+      })),
+      widths: expanded.widths,
+    }
+  }, [routePoints, legWidths, savedTeamPlan])
+
+  const routeLabel = useMemo(() => {
+    const parsed = planData?.waypoints[0] ? parseWaypointCode(planData.waypoints[0].originalName) : null
+    if (parsed) return `${parsed.routeType}${parsed.routeNumber}`
+    return planData?.plan.name.replace(/\s+/g, '') ?? ''
+  }, [planData])
+
+  const teamDraws = useMemo(() => {
+    if (!savedTeamPlan || savedTeamPlan.flightPlanId !== selectedPlanId) return null
+    return savedTeamPlan.teams.map((team) =>
+      drawSavedTeam({
+        team,
+        points: planningRoute.points,
+        legWidths: legWidths ? planningRoute.widths : legWidths,
+        firstOffsetNm: savedTeamPlan.firstOffsetNm,
+        stepNm: savedTeamPlan.stepNm,
+      })
+    )
+  }, [savedTeamPlan, selectedPlanId, planningRoute, legWidths])
+
+  const crewOverlays = useMemo(() => {
+    if (teamDraws) return teamDraws.map((draw) => draw.overlay)
+    const team1 =
+      offsetGeometry && planData?.plan.sortie1Side
+        ? serpentineFromTracks({
+            id: 'team1' as const,
+            label: 'Team 1',
+            sortie1Side: planData.plan.sortie1Side,
+            inner: offsetGeometry.inner,
+            outer: offsetGeometry.outer,
+            departure: planData.departure,
+            destination: planData.destination,
+          })
+        : { ...emptyCrewOverlay('team1', 'Team 1'), airport: planData?.departure?.identifier ?? null }
+    return [
+      team1,
+      emptyCrewOverlay('team2', 'Team 2'),
+      emptyCrewOverlay('team3', 'Team 3'),
+    ] satisfies CrewSerpentine[]
+  }, [teamDraws, offsetGeometry, planData])
+
+  const activeOverlay = selectedCrewOverlay(crewOverlays, selectedCrew)
+  const selectorSorties = useMemo(() => {
+    if (savedTeamPlan && savedTeamPlan.flightPlanId === selectedPlanId) {
+      const team = savedTeamPlan.teams.find((item) => item.id === selectedCrew)
+      if (team) return team.sorties
+    }
+    const passes = activeOverlay?.passes ?? []
+    if (passes.some((pass) => pass.number === 1) && passes.some((pass) => pass.number === 2)) {
+      return [{ number: 1 }, { number: 2 }]
+    }
+    return null
+  }, [savedTeamPlan, selectedPlanId, selectedCrew, activeOverlay])
+  const drawnSortie: MapSortieNumber =
+    selectorSorties && mapSortieButtons(selectorSorties).some((button) => button.number === selectedSortie && button.enabled)
+      ? selectedSortie
+      : selectorSorties
+        ? DEFAULT_MAP_SORTIE
+        : selectedSortie
+  const shownPasses = useMemo(
+    () => passesForSortie(activeOverlay?.passes ?? [], drawnSortie),
+    [activeOverlay, drawnSortie]
+  )
+  const shownSortie: MapSortieNumber = shownPasses.length === 1 ? shownPasses[0].number : drawnSortie
+  const activeSortie =
+    teamDraws?.find((draw) => draw.overlay.id === selectedCrew)?.sorties.find((sortie) => sortie.number === shownSortie) ??
+    null
+  const crewAirports = useMemo(() => {
+    const toAirport = (airport: { identifier: string; latitude: number; longitude: number } | null): TransitAirport | null =>
+      airport
+        ? { identifier: airport.identifier, latitude: airport.latitude, longitude: airport.longitude }
+        : null
+    const savedTeam = savedTeamPlan?.teams.find((team) => team.id === selectedCrew)
+    if (savedTeam) {
+      const refuel = toAirport(savedTeam.refuelStop ?? null)
+      return {
+        departure: toAirport(savedTeam.departure),
+        landing: refuel ?? toAirport(savedTeam.landing),
       }
     }
-    map.on('idle', bringRouteToFront)
-    bringRouteToFront()
-    return () => {
-      map.off('idle', bringRouteToFront)
+    if (selectedCrew !== 'team1' || !planData) return { departure: null, landing: null }
+    return {
+      departure: toAirport(planData.departure),
+      landing: toAirport(planData.destination),
     }
-  }, [mapReady, routeGeoJSON, selectedPlanId])
+  }, [selectedCrew, planData, savedTeamPlan])
+  const sortieAirports = useMemo(() => {
+    const ends = airportsForSortie(shownSortie, crewAirports)
+    const refuelIdent = savedTeamPlan?.teams.find((team) => team.id === selectedCrew)?.refuelStop?.identifier
+    const mark = (airport: TransitAirport | null): TransitAirport | null => {
+      if (!airport || !refuelIdent || airport.identifier.toUpperCase() !== refuelIdent.toUpperCase()) return airport
+      return { ...airport, caption: `${airport.identifier} — refuel` }
+    }
+    return { departure: mark(ends.departure), landing: mark(ends.landing) }
+  }, [shownSortie, crewAirports, savedTeamPlan, selectedCrew])
+  const serpentine = useMemo(() => {
+    if (shownPasses.length === 0) return null
+    return buildSerpentineDisplay(
+      shownPasses,
+      {
+        left: offsetGeometry?.corridorLeft,
+        right: offsetGeometry?.corridorRight,
+      },
+      sortieAirports
+    )
+  }, [shownPasses, offsetGeometry, sortieAirports])
+  const airportNotes = !planData
+    ? []
+    : (serpentine?.airportNotes ?? (teamDraws ? [] : crewAirportNotes(sortieAirports)))
 
   const allCoords = useMemo(() => {
     const c = [...routeCoords]
     for (const item of towerOverlayData ?? []) {
       c.push([item.towerLon, item.towerLat])
     }
+    for (const track of [
+      offsetGeometry?.inner,
+      offsetGeometry?.outer,
+      offsetGeometry?.corridorLeft,
+      offsetGeometry?.corridorRight,
+    ]) {
+      for (const point of track ?? []) {
+        c.push([point.lon, point.lat])
+      }
+    }
+    for (const line of serpentine?.flows ?? []) {
+      for (const coord of line) c.push(coord)
+    }
+    for (const leg of serpentine?.airportLegs ?? []) {
+      for (const coord of leg.coordinates) c.push(coord)
+    }
     return c
-  }, [routeCoords, towerOverlayData])
+  }, [routeCoords, towerOverlayData, offsetGeometry, serpentine])
 
-  const bounds = allCoords.length > 0 ? computeBounds(allCoords) : (routeCoords.length > 0 ? computeBounds(routeCoords) : null)
+  const bounds = useMemo(
+    () =>
+      allCoords.length > 0
+        ? computeBounds(allCoords)
+        : routeCoords.length > 0
+          ? computeBounds(routeCoords)
+          : null,
+    [allCoords, routeCoords],
+  )
 
   const fitMapToRoute = useCallback(() => {
     if (!mapRef.current || !bounds) return
+    mapRef.current.resize()
     mapRef.current.fitBounds(bounds, {
-      padding: 60,
+      padding: 24,
       duration: 800,
       maxZoom: 12,
     })
@@ -259,10 +521,24 @@ export function MissionMapPage() {
   }, [])
 
   useEffect(() => {
-    if (mapReady && bounds) {
-      fitMapToRoute()
+    if (!mapReady || !bounds) return
+    const map = mapRef.current
+    if (!map) return
+    const fit = () => {
+      map.resize()
+      map.fitBounds(bounds, {
+        padding: 24,
+        duration: 0,
+        maxZoom: 12,
+      })
     }
-  }, [mapReady, bounds, fitMapToRoute])
+    fit()
+    const observer = new ResizeObserver(() => {
+      fit()
+    })
+    observer.observe(map.getContainer())
+    return () => observer.disconnect()
+  }, [mapReady, bounds])
 
   useEffect(() => {
     if (plans && plans.length > 0 && !selectedPlanId) {
@@ -342,7 +618,12 @@ export function MissionMapPage() {
         )}
         <select
           value={selectedPlanId ?? ''}
-          onChange={(e) => setSelectedPlanId(e.target.value || null)}
+          onChange={(e) => {
+            const next = e.target.value || null
+            if (next === selectedPlanId) return
+            if (!confirmLeaveOffsetPlan()) return
+            setSelectedPlanId(next)
+          }}
           className="px-3 py-2 border border-white/25 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-cap-yellow focus:border-cap-yellow max-w-xs shadow-sm"
         >
           <option value="">Select flight plan</option>
@@ -355,6 +636,7 @@ export function MissionMapPage() {
         <button
           type="button"
           onClick={() => {
+            if (!confirmLeaveOffsetPlan()) return
             if (selectedPlanId) navigate(`/flight-plans/${selectedPlanId}`)
             else navigate('/flight-plans')
           }}
@@ -387,12 +669,132 @@ export function MissionMapPage() {
             Fit display to route
           </button>
         )}
-        <p className="text-sm text-white/80">
-          {planData
-            ? `${planData.waypoints.length} waypoints${planData.departure || planData.destination ? ' • Airports connected' : ''}${(towerOverlayData ?? []).length > 0 ? ` • ${(towerOverlayData ?? []).length} towers` : ''}`
-            : 'Select a flight plan to view the route'}
-        </p>
+        {planData && (
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Each team shows Sortie 1 first. Sortie 2 is the next day. */}
+            <div role="radiogroup" aria-label="Crew overlay" className="flex flex-wrap items-center gap-1">
+            {crewOverlays.map((crew) => {
+              const selected = crew.id === selectedCrew
+              return (
+                <button
+                  key={crew.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setSelectedCrew(crew.id)}
+                  className={`px-3 py-2 text-sm rounded-lg border ${
+                    selected
+                      ? 'bg-cap-ultramarine text-white border-cap-ultramarine'
+                      : 'bg-white/10 text-white border-white/40 hover:bg-white/20'
+                  }`}
+                >
+                  {crew.label}
+                  {crew.airport ? ` · ${crew.airport}` : ''}
+                </button>
+              )
+            })}
+            </div>
+            {selectorSorties && selectorSorties.length > 0 && (
+              <MapSortieSelector
+                sorties={selectorSorties}
+                selected={drawnSortie}
+                onSelect={setSelectedSortie}
+              />
+            )}
+            <p className="text-sm text-white/80">
+              For assigning more than one team to this route. Each team shows Sortie 1 first; switch to Sortie 2 for the next day.
+            </p>
+          </div>
+        )}
+        {!savedTeamPlan && planData && (
+          <p className="text-sm text-white/80">{NO_TEAM_PLAN_NOTE}</p>
+        )}
+        {teamDraws
+          ?.find((draw) => draw.overlay.id === selectedCrew)
+          ?.notes.map((note) => (
+            <p key={note} className="text-sm text-white/80">
+              {note}
+            </p>
+          ))}
+        {airportNotes.map((note) => (
+          <p key={note} className="text-sm text-white/80">
+            {note}
+          </p>
+        ))}
+        {planData &&
+          !teamDraws &&
+          activeOverlay &&
+          activeOverlay.passes.length === 0 &&
+          (activeOverlay.id !== 'team1' || !planData.plan.sortie1Side) && (
+            <p className="text-sm text-white/80">
+              {activeOverlay.label} has no airport or Sortie 1 side on this flight plan, so no path is drawn.
+            </p>
+          )}
+        {planData && activeSortie && activeSortie.lanes > 0 ? (
+          <p className="text-sm text-white/80">
+            {formatSortieHeader(
+              activeSortie,
+              savedTeamPlan?.teams.find((team) => team.id === selectedCrew)?.refuelStop?.identifier
+            )}
+          </p>
+        ) : planData && !teamDraws ? (
+          <p className="text-sm text-white/80">
+            {`${planData.waypoints.length} waypoints${planData.departure || planData.destination ? ' • Airports connected' : ''}${(towerOverlayData ?? []).length > 0 ? ` • ${(towerOverlayData ?? []).length} towers` : ''}`}
+          </p>
+        ) : !planData ? (
+          <p className="text-sm text-white/80">Select a flight plan to view the route</p>
+        ) : null}
       </div>
+
+      {planData && planData.waypoints.length >= 2 && (
+        <OffsetRoutePanel
+          key={planData.plan.id}
+          flightPlanId={planData.plan.id}
+          waypoints={planData.waypoints.map((wp) => ({
+            originalName: wp.originalName,
+            g1000Name: wp.g1000Name,
+            lat: wp.latitude,
+            lon: wp.longitude,
+          }))}
+          departure={planData.departure}
+          destination={planData.destination}
+          sortie1Side={planData.plan.sortie1Side ?? null}
+          onGeometry={setOffsetGeometry}
+          onLegWidths={setLegWidths}
+          teamPlanDownload={
+            savedTeamPlan && savedTeamPlan.flightPlanId === selectedPlanId
+              ? (() => {
+                  const team = savedTeamPlan.teams.find((item) => item.id === selectedCrew)
+                  if (!team) return null
+                  const records =
+                    savedTeamPlan.routeInsert == null
+                      ? planData.waypoints
+                      : planningRoute.points.map((point, index) => ({
+                          id: `wp-${point.ptIdent}`,
+                          flightPlanId: planData.plan.id,
+                          originalName: point.originalName || point.ptIdent,
+                          g1000Name: point.g1000Name || point.ptIdent,
+                          latitude: point.lat,
+                          longitude: point.lon,
+                          routeType: planData.waypoints[0]?.routeType ?? 'VR',
+                          sequence: index,
+                        }))
+                  return {
+                    team,
+                    routeLabel,
+                    waypoints: records,
+                    points: planningRoute.points,
+                    legWidths: legWidths ? planningRoute.widths : null,
+                    policy: {
+                      firstOffsetNm: savedTeamPlan.firstOffsetNm,
+                      stepNm: savedTeamPlan.stepNm,
+                    },
+                  }
+                })()
+              : null
+          }
+        />
+      )}
 
       <div className="flex-1 min-h-0 relative">
         <Map
@@ -406,28 +808,117 @@ export function MissionMapPage() {
           style={{ width: '100%', height: '100%' }}
           mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
           onLoad={() => setMapReady(true)}
+          onMoveEnd={(event) => setMapZoom(event.viewState.zoom)}
         >
-          {routeGeoJSON && (
+          {teamDraws && serpentine && serpentine.shades.length > 0 && (
+            <Source id="serpentine-shade" type="geojson" data={shadeCollection(serpentine.shades)}>
+              <Layer
+                id="serpentine-shade-fill"
+                type="fill"
+                paint={{ 'fill-color': SERPENTINE_YELLOW, 'fill-opacity': 0.22 }}
+              />
+            </Source>
+          )}
+
+          {planData && planData.waypoints.length >= 2 && (
             <Source
-              id="route"
+              id="route-line"
               type="geojson"
-              data={routeGeoJSON}
-              key={`route-src-${selectedPlanId}-${routeCoords.length}`}
+              data={{
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                  type: 'LineString',
+                  coordinates: [...planData.waypoints]
+                    .sort((a, b) => a.sequence - b.sequence)
+                    .map((waypoint) => [waypoint.longitude, waypoint.latitude]),
+                },
+              }}
             >
               <Layer
                 id="route-line"
                 type="line"
-                layout={{
-                  'line-join': 'round',
-                  'line-cap': 'round',
-                }}
+                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                paint={{ 'line-color': MAP_ROUTE_BLUE, 'line-width': 3 }}
+              />
+            </Source>
+          )}
+
+          {lineFromPoints(offsetGeometry?.corridorLeft) && (
+            <Source id="corridor-left" type="geojson" data={lineFromPoints(offsetGeometry?.corridorLeft)!}>
+              <Layer
+                id="corridor-left-line"
+                type="line"
+                paint={{ 'line-color': '#ffffff', 'line-width': 2, 'line-dasharray': [2, 2] }}
+              />
+            </Source>
+          )}
+          {lineFromPoints(offsetGeometry?.corridorRight) && (
+            <Source id="corridor-right" type="geojson" data={lineFromPoints(offsetGeometry?.corridorRight)!}>
+              <Layer
+                id="corridor-right-line"
+                type="line"
+                paint={{ 'line-color': '#ffffff', 'line-width': 2, 'line-dasharray': [2, 2] }}
+              />
+            </Source>
+          )}
+          {serpentine && serpentine.airportLegs.length > 0 && (
+            <Source id="airport-legs" type="geojson" data={lineCollection(serpentine.airportLegs.map((leg) => leg.coordinates))}>
+              <Layer
+                id="airport-legs-line"
+                type="line"
                 paint={{
-                  'line-color': '#FFD911',
-                  'line-width': 3,
+                  'line-color': '#ffffff',
+                  'line-width': 2,
+                  'line-dasharray': [4, 3],
                 }}
               />
             </Source>
           )}
+          {teamDraws && serpentine && serpentine.flows.length > 0 && (
+            <Source id="serpentine-flow" type="geojson" data={lineCollection(serpentine.flows)}>
+              <Layer
+                id="serpentine-flow-line"
+                type="line"
+                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                paint={{ 'line-color': SERPENTINE_YELLOW, 'line-width': 5 }}
+              />
+            </Source>
+          )}
+          {!teamDraws &&
+            (activeOverlay?.passes ?? [])
+              .filter((pass) => pass.number !== shownSortie)
+              .map((pass) => {
+                const line = sortieWaypointLine(pass.waypoints)
+                const data = lineFromCoordinates(line)
+                if (!data) return null
+                return (
+                  <Source key={`sortie-quiet-${pass.number}`} id={`sortie-quiet-${pass.number}`} type="geojson" data={data}>
+                    <Layer
+                      id={`sortie-quiet-${pass.number}-line`}
+                      type="line"
+                      layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                      paint={{ 'line-color': SERPENTINE_YELLOW, 'line-width': 2, 'line-opacity': 0.35 }}
+                    />
+                  </Source>
+                )
+              })}
+          {!teamDraws &&
+            (() => {
+              const pass = (activeOverlay?.passes ?? []).find((item) => item.number === shownSortie)
+              const data = pass ? lineFromCoordinates(sortieWaypointLine(pass.waypoints)) : null
+              if (!data) return null
+              return (
+                <Source id="sortie-highlight" type="geojson" data={data}>
+                  <Layer
+                    id="sortie-highlight-line"
+                    type="line"
+                    layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                    paint={{ 'line-color': SERPENTINE_YELLOW, 'line-width': 5 }}
+                  />
+                </Source>
+              )
+            })()}
 
           {towerLinesGeoJSON && (
             <Source id="tower-lines" type="geojson" data={towerLinesGeoJSON}>
@@ -446,59 +937,173 @@ export function MissionMapPage() {
             </Source>
           )}
 
+          {serpentine && serpentine.crossoverLegs.length > 0 && (
+            <Source id="crossover-leg" type="geojson" data={lineCollection(serpentine.crossoverLegs)}>
+              <Layer
+                id="crossover-leg-line"
+                type="line"
+                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                paint={{ 'line-color': SERPENTINE_YELLOW, 'line-width': 5 }}
+              />
+            </Source>
+          )}
+
           {(towerOverlayData ?? []).map((item) => (
             <TowerLeaderMarker key={item.id} item={item} />
           ))}
 
-          <NavigationControl position="top-right" />
-
-          {planData?.departure && (
+          {serpentine?.legArrows.map((arrow, index) => (
             <Marker
-              longitude={planData.departure.longitude}
-              latitude={planData.departure.latitude}
-              anchor="bottom"
+              key={`leg-${index}-${arrow.fromName}-${arrow.toName}`}
+              longitude={arrow.lon}
+              latitude={arrow.lat}
+              anchor="center"
             >
-              <div
-                className="px-2 py-1 rounded text-xs font-medium text-white shadow"
-                style={{ backgroundColor: '#0E2B8D' }}
-                title={planData.departure.name}
+              <span
+                className="pointer-events-none block font-black leading-none"
+                style={{
+                  color: arrow.color,
+                  fontSize: legArrowSizePx(mapZoom),
+                  transform: `rotate(${arrow.bearing}deg)`,
+                  textShadow: '0 0 2px #fff, 0 0 2px #000',
+                }}
               >
-                {planData.departure.identifier}
-              </div>
+                ▲
+              </span>
             </Marker>
+          ))}
+
+          {serpentine?.airportLegs.map((leg) =>
+            leg.arrow ? (
+              <Marker
+                key={`transit-${leg.role}`}
+                longitude={leg.arrow.lon}
+                latitude={leg.arrow.lat}
+                anchor="center"
+              >
+                <span
+                  className="pointer-events-none block font-black leading-none"
+                  style={{
+                    color: leg.arrow.color,
+                    fontSize: legArrowSizePx(mapZoom),
+                    transform: `rotate(${leg.arrow.bearing}deg)`,
+                    textShadow: '0 0 2px #fff, 0 0 2px #fff',
+                  }}
+                >
+                  ▲
+                </span>
+              </Marker>
+            ) : null
           )}
 
-          {planData?.waypoints.map((wp) => (
+          {serpentine?.airportLegs.map((leg) => {
+            const airportEnd = leg.role === 'departure' ? leg.coordinates[0] : leg.coordinates[leg.coordinates.length - 1]
+            return (
+              <Marker
+                key={`airport-${leg.role}-${leg.identifier}`}
+                longitude={airportEnd[0]}
+                latitude={airportEnd[1]}
+                anchor="bottom"
+              >
+                <div
+                  className="px-2 py-1 rounded text-xs font-medium text-white shadow"
+                  style={{ backgroundColor: leg.role === 'departure' ? '#0E2B8D' : '#8B0000' }}
+                >
+                  {leg.caption || leg.identifier}
+                </div>
+              </Marker>
+            )
+          })}
+
+          {serpentine?.arrows.map((arrow, index) => (
+            <FlowArrow
+              key={`arrow-${arrow.pass}-${index}`}
+              lon={arrow.lon}
+              lat={arrow.lat}
+              bearing={arrow.bearing}
+              label={`Pass ${arrow.pass}`}
+              small={arrow.pass === 2}
+            />
+          ))}
+
+          {serpentine?.laneCaptions.map((caption) => (
             <Marker
-              key={wp.id}
-              longitude={wp.longitude}
-              latitude={wp.latitude}
+              key={`lane-${caption.text}-${caption.lon}-${caption.lat}`}
+              longitude={caption.lon}
+              latitude={caption.lat}
               anchor="bottom"
+              offset={[0, -8]}
+              style={{ zIndex: 25 }}
             >
               <div
-                className="px-2 py-0.5 rounded text-xs font-mono text-cap-ultramarine bg-white border border-cap-ultramarine shadow"
-                title={wp.originalName}
+                className="pointer-events-none whitespace-nowrap text-[10px] font-semibold text-white"
+                style={{ textShadow: '0 0 3px #0E2B8D, 0 1px 2px #000' }}
               >
-                {wp.g1000Name}
+                {caption.text}
               </div>
             </Marker>
           ))}
 
-          {planData?.destination && (
-            <Marker
-              longitude={planData.destination.longitude}
-              latitude={planData.destination.latitude}
-              anchor="bottom"
-            >
-              <div
-                className="px-2 py-1 rounded text-xs font-medium text-white shadow"
-                style={{ backgroundColor: '#8B0000' }}
-                title={planData.destination.name}
+          {serpentine?.labels.map((label) => {
+            const place = labelPlacement(label.bearing)
+            return (
+              <Marker
+                key={`g1000-${label.pass}-${label.name}-${label.lon}-${label.lat}`}
+                longitude={label.lon}
+                latitude={label.lat}
+                anchor={place.anchor}
+                offset={place.offset}
+                style={{ zIndex: label.role ? 35 : 20 }}
               >
-                {planData.destination.identifier}
+                <div className="pointer-events-none text-center leading-tight">
+                  <div
+                    className="font-mono text-[10px] font-semibold text-white"
+                    style={{ textShadow: '0 0 3px #0E2B8D, 0 1px 2px #000' }}
+                  >
+                    {label.name}
+                  </div>
+                  {label.role ? (
+                    <div
+                      className="text-[10px] font-bold text-white"
+                      style={{ textShadow: '0 0 3px #0E2B8D, 0 1px 2px #000' }}
+                    >
+                      {label.role}
+                    </div>
+                  ) : null}
+                </div>
+              </Marker>
+            )
+          })}
+
+          <NavigationControl position="top-right" />
+
+          {planData?.waypoints.map((wp) => {
+            const letter = publishedPointLabel(wp.originalName)
+            if (!letter) return null
+            return (
+              <Marker key={wp.id} longitude={wp.longitude} latitude={wp.latitude} anchor="center" style={{ zIndex: 30 }}>
+                <span
+                  className="pointer-events-none text-[11px] font-semibold text-white"
+                  style={{ color: MAP_ROUTE_BLUE, textShadow: '0 0 2px #fff, 0 0 3px #fff' }}
+                  title={wp.originalName}
+                >
+                  {letter}
+                </span>
+              </Marker>
+            )
+          })}
+
+          {(offsetGeometry?.flags ?? []).map((flag) => (
+            <Marker key={`${flag.side}-${flag.index}-${flag.reason}`} longitude={flag.lon} latitude={flag.lat} anchor="center">
+              <div
+                className="w-5 h-5 rounded-full bg-cap-yellow text-cap-ultramarine text-xs font-bold flex items-center justify-center border border-black shadow"
+                title={flag.message}
+              >
+                !
               </div>
             </Marker>
-          )}
+          ))}
+
         </Map>
       </div>
     </div>

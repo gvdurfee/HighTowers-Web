@@ -1,0 +1,394 @@
+# MTR width-reader coverage
+
+FAA cycle file: **2026-10-01** (`server/.mtr-cache/2026-10-01_MTR_PT.csv` and `2026-10-01_MTR_WDTH.csv`).
+EFF_DATE on every row in both files: **2026/09/03**.
+
+Scope: 205 IR and VR routes whose ARTCC includes ZAB, ZDV, ZLA, ZFW, ZHU, ZKC. The primary sequence is the published `NEXT_ROUTE_PT_ID` chain. A starred point id matches the unstarred point. Readable clauses fill their legs. A clause that cannot be read leaves only the uncovered legs for the pilot.
+
+FULL means every primary leg has a left and right width. NEEDS PILOT ENTRY means at least one leg is blank. The blank count is the legs the pilot must enter.
+
+## Summary
+
+| Status | Routes |
+| --- | ---: |
+| FULL | 152 |
+| NEEDS PILOT ENTRY | 53 |
+| Total | 205 |
+
+A route that touches more than one center is counted in each of those centers.
+
+| Center | FULL | NEEDS PILOT ENTRY | Routes |
+| --- | ---: | ---: | ---: |
+| ZAB | 45 | 16 | 61 |
+| ZDV | 21 | 7 | 28 |
+| ZLA | 35 | 3 | 38 |
+| ZFW | 34 | 18 | 52 |
+| ZHU | 35 | 12 | 47 |
+| ZKC | 16 | 15 | 31 |
+
+## Routes that need pilot entry
+
+### NEEDS PILOT ENTRY (53)
+
+#### FAA text not readable (29)
+
+A clause is still in a form the reader does not accept (taper, cardinal sides, a missing number, or wording outside an NM span). The other legs keep their published widths.
+
+- **IR-030** (ZHU, ZJX, ZTL): 2 of 17 legs; 2 FAA text not readable: 2 NM WEST SIDE AND 5 NM EAST SIDE OF CENTERLINE B TO C AND O TO P.
+- **IR-031** (ZHU, ZJX, ZTL): 2 of 17 legs; 2 FAA text not readable: 2 NM WEST SIDE AND 5 NM EAST SIDE OF CENTERLINE B TO C AND O TO P.
+- **IR-121** (ZFW, ZME): 1 of 5 legs; 1 FAA text not readable: 2 NM WIDENING TO 6 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM B TO C.
+- **IR-126** (ZDV, ZLA, ZLC): 3 of 38 legs; 3 FAA text not readable: RE-ENTRY RE-ENTRY.
+- **IR-145** (ZFW, ZKC): 3 of 7 legs; 3 FAA text not readable: 3 NM EAST AND 6 NM WEST OF CENTERLINE FROM D TO E 3 NM SOUTH AND 6 NM NORTH OF CENTERLINE FROM E TO F | 3 NM EAST AND 6 NM WEST OF CENTERLINE FROM D TO E 3 NM SOUTH AND 6 NM NORTH OF CENTERLINE FROM E TO F 5 NM EAST AND 3 NM WEST OF CENTERLINE FROM F TO G | 3 NM SOUTH AND 6 NM NORTH OF CENTERLINE FROM E TO F 5 NM EAST AND 3 NM WEST OF CENTERLINE FROM F TO G.
+- **IR-146** (ZKC): 6 of 8 legs; 6 FAA text not readable: 3 NM EAST AND 5 NM WEST OF CENTERLINE FROM C TO 12 NM BEYOND C 3 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND C TO F 12 NM BEYOND F 2 NM EITHER SIDE OF CENTERLINE FROM | 12 NM BEYOND C 3 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND F 2 NM EITHER SIDE OF CENTERLINE FROM | 12 NM BEYOND C 3 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND C TO F 2 NM SOUTH AND 6 NM NORTH OF CENTERLINE FROM F TO 12 NM BEYOND F 2 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND F TO I. | 12 NM BEYOND C 3 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND F 2 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND F TO I.
+- **IR-169** (ZFW, ZHU): 2 of 9 legs; 2 FAA text not readable: 13 NM EITHER SIDE OF CENTERLINE TAPERING TO 10 NM EITHER SIDE OF CENTERLINE FROM H TO I 10 NM EITHER SIDE OF CENTERLINE TAPERING TO 5 NM EITHER SIDE OF CENTERLINE FROM I TO J.
+- **IR-485** (ZDV, ZLC): 2 of 18 legs; 2 FAA text not readable: CONFINES OF POWDER RIVER A MOA FROM LD TO LF.
+- **IR-499** (ZDV, ZLC): 1 of 25 legs; 1 FAA text not readable: 2 NM LEFT AND 3 NM RIGHT OF CENTERILNE FROM SH TO SI.
+- **VR-100** (ZAB): 1 of 16 legs; 1 FAA text not readable: 5 NM INCREASING TO 28 NM EITHER SIDE OF CENTERLINE FROM N TO O.
+- **VR-125** (ZAB): 1 of 16 legs; 1 FAA text not readable: 28 NM EITHER SIDE OF CENTERLINE DECREASING TO 5 NM EITHER SIDE OF CENTERLINE FROM C TO D.
+- **VR-142** (ZFW, ZHU): 2 of 4 legs; 2 FAA text not readable: 5 NM RIGHT AND 5 NM EXPANDING TO 10 NM LEFT OF CENTERLINE FROM A TO B | 5 NM RIGHT AND 10 NM TAPERING TO 5 NM LEFT OF CENTERLINE FROM D TO E.
+- **VR-143** (ZFW, ZHU): 3 of 10 legs; 3 FAA text not readable: 20 NM TAPERING TO 8 NM LEFT AND 10 NM RIGHT OF CENTERLINE FROM F TO G | 8 NM TAPERING TO 6 NM LEFT AND 14 NM RIGHT OF CENTERLINE FROM H TO I 6 NM TAPERING TO 3 NM LEFT AND 14 NM RIGHT OF CENTERLINE FROM I TO J.
+- **VR-152** (ZKC): 1 of 7 legs; 1 FAA text not readable: ON CENTERLINE TO 9 NM RIGHT OF CENTERLINE FROM G TO H, EXCLUDING R-3601.
+- **VR-198** (ZAB, ZFW): 2 of 10 legs; 2 FAA text not readable: 5 NM LEFT AND 4 NM RIGHT NARROWING TO 3 NM RIGHT OF CENTERLINE FROM H TO I 5 NM LEFT AND 3 NM RIGHT WIDENING TO 5 NM RIGHT OF CENTERLINE FROM I TO J.
+- **VR-199** (ZAB, ZFW): 2 of 10 legs; 2 FAA text not readable: 5 NM LEFT NARROWING TO 3 NM LEFT AND 5 NM RIGHT OF CENTERLINE FROM B TO C 3 NM LEFT WIDENING TO 4 NM LEFT AND 5 NM RIGHT OF CENTERLINE FROM C TO D.
+- **VR-511** (ZKC, ZMP): 1 of 11 legs; 1 FAA text not readable: (EXCEPT 8 NM LEFT AND 20 NM RIGHT OF CENTERLINE BETWEEN H AND I IF AIRCRAFT ARE SCHEDULED TO CONDUCT OPERATIONS INTO R-3602).
+- **VR-512** (ZKC, ZMP): 1 of 11 legs; 1 FAA text not readable: (EXCEPT 20 NM LEFT AND 8 NM RIGHT OF CENTERLINE BETWEEN D AND E IF AIRCRAFT ARE SCHEDULED TO CONDUCT OPERATIONS INTO R-3602).
+- **VR-531** (ZKC): 2 of 8 legs; 2 FAA text not readable: 5 NM TAPERING DOWN TO 3 NM WIDENING OUT TO.
+- **VR-532** (ZKC): 2 of 15 legs; 2 FAA text not readable: 5 NM WIDENING OUT TO 15 NM RIGHT AND 15 NM TAPERING DOWN TO 3 NM LEFT OF CENTERLINE FROM G TO H 15 NM TAPERING DOWN TO | 5 NM WIDENING OUT TO 15 NM RIGHT AND 15 NM TAPERING DOWN TO 15 NM TAPERING DOWN TO.
+- **VR-533** (ZKC): 2 of 8 legs; 2 FAA text not readable: 5 NM LEFT AND 5 NM TAPERING DOWN TO 2 NM RIGHT FROM B TO C 5 NM LEFT AND 2 NM TAPERING OUT TO 5 NM RIGHT FROM C TO D.
+- **VR-535** (ZKC): 1 of 9 legs; 1 FAA text not readable: 5 NM LEFT AND 15 NM TAPERING DOWN TO 2 NM RIGHT OF CENTERLINE FROM D TO E.
+- **VR-544** (ZKC, ZMP): 1 of 8 legs; 1 FAA text not readable: 8 NM EAST AND 4 NM WEST OF CENTERLINE FROM D TO E.
+- **VR-545** (ZKC, ZMP): 1 of 8 legs; 1 FAA text not readable: 8 NM EAST AND 4 NM WEST OF CENTERLINE FROM E TO F.
+- **VR-552** (ZKC): 1 of 7 legs; 1 FAA text not readable: ON CENTERLINE TO 9 NM LEFT OF CENTERLINE FROM A TO B, EXCLUDING R-3601.
+- **VR-1085** (ZHU, ZJX, ZTL): 3 of 11 legs; 3 FAA text not readable: 3 NM EITHER SIDE OF CENTERLINE FROM F TO F1 AND F2.
+- **VR-1103** (ZFW, ZME): 1 of 5 legs; 1 FAA text not readable: 2 NM WIDENING TO 6 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM B TO C.
+- **VR-1141** (ZAB, ZFW): 3 of 7 legs; 3 FAA text not readable: 10 NM AT C TAPERING TO 7 NM AT D 7 NM EITHER SIDE OF CENTERLINE AT E WIDENING TO 8 NM EITHER SIDE OF CENTERLINE AT F 8 NM EITHER SIDE OF CENTERLINE AT F WIDENING TO 10 NM EITHER SIDE OF CENTERLINE AT G.
+- **VR-1142** (ZAB, ZFW): 3 of 7 legs; 3 FAA text not readable: 10 NM TAPERING TO 8 NM EITHER SIDE OF CENTERLINE FROM B TO C 8 NM EITHER SIDE OF CENTERLINE AT C TAPERING TO 7 NM EITHER SIDE OF CENTERLINE AT D 7 NM EITHER SIDE OF CENTERLINE AT E WIDENING TO 10 NM AT F | 8 NM EITHER SIDE OF CENTERLINE AT C TAPERING TO 7 NM EITHER SIDE OF CENTERLINE AT D 7 NM EITHER SIDE OF CENTERLINE AT E WIDENING TO 10 NM AT F.
+
+#### Not covered by FAA text (13)
+
+The readable clauses never name these legs. The pilot enters the width. Nothing is guessed.
+
+- **IR-112** (ZAB, ZDV): 6 of 28 legs; 6 not covered by FAA text (XM*–EH1, EH1–I1, I1–EK1, EK1–L1, XI–L2, L2–XM1).
+- **IR-172** (ZAB, ZFW, ZKC): 1 of 10 legs; 1 not covered by FAA text (I–J).
+- **IR-178** (ZAB, ZFW): 9 of 52 legs; 9 not covered by FAA text (OA–AE1, AE1–K1, K1–L1, L1–M1, M1–X1, X1–Y1, Y1–Z1, Z1–F1, F1–G1).
+- **IR-192** (ZAB, ZFW): 2 of 33 legs; 2 not covered by FAA text (T*–T1, T1–T2). Alternates without width: EL PASO GAP (entry/exit); ELK (entry); TALON LOW MOA (entry/exit); ZIPER (exit).
+- **IR-286** (ZLA, ZLC, ZOA): 10 of 22 legs; 10 not covered by FAA text (M–AA, AA–BB, BB–CC, CC–I1, I1–G1, G1–GX, GX–I2, I2–IX, IX–J1, J1–JX).
+- **IR-508** (ZDV, ZMP): 1 of 10 legs; 1 not covered by FAA text (J–D1).
+- **IR-613** (ZDV, ZMP): 1 of 12 legs; 1 not covered by FAA text (L–C1).
+- **VR-101** (ZFW, ZHU): 2 of 5 legs; 2 not covered by FAA text (D–D1, D1–B1).
+- **VR-118** (ZFW): 1 of 7 legs; 1 not covered by FAA text (D–D1).
+- **VR-179** (ZHU, ZTL): 1 of 8 legs; 1 not covered by FAA text (G–F1).
+- **VR-222** (ZLA): 8 of 14 legs; 8 not covered by FAA text (G–C1, C1–E1, E1–E2, E2–E2X, E2X–EE1, EE1–E2*, E2*–E3, E3–E3X).
+- **VR-1022** (ZHU, ZME, ZTL): 1 of 7 legs; 1 not covered by FAA text (G–EA).
+- **VR-1082** (ZHU, ZJX, ZTL): 1 of 8 legs; 1 not covered by FAA text (H–DA).
+
+#### Mixed: some legs not covered, some FAA text not readable (7)
+
+Some blank legs are outside every readable span. Others sit under a clause the reader could not read.
+
+- **IR-123** (ZFW, ZHU): 2 of 12 legs; 1 not covered by FAA text (J–H1); 1 FAA text not readable: 13 NM TAPERING TO 5 NM EITHER SIDE OF CENTERLINE FROM F TO G.
+- **IR-128** (ZAB, ZFW): 11 of 47 legs; 5 not covered by FAA text (AA–AB, AB–AC, AC–AD, AD–AE, J1–RA); 6 FAA text not readable: 4 NM EITHER SIDE OF CENTERLINE FROM Z TO AF. RE-ENTRY | 4 NM EITHER SIDE OF CENTERLINE FROM Z TO AF. RE-ENTRY 5 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM RE TO RG. RE-ENTRY R-5104/R-5105 BOUNDARIES FROM RG TO RH | 5 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM RE TO RG. RE-ENTRY R-5104/R-5105 BOUNDARIES FROM RG TO RH. Alternates without width: RG (exit).
+- **IR-170** (ZHU): 7 of 8 legs; 1 not covered by FAA text (E–F); 6 FAA text not readable: 5 NM TAPERING TO 3 NM EITHER SIDE OF CENTERLINE FROM B TO D | 5 NM TAPERING TO 3 NM EITHER SIDE OF CENTERLINE FROM B TO D 3 NM TAPERING TO 4 NM EITHER SIDE OF CENTERLINE FROM D TO G | 3 NM TAPERING TO 4 NM EITHER SIDE OF CENTERLINE FROM D TO G 4 NM EXPANDING TO 5 NM EITHER SIDE OF CENTERLINE FROM G TO I. | 4 NM EXPANDING TO 5 NM EITHER SIDE OF CENTERLINE FROM G TO I.
+- **IR-180** (ZAB, ZFW): 7 of 47 legs; 1 not covered by FAA text (R1–RA); 6 FAA text not readable: 4 NM EITHER SIDE OF CENTERLINE FROM AE TO AG. RE-ENTRY | 4 NM EITHER SIDE OF CENTERLINE FROM AE TO AG. RE-ENTRY 5 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM RE TO RG. R-5104/R-5105 BOUNDARIES FROM RG TO RH | 5 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM RE TO RG. R-5104/R-5105 BOUNDARIES FROM RG TO RH. Alternates without width: RG (exit).
+- **IR-473** (ZDV, ZLC): 10 of 42 legs; 6 not covered by FAA text (B3–B4, B4–B5, IL–AK, AK–EX, EX–EL, EL–EM); 4 FAA text not readable: CONFINES OF POWDER RIVER MOA FROM B2 TO B6 | 4 NM EITHER SIDE OF CENTERLINE FORM AI TO EN.
+- **IR-505** (ZKC, ZMP): 7 of 15 legs; 1 not covered by FAA text (C1–D1); 6 FAA text not readable: 8 NM EAST AND 4 NM WEST OF CENTERLINE FROM G TO H | 7 NM EITHER SIDE OF CENTERLINE FROM J TO K. ALTERNATE ENTRY: E - ON CENTERLINE YA TO E1.
+- **IR-592** (ZKC, ZME): 12 of 41 legs; 9 not covered by FAA text (AC–H1, H1–I1, I1–J1, TB–E1, E1–N1, N1–NA, NA–OA, OA–P1, P1–Q1); 3 FAA text not readable: RE-ENTRY T - 3 NM LEFT AND 4 NM OF CENTERLINE FROM T1 TO TA.
+
+#### Coordinate width (4)
+
+The FAA published the corridor as coordinates. Those legs stay blank for the pilot. The reader does not turn coordinates into a width.
+
+- **IR-133** (ZAB): 16 of 16 legs; 16 FAA text not readable: STARTING AT N33-17.2 W105-21.3 TO N33-32 W105-08 TO N34-06 W104-58 TO N34-13 W105-05 TO N34-31 W105-05 TO N34-32 W104-58 TO N34-42 W105-13 TO N34-42 W106-14 TO N34-16 W106-30 TO N33-50 W106-30 VIA THE SOUTHERN BOUNDAR…. Alternates without width: ELK (entry); PECOS MOA (entry); RED RIO (exit).
+- **IR-134** (ZAB): 22 of 22 legs; 22 FAA text not readable: STARTING AT N32-35 W105-10 TO N32-13 W105-15 TO N32-10.5 W105-00 TO N32-35 W105-10 TO N32-44 W105-23 TO N32-34 W105-30 TO N32-26 W105-30 TO N32-15 W105-42 TO N32-06 W105-41 TO N32-02 W104-41 TO N32-12 W104-41 TO N33-0…. Alternates without width: EL PASO GAP (entry/exit); TALON LOW (entry/exit); ZIPER (exit).
+- **IR-142** (ZAB): 11 of 11 legs; 11 FAA text not readable: STARTING AT N33-17.2 W105-21.3 TO N33-32 W105-08 TO N34-06 W104-58 TO N34-13 W105-05 TO N34-31 W105-05 TO N34-32 W104-58 TO N34-42 W105-13 TO N34-42 W106-14 TO N34-16 W106-30 TO N33-50 W106-30 VIA THE SOUTHERN BOUNDAR…. Alternates without width: ELK (exit).
+- **IR-195** (ZAB): 19 of 19 legs; 19 FAA text not readable: STARTING AT N32-35 W105-10 TO N32-13 W105-15 TO N32-10.5 W105-00 TO N32-35 W105-10 TO N32-44 W105-23 TO N32-34 W105-30 TO N32-36 W105-38.5 TO N32-44 W105-59 TO N32-28 W106-00 TO N32-23 W105-42.5 TO N32-06 W105-41 TO N…. Alternates without width: EL PASO GAP (entry/exit); TALON LOW (entry/exit); ZIPER (exit).
+
+## Lopsided widths
+
+75 routes with a published side wider than the other. These still count as FULL or PARTIAL when the numbers were read.
+
+- **IR-037** (ZHU, ZME): C–D 4/5; F–G 5/4
+- **IR-109** (ZAB, ZDV): E–F 3/1; F–AO 3/1; AO–AP 5/3
+- **IR-112** (ZAB, ZDV): D–E 5/4
+- **IR-117** (ZFW, ZME): E–F 2/10
+- **IR-121** (ZFW, ZME): E–F 5/3
+- **IR-126** (ZDV, ZLA, ZLC): N–O 4/2; O–P 3/2.5; P–Q 3/2.5; Q–R 3/2.5; R–S 3/2.5
+- **IR-128** (ZAB, ZFW): C–D 3/2.5; D–DE 3/2.5; K–L 5/4; L–M 5/4; Q–R 4/3; R–S 3/4; S–T 3/4; T–U 3/4; W–X 4/3; X–Y 4/3; RA–RB 4/5; RB–RC 4/5
+- **IR-164** (ZFW, ZME): D–E 5/3
+- **IR-169** (ZFW, ZHU): A–B 4/3; B–C 4/3; C–D 4/3; D–E 4/3
+- **IR-175** (ZKC): A–AA 4/2; AA–B 4/2; B–C 4/3; F–G 4/3; G–G1 4/3; G1–H 2/3; H–I 2/3
+- **IR-177** (ZAB, ZDV, ZKC): I–J 3/4; K–L 6/3; L–M 6/5
+- **IR-178** (ZAB, ZFW): F–G 5/9; G–H 5/9; H–I 5/9; I–J 8/6; J–K 8/6; K–L 8/6; L–M 8/6; M–N 8/6; N–O 8/6; O–P 8/6; P–Q 10/4; Q–R 10/4; R–S 10/4; S–T 4/10; T–U 4/10; U–V 4/10; Z–AA 4/2; AA–AB 4/2; AB–AC 3/4; VA–VB 4/2; O1–OA 4/6
+- **IR-180** (ZAB, ZFW): H–I 3/4; I–J 3/4; L–M 4/3; M–N 4/3; N–O 4/3; O–P 3/4; T–U 4/5; U–V 4/5; AC–AD 2.5/3; AD–AE 2.5/3; RA–RB 4/5; RB–RC 4/5
+- **IR-185** (ZKC): A–B 3/2; B–C 3/2; C–D 3/4; D–E 3/4; H–I 3/4; I–J 2/4; J–K 2/4
+- **IR-192** (ZAB, ZFW): B–C 8/7; C–D 8/7; D–E 8/7; E–F 2/8; F–G 2/8; G–H 4/7; H–I 3/7; I–J 3/4; L–M 8/10; M–N 8/10; N–O 5/10; O–P 5/10; P–Q 5/10; Q–R 4/13; R–S 5/8; S–T 7/6; T–U 7/13; V–W 10/9; W–A2 7/13; A2–A1 7/13; A1–L2 7/13; L2–L1 7/13; L1–M1 7/13; M1–L* 7/13; L*–L1* 7/13; L1*–L2* 7/13; L2*–T* 7/13
+- **IR-194** (ZAB, ZFW): A–B 3/2; B–C 9/6; C–D 9/6; D–E 6/7; E–F 8/5; F–G 13/4; G–H 10/5; H–I 10/5; I–J 10/5; J–K 10/8; K–L 10/8; L–M 4/3; N–O 4/3; O–P 7/3; P–Q 7/4; Q–R 8/2; R–S 8/2; S–T 7/8; T–U 7/8; U–V 7/8; V–W 7/10; W–X 3/4; X–Y 3/4; Y–Z 10/9; Z–K2 3/4; K2–K1 3/4; K1–L1 3/4; L1–T1 3/4; T1–K* 3/4; K*–K1* 3/4; K1*–K2* 3/4; K2*–V* 3/4; V*–V1 3/4; V1–R* 3/4; R*–W* 3/4
+- **IR-200** (ZLA, ZLC, ZOA): R–S 7/4; AF–AG 7/4; AG–AH 7/10; AH–AI 7/10
+- **IR-213** (ZAB, ZLA): F–G 2/5; I–J 1/3; J–K 2/3
+- **IR-214** (ZAB, ZLA): C–D 1/4; D–E 1/4; E–F 1/4; G–H 1/3; H–I 2/4
+- **IR-266** (ZDV, ZLA, ZLC): H–I 2.5/3; I–J 2.5/3; L–M 2/4
+- **IR-425** (ZLA, ZLC, ZOA): E–F 10/7; F–G 10/7; G–H 4/7; U–V 4/7
+- **IR-473** (ZDV, ZLC): F–JA 5/7; JA–JB 5/7; JB–JC 7/4; JC–JD 7/4; JD–JE 7/4; JE–JF 7/4; O–O1 8/4; T–U 3/4; AA–AB 4/8; B6–B7 6/4; B7–AH 6/4; AH–AI 6/4
+- **IR-485** (ZDV, ZLC): LF–LG 6/4; LG–AH 6/4; AH–AI 6/4
+- **IR-499** (ZDV, ZLC): F–JA 5/7; JA–JB 5/7; JB–JC 7/4; JC–JD 7/4; JD–JE 7/4; JE–JF 7/4; SI–SJ 1/3; SJ–SK 2/3; SK–SL 2/3
+- **IR-504** (ZKC, ZMP): A–B 3/4; B–C 3/4; I–J 4/3; N–O 2/4; O–P 2/4
+- **IR-514** (ZDV, ZMP): B–C 4/15; C–D 16/13; D–E 16/25; E–F 10/25; F–G 10/25; G–H 12/6
+- **IR-592** (ZKC, ZME): A–BA 3/1; BA–B 3/1; N–O 4/3; O–P 4/3; P–Q 4/3; T–U 3/4; W–X 4/2; X–Y 4/2; AA–AB 4/3; AB–AC 4/3
+- **IR-613** (ZDV, ZMP): C–D 6/12; D–E 25/10; E–F 25/10; F–G 25/16; G–H 13/16; H–I 15/4; J–K 6/12
+- **VR-060** (ZHU, ZTL): B–C 2/13.5
+- **VR-100** (ZAB): A–B 3/5; P–Q 28/2
+- **VR-101** (ZFW, ZHU): B–C 8/5; C–D 8/5
+- **VR-108** (ZAB): J–K 7.5/20; K–L 7.5/20; L–M 7.5/20; M–N 7.5/20; N–O 7.5/20; O–M1 7.5/20
+- **VR-114** (ZAB): B–C 10/20; C–D 10/20; D–E 10/20; E–F 10/20; F–M1 10/20
+- **VR-118** (ZFW): A–B 5/13; B–C 3/13; C1–B1 3/13; B1–A1 5/13
+- **VR-119** (ZKC): F–G 6/8
+- **VR-125** (ZAB): A–B 2/28; P–M2 5/3
+- **VR-138** (ZKC): J–K 6/8
+- **VR-142** (ZFW, ZHU): B–C 10/5; C–D 10/5
+- **VR-143** (ZFW, ZHU): C–D 20/11; G–H 8/14; J–K 3/14
+- **VR-151** (ZHU): C–D 3/1
+- **VR-176** (ZAB): E–F 20/10; F–G 20/10; G–H 15/10; I–J 10/37; J–K 20/38; L–M 20/25
+- **VR-179** (ZHU, ZTL): A–B 2/8; B–C 2/1; D–E 8/5; E–F 5/8
+- **VR-198** (ZAB, ZFW): F–G 5/4
+- **VR-199** (ZAB, ZFW): E–F 4/5
+- **VR-222** (ZLA): D–E 5/3
+- **VR-231** (ZAB): B–C 5/4; C–D 14/6; D–E 8/6
+- **VR-241** (ZAB): C–D 5/3; D–E 4/5; E–F 4/2; F–G 5/2; G–H 2/3; I–J 2/3; J–K 2/4
+- **VR-243** (ZAB, ZLA): H–I 14/6; I–J 8/6
+- **VR-244** (ZAB): C–D 5/3; D–E 4/5; E–F 4/2; F–G 5/2; G–H 2/3; H–I 4/3; I–J 2/3; L–M 3/2
+- **VR-245** (ZAB, ZLA, ZLC): D–E 2/1.5; E–F 14/6; F–G 8/6
+- **VR-260** (ZAB): D–E 2/1; E–F 1/2; L–M 3/2
+- **VR-263** (ZAB): A–B 2/4; B–C 8/10; C–D 8/10; F–G 15/8; G–H 13/10; J–K 2/1; K–L 2/1; L–M 2/4; M–N 1/4; N–O 1/4; S–T 3/2
+- **VR-531** (ZKC): A–B 3/5; F–G 6/8
+- **VR-532** (ZKC): C–D 15/5; D–E 15/5; H–I 3/8; K–L 6/8; AF–K1 6/8; K1–L1 6/8
+- **VR-533** (ZKC): H–I 6/8
+- **VR-534** (ZKC): G–H 6/8
+- **VR-535** (ZKC): B–C 5/15; C–D 5/15; E–F 6/8; F–G 6/8; G–H 6/8; H–I 6/8; I–J 6/8
+- **VR-536** (ZKC): E–F 6/8
+- **VR-1021** (ZHU, ZME, ZTL): M–N 3/5
+- **VR-1082** (ZHU, ZJX, ZTL): A–B 2/5; D–E 5/2
+- **VR-1085** (ZHU, ZJX, ZTL): A–B 2/5
+- **VR-1103** (ZFW, ZME): E–F 5/3
+- **VR-1104** (ZFW, ZME): D–E 5/3
+- **VR-1107** (ZAB): A–B 15/30; B–C 25/30
+- **VR-1113** (ZFW, ZME): E–F 2/10
+- **VR-1116** (ZFW, ZHU): A–B 3/4; E–F 3/4; F–G 3/4; G–H 3/4
+- **VR-1145** (ZFW): C–D 10/5
+- **VR-1146** (ZFW): F–G 5/10
+- **VR-1195** (ZAB): D–E 30/25; E–F 30/15
+- **VR-1214** (ZLA, ZOA): I–J 5/15; J–K 5/15
+- **VR-1257** (ZLA, ZOA): M–N 2/1; N–O 2/1
+- **VR-1266** (ZLA): F–G 2/1
+- **VR-1268** (ZAB, ZLA): E–F 1/4; F–G 1/4; G–H 1/4
+- **VR-1546** (ZKC): B–C 2/4
+- **VR-1679** (ZKC, ZID): B–C 4/5; F–G 5/8; G–H 3/7; I–J 10/4
+
+## Routes
+
+| Route | Centers | Status | Legs needing pilot entry | Alternates without width |
+| --- | --- | --- | --- | --- |
+| IR-030 | ZHU, ZJX, ZTL | NEEDS PILOT ENTRY | 2 of 17 legs; 2 FAA text not readable: 2 NM WEST SIDE AND 5 NM EAST SIDE OF CENTERLINE B TO C AND O TO P. | — |
+| IR-031 | ZHU, ZJX, ZTL | NEEDS PILOT ENTRY | 2 of 17 legs; 2 FAA text not readable: 2 NM WEST SIDE AND 5 NM EAST SIDE OF CENTERLINE B TO C AND O TO P. | — |
+| IR-037 | ZHU, ZME | FULL | — | — |
+| IR-038 | ZHU | FULL | — | — |
+| IR-040 | ZHU, ZME | FULL | — | — |
+| IR-070 | ZFW, ZME | FULL | — | — |
+| IR-103 | ZFW | FULL | — | — |
+| IR-105 | ZFW | FULL | — | — |
+| IR-107 | ZAB | FULL | — | — |
+| IR-109 | ZAB, ZDV | FULL | — | — |
+| IR-111 | ZAB | FULL | — | — |
+| IR-112 | ZAB, ZDV | NEEDS PILOT ENTRY | 6 of 28 legs; 6 not covered by FAA text (XM*–EH1, EH1–I1, I1–EK1, EK1–L1, XI–L2, L2–XM1) | — |
+| IR-113 | ZAB | FULL | — | M3 (entry) |
+| IR-117 | ZFW, ZME | FULL | — | — |
+| IR-121 | ZFW, ZME | NEEDS PILOT ENTRY | 1 of 5 legs; 1 FAA text not readable: 2 NM WIDENING TO 6 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM B TO C | — |
+| IR-123 | ZFW, ZHU | NEEDS PILOT ENTRY | 2 of 12 legs; 1 not covered by FAA text (J–H1); 1 FAA text not readable: 13 NM TAPERING TO 5 NM EITHER SIDE OF CENTERLINE FROM F TO G | — |
+| IR-124 | ZFW, ZHU | FULL | — | — |
+| IR-126 | ZDV, ZLA, ZLC | NEEDS PILOT ENTRY | 3 of 38 legs; 3 FAA text not readable: RE-ENTRY RE-ENTRY | — |
+| IR-127 | ZFW, ZHU | FULL | — | — |
+| IR-128 | ZAB, ZFW | NEEDS PILOT ENTRY | 11 of 47 legs; 5 not covered by FAA text (AA–AB, AB–AC, AC–AD, AD–AE, J1–RA); 6 FAA text not readable: 4 NM EITHER SIDE OF CENTERLINE FROM Z TO AF. RE-ENTRY / 4 NM EITHER SIDE OF CENTERLINE FROM Z TO AF. RE-ENTRY 5 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM RE TO RG. RE-ENTRY R-5104/R-5105 BOUNDARIES FROM RG TO RH / 5 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM RE TO RG. RE-ENTRY R-5104/R-5105 BOUNDARIES FROM RG TO RH | RG (exit) |
+| IR-129 | ZFW, ZHU | FULL | — | — |
+| IR-133 | ZAB | NEEDS PILOT ENTRY | 16 of 16 legs; 16 FAA text not readable: STARTING AT N33-17.2 W105-21.3 TO N33-32 W105-08 TO N34-06 W104-58 TO N34-13 W105-05 TO N34-31 W105-05 TO N34-32 W104-58 TO N34-42 W105-13 TO N34-42 W106-14 TO N34-16 W106-30 TO N33-50 W106-30 VIA THE SOUTHERN BOUNDAR… | ELK (entry); PECOS MOA (entry); RED RIO (exit) |
+| IR-134 | ZAB | NEEDS PILOT ENTRY | 22 of 22 legs; 22 FAA text not readable: STARTING AT N32-35 W105-10 TO N32-13 W105-15 TO N32-10.5 W105-00 TO N32-35 W105-10 TO N32-44 W105-23 TO N32-34 W105-30 TO N32-26 W105-30 TO N32-15 W105-42 TO N32-06 W105-41 TO N32-02 W104-41 TO N32-12 W104-41 TO N33-0… | EL PASO GAP (entry/exit); TALON LOW (entry/exit); ZIPER (exit) |
+| IR-135 | ZHU | FULL | — | — |
+| IR-136 | ZHU | FULL | — | — |
+| IR-137 | ZAB, ZDV | FULL | — | — |
+| IR-139 | ZFW, ZHU | FULL | — | — |
+| IR-142 | ZAB | NEEDS PILOT ENTRY | 11 of 11 legs; 11 FAA text not readable: STARTING AT N33-17.2 W105-21.3 TO N33-32 W105-08 TO N34-06 W104-58 TO N34-13 W105-05 TO N34-31 W105-05 TO N34-32 W104-58 TO N34-42 W105-13 TO N34-42 W106-14 TO N34-16 W106-30 TO N33-50 W106-30 VIA THE SOUTHERN BOUNDAR… | ELK (exit) |
+| IR-145 | ZFW, ZKC | NEEDS PILOT ENTRY | 3 of 7 legs; 3 FAA text not readable: 3 NM EAST AND 6 NM WEST OF CENTERLINE FROM D TO E 3 NM SOUTH AND 6 NM NORTH OF CENTERLINE FROM E TO F / 3 NM EAST AND 6 NM WEST OF CENTERLINE FROM D TO E 3 NM SOUTH AND 6 NM NORTH OF CENTERLINE FROM E TO F 5 NM EAST AND 3 NM WEST OF CENTERLINE FROM F TO G / 3 NM SOUTH AND 6 NM NORTH OF CENTERLINE FROM E TO F 5 NM EAST AND 3 NM WEST OF CENTERLINE FROM F TO G | — |
+| IR-146 | ZKC | NEEDS PILOT ENTRY | 6 of 8 legs; 6 FAA text not readable: 3 NM EAST AND 5 NM WEST OF CENTERLINE FROM C TO 12 NM BEYOND C 3 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND C TO F 12 NM BEYOND F 2 NM EITHER SIDE OF CENTERLINE FROM / 12 NM BEYOND C 3 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND F 2 NM EITHER SIDE OF CENTERLINE FROM / 12 NM BEYOND C 3 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND C TO F 2 NM SOUTH AND 6 NM NORTH OF CENTERLINE FROM F TO 12 NM BEYOND F 2 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND F TO I. / 12 NM BEYOND C 3 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND F 2 NM EITHER SIDE OF CENTERLINE FROM 12 NM BEYOND F TO I. | — |
+| IR-147 | ZHU | FULL | — | — |
+| IR-148 | ZHU | FULL | — | — |
+| IR-149 | ZHU | FULL | — | — |
+| IR-154 | ZAB, ZFW | FULL | — | — |
+| IR-155 | ZAB, ZFW | FULL | — | — |
+| IR-164 | ZFW, ZME | FULL | — | — |
+| IR-166 | ZHU | FULL | — | — |
+| IR-167 | ZHU | FULL | — | — |
+| IR-169 | ZFW, ZHU | NEEDS PILOT ENTRY | 2 of 9 legs; 2 FAA text not readable: 13 NM EITHER SIDE OF CENTERLINE TAPERING TO 10 NM EITHER SIDE OF CENTERLINE FROM H TO I 10 NM EITHER SIDE OF CENTERLINE TAPERING TO 5 NM EITHER SIDE OF CENTERLINE FROM I TO J. | — |
+| IR-170 | ZHU | NEEDS PILOT ENTRY | 7 of 8 legs; 1 not covered by FAA text (E–F); 6 FAA text not readable: 5 NM TAPERING TO 3 NM EITHER SIDE OF CENTERLINE FROM B TO D / 5 NM TAPERING TO 3 NM EITHER SIDE OF CENTERLINE FROM B TO D 3 NM TAPERING TO 4 NM EITHER SIDE OF CENTERLINE FROM D TO G / 3 NM TAPERING TO 4 NM EITHER SIDE OF CENTERLINE FROM D TO G 4 NM EXPANDING TO 5 NM EITHER SIDE OF CENTERLINE FROM G TO I. / 4 NM EXPANDING TO 5 NM EITHER SIDE OF CENTERLINE FROM G TO I. | — |
+| IR-171 | ZFW, ZKC | FULL | — | — |
+| IR-172 | ZAB, ZFW, ZKC | NEEDS PILOT ENTRY | 1 of 10 legs; 1 not covered by FAA text (I–J) | — |
+| IR-173 | ZAB, ZKC | FULL | — | — |
+| IR-175 | ZKC | FULL | — | — |
+| IR-177 | ZAB, ZDV, ZKC | FULL | — | — |
+| IR-178 | ZAB, ZFW | NEEDS PILOT ENTRY | 9 of 52 legs; 9 not covered by FAA text (OA–AE1, AE1–K1, K1–L1, L1–M1, M1–X1, X1–Y1, Y1–Z1, Z1–F1, F1–G1) | — |
+| IR-180 | ZAB, ZFW | NEEDS PILOT ENTRY | 7 of 47 legs; 1 not covered by FAA text (R1–RA); 6 FAA text not readable: 4 NM EITHER SIDE OF CENTERLINE FROM AE TO AG. RE-ENTRY / 4 NM EITHER SIDE OF CENTERLINE FROM AE TO AG. RE-ENTRY 5 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM RE TO RG. R-5104/R-5105 BOUNDARIES FROM RG TO RH / 5 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM RE TO RG. R-5104/R-5105 BOUNDARIES FROM RG TO RH | RG (exit) |
+| IR-181 | ZFW, ZKC | FULL | — | — |
+| IR-182 | ZAB, ZFW, ZKC | FULL | — | — |
+| IR-183 | ZAB, ZKC | FULL | — | — |
+| IR-185 | ZKC | FULL | — | — |
+| IR-192 | ZAB, ZFW | NEEDS PILOT ENTRY | 2 of 33 legs; 2 not covered by FAA text (T*–T1, T1–T2) | EL PASO GAP (entry/exit); ELK (entry); TALON LOW MOA (entry/exit); ZIPER (exit) |
+| IR-194 | ZAB, ZFW | FULL | — | EL PASO GAP (entry/exit); ELK (exit); TALON LOW (entry/exit); ZIPER (exit) |
+| IR-195 | ZAB | NEEDS PILOT ENTRY | 19 of 19 legs; 19 FAA text not readable: STARTING AT N32-35 W105-10 TO N32-13 W105-15 TO N32-10.5 W105-00 TO N32-35 W105-10 TO N32-44 W105-23 TO N32-34 W105-30 TO N32-36 W105-38.5 TO N32-44 W105-59 TO N32-28 W106-00 TO N32-23 W105-42.5 TO N32-06 W105-41 TO N… | EL PASO GAP (entry/exit); TALON LOW (entry/exit); ZIPER (exit) |
+| IR-200 | ZLA, ZLC, ZOA | FULL | — | — |
+| IR-203 | ZLA, ZOA | FULL | — | — |
+| IR-211 | ZLA | FULL | — | — |
+| IR-212 | ZLA | FULL | — | — |
+| IR-213 | ZAB, ZLA | FULL | — | — |
+| IR-214 | ZAB, ZLA | FULL | — | — |
+| IR-216 | ZLA | FULL | — | — |
+| IR-217 | ZLA | FULL | — | — |
+| IR-218 | ZAB, ZLA | FULL | — | — |
+| IR-250 | ZAB, ZLA | FULL | — | — |
+| IR-252 | ZLA | FULL | — | — |
+| IR-254 | ZAB | FULL | — | — |
+| IR-255 | ZLA | FULL | — | — |
+| IR-266 | ZDV, ZLA, ZLC | FULL | — | — |
+| IR-286 | ZLA, ZLC, ZOA | NEEDS PILOT ENTRY | 10 of 22 legs; 10 not covered by FAA text (M–AA, AA–BB, BB–CC, CC–I1, I1–G1, G1–GX, GX–I2, I2–IX, IX–J1, J1–JX) | — |
+| IR-308 | ZAB, ZDV | FULL | — | — |
+| IR-409 | ZAB, ZDV | FULL | — | — |
+| IR-414 | ZDV | FULL | — | — |
+| IR-415 | ZDV | FULL | — | — |
+| IR-416 | ZDV | FULL | — | — |
+| IR-424 | ZDV | FULL | — | — |
+| IR-425 | ZLA, ZLC, ZOA | FULL | — | — |
+| IR-473 | ZDV, ZLC | NEEDS PILOT ENTRY | 10 of 42 legs; 6 not covered by FAA text (B3–B4, B4–B5, IL–AK, AK–EX, EX–EL, EL–EM); 4 FAA text not readable: CONFINES OF POWDER RIVER MOA FROM B2 TO B6 / 4 NM EITHER SIDE OF CENTERLINE FORM AI TO EN. | — |
+| IR-485 | ZDV, ZLC | NEEDS PILOT ENTRY | 2 of 18 legs; 2 FAA text not readable: CONFINES OF POWDER RIVER A MOA FROM LD TO LF | — |
+| IR-499 | ZDV, ZLC | NEEDS PILOT ENTRY | 1 of 25 legs; 1 FAA text not readable: 2 NM LEFT AND 3 NM RIGHT OF CENTERILNE FROM SH TO SI | — |
+| IR-504 | ZKC, ZMP | FULL | — | — |
+| IR-505 | ZKC, ZMP | NEEDS PILOT ENTRY | 7 of 15 legs; 1 not covered by FAA text (C1–D1); 6 FAA text not readable: 8 NM EAST AND 4 NM WEST OF CENTERLINE FROM G TO H / 7 NM EITHER SIDE OF CENTERLINE FROM J TO K. ALTERNATE ENTRY: E - ON CENTERLINE YA TO E1. | — |
+| IR-508 | ZDV, ZMP | NEEDS PILOT ENTRY | 1 of 10 legs; 1 not covered by FAA text (J–D1) | — |
+| IR-509 | ZDV, ZMP | FULL | — | — |
+| IR-514 | ZDV, ZMP | FULL | — | — |
+| IR-518 | ZDV, ZMP | FULL | — | — |
+| IR-592 | ZKC, ZME | NEEDS PILOT ENTRY | 12 of 41 legs; 9 not covered by FAA text (AC–H1, H1–I1, I1–J1, TB–E1, E1–N1, N1–NA, NA–OA, OA–P1, P1–Q1); 3 FAA text not readable: RE-ENTRY T - 3 NM LEFT AND 4 NM OF CENTERLINE FROM T1 TO TA | — |
+| IR-613 | ZDV, ZMP | NEEDS PILOT ENTRY | 1 of 12 legs; 1 not covered by FAA text (L–C1) | — |
+| VR-060 | ZHU, ZTL | FULL | — | — |
+| VR-100 | ZAB | NEEDS PILOT ENTRY | 1 of 16 legs; 1 FAA text not readable: 5 NM INCREASING TO 28 NM EITHER SIDE OF CENTERLINE FROM N TO O | — |
+| VR-101 | ZFW, ZHU | NEEDS PILOT ENTRY | 2 of 5 legs; 2 not covered by FAA text (D–D1, D1–B1) | — |
+| VR-104 | ZFW | FULL | — | — |
+| VR-108 | ZAB | FULL | — | — |
+| VR-114 | ZAB | FULL | — | — |
+| VR-118 | ZFW | NEEDS PILOT ENTRY | 1 of 7 legs; 1 not covered by FAA text (D–D1) | — |
+| VR-119 | ZKC | FULL | — | — |
+| VR-125 | ZAB | NEEDS PILOT ENTRY | 1 of 16 legs; 1 FAA text not readable: 28 NM EITHER SIDE OF CENTERLINE DECREASING TO 5 NM EITHER SIDE OF CENTERLINE FROM C TO D | — |
+| VR-138 | ZKC | FULL | — | — |
+| VR-140 | ZHU | FULL | — | — |
+| VR-142 | ZFW, ZHU | NEEDS PILOT ENTRY | 2 of 4 legs; 2 FAA text not readable: 5 NM RIGHT AND 5 NM EXPANDING TO 10 NM LEFT OF CENTERLINE FROM A TO B / 5 NM RIGHT AND 10 NM TAPERING TO 5 NM LEFT OF CENTERLINE FROM D TO E. | — |
+| VR-143 | ZFW, ZHU | NEEDS PILOT ENTRY | 3 of 10 legs; 3 FAA text not readable: 20 NM TAPERING TO 8 NM LEFT AND 10 NM RIGHT OF CENTERLINE FROM F TO G / 8 NM TAPERING TO 6 NM LEFT AND 14 NM RIGHT OF CENTERLINE FROM H TO I 6 NM TAPERING TO 3 NM LEFT AND 14 NM RIGHT OF CENTERLINE FROM I TO J | — |
+| VR-151 | ZHU | FULL | — | — |
+| VR-152 | ZKC | NEEDS PILOT ENTRY | 1 of 7 legs; 1 FAA text not readable: ON CENTERLINE TO 9 NM RIGHT OF CENTERLINE FROM G TO H, EXCLUDING R-3601. | — |
+| VR-156 | ZHU | FULL | — | — |
+| VR-158 | ZFW | FULL | — | — |
+| VR-159 | ZFW | FULL | — | — |
+| VR-168 | ZHU | FULL | — | — |
+| VR-176 | ZAB | FULL | — | — |
+| VR-179 | ZHU, ZTL | NEEDS PILOT ENTRY | 1 of 8 legs; 1 not covered by FAA text (G–F1) | — |
+| VR-186 | ZFW, ZHU | FULL | — | — |
+| VR-189 | ZFW, ZME | FULL | — | — |
+| VR-196 | ZAB | FULL | — | — |
+| VR-197 | ZAB | FULL | — | — |
+| VR-198 | ZAB, ZFW | NEEDS PILOT ENTRY | 2 of 10 legs; 2 FAA text not readable: 5 NM LEFT AND 4 NM RIGHT NARROWING TO 3 NM RIGHT OF CENTERLINE FROM H TO I 5 NM LEFT AND 3 NM RIGHT WIDENING TO 5 NM RIGHT OF CENTERLINE FROM I TO J | — |
+| VR-199 | ZAB, ZFW | NEEDS PILOT ENTRY | 2 of 10 legs; 2 FAA text not readable: 5 NM LEFT NARROWING TO 3 NM LEFT AND 5 NM RIGHT OF CENTERLINE FROM B TO C 3 NM LEFT WIDENING TO 4 NM LEFT AND 5 NM RIGHT OF CENTERLINE FROM C TO D | — |
+| VR-209 | ZLA, ZLC, ZOA | FULL | — | — |
+| VR-222 | ZLA | NEEDS PILOT ENTRY | 8 of 14 legs; 8 not covered by FAA text (G–C1, C1–E1, E1–E2, E2–E2X, E2X–EE1, EE1–E2*, E2*–E3, E3–E3X) | — |
+| VR-223 | ZAB | FULL | — | — |
+| VR-231 | ZAB | FULL | — | — |
+| VR-239 | ZAB | FULL | — | — |
+| VR-241 | ZAB | FULL | — | — |
+| VR-242 | ZAB | FULL | — | — |
+| VR-243 | ZAB, ZLA | FULL | — | — |
+| VR-244 | ZAB | FULL | — | — |
+| VR-245 | ZAB, ZLA, ZLC | FULL | — | — |
+| VR-249 | ZLA, ZOA | FULL | — | — |
+| VR-259 | ZAB | FULL | — | — |
+| VR-260 | ZAB | FULL | — | — |
+| VR-263 | ZAB | FULL | — | — |
+| VR-267 | ZAB | FULL | — | — |
+| VR-268 | ZAB | FULL | — | — |
+| VR-269 | ZAB | FULL | — | — |
+| VR-410 | ZDV | FULL | — | — |
+| VR-411 | ZDV | FULL | — | — |
+| VR-413 | ZDV | FULL | — | — |
+| VR-511 | ZKC, ZMP | NEEDS PILOT ENTRY | 1 of 11 legs; 1 FAA text not readable: (EXCEPT 8 NM LEFT AND 20 NM RIGHT OF CENTERLINE BETWEEN H AND I IF AIRCRAFT ARE SCHEDULED TO CONDUCT OPERATIONS INTO R-3602) | — |
+| VR-512 | ZKC, ZMP | NEEDS PILOT ENTRY | 1 of 11 legs; 1 FAA text not readable: (EXCEPT 20 NM LEFT AND 8 NM RIGHT OF CENTERLINE BETWEEN D AND E IF AIRCRAFT ARE SCHEDULED TO CONDUCT OPERATIONS INTO R-3602) | — |
+| VR-531 | ZKC | NEEDS PILOT ENTRY | 2 of 8 legs; 2 FAA text not readable: 5 NM TAPERING DOWN TO 3 NM WIDENING OUT TO | — |
+| VR-532 | ZKC | NEEDS PILOT ENTRY | 2 of 15 legs; 2 FAA text not readable: 5 NM WIDENING OUT TO 15 NM RIGHT AND 15 NM TAPERING DOWN TO 3 NM LEFT OF CENTERLINE FROM G TO H 15 NM TAPERING DOWN TO / 5 NM WIDENING OUT TO 15 NM RIGHT AND 15 NM TAPERING DOWN TO 15 NM TAPERING DOWN TO | — |
+| VR-533 | ZKC | NEEDS PILOT ENTRY | 2 of 8 legs; 2 FAA text not readable: 5 NM LEFT AND 5 NM TAPERING DOWN TO 2 NM RIGHT FROM B TO C 5 NM LEFT AND 2 NM TAPERING OUT TO 5 NM RIGHT FROM C TO D | — |
+| VR-534 | ZKC | FULL | — | — |
+| VR-535 | ZKC | NEEDS PILOT ENTRY | 1 of 9 legs; 1 FAA text not readable: 5 NM LEFT AND 15 NM TAPERING DOWN TO 2 NM RIGHT OF CENTERLINE FROM D TO E | — |
+| VR-536 | ZKC | FULL | — | — |
+| VR-544 | ZKC, ZMP | NEEDS PILOT ENTRY | 1 of 8 legs; 1 FAA text not readable: 8 NM EAST AND 4 NM WEST OF CENTERLINE FROM D TO E | — |
+| VR-545 | ZKC, ZMP | NEEDS PILOT ENTRY | 1 of 8 legs; 1 FAA text not readable: 8 NM EAST AND 4 NM WEST OF CENTERLINE FROM E TO F | — |
+| VR-552 | ZKC | NEEDS PILOT ENTRY | 1 of 7 legs; 1 FAA text not readable: ON CENTERLINE TO 9 NM LEFT OF CENTERLINE FROM A TO B, EXCLUDING R-3601 | — |
+| VR-1020 | ZHU, ZJX, ZTL | FULL | — | — |
+| VR-1021 | ZHU, ZME, ZTL | FULL | — | — |
+| VR-1022 | ZHU, ZME, ZTL | NEEDS PILOT ENTRY | 1 of 7 legs; 1 not covered by FAA text (G–EA) | — |
+| VR-1023 | ZHU | FULL | — | — |
+| VR-1024 | ZHU, ZME | FULL | — | — |
+| VR-1032 | ZFW, ZME | FULL | — | — |
+| VR-1072 | ZHU, ZME | FULL | — | — |
+| VR-1082 | ZHU, ZJX, ZTL | NEEDS PILOT ENTRY | 1 of 8 legs; 1 not covered by FAA text (H–DA) | — |
+| VR-1083 | ZHU, ZJX, ZTL | FULL | — | — |
+| VR-1085 | ZHU, ZJX, ZTL | NEEDS PILOT ENTRY | 3 of 11 legs; 3 FAA text not readable: 3 NM EITHER SIDE OF CENTERLINE FROM F TO F1 AND F2. | — |
+| VR-1103 | ZFW, ZME | NEEDS PILOT ENTRY | 1 of 5 legs; 1 FAA text not readable: 2 NM WIDENING TO 6 NM LEFT AND 3 NM RIGHT OF CENTERLINE FROM B TO C | — |
+| VR-1104 | ZFW, ZME | FULL | — | — |
+| VR-1105 | ZHU | FULL | — | — |
+| VR-1106 | ZHU | FULL | — | — |
+| VR-1107 | ZAB | FULL | — | — |
+| VR-1110 | ZFW, ZHU | FULL | — | — |
+| VR-1113 | ZFW, ZME | FULL | — | — |
+| VR-1116 | ZFW, ZHU | FULL | — | — |
+| VR-1120 | ZHU | FULL | — | — |
+| VR-1121 | ZHU | FULL | — | — |
+| VR-1122 | ZHU | FULL | — | — |
+| VR-1123 | ZHU | FULL | — | — |
+| VR-1124 | ZFW | FULL | — | — |
+| VR-1128 | ZFW | FULL | — | — |
+| VR-1137 | ZFW | FULL | — | — |
+| VR-1139 | ZFW | FULL | — | — |
+| VR-1140 | ZFW | FULL | — | — |
+| VR-1141 | ZAB, ZFW | NEEDS PILOT ENTRY | 3 of 7 legs; 3 FAA text not readable: 10 NM AT C TAPERING TO 7 NM AT D 7 NM EITHER SIDE OF CENTERLINE AT E WIDENING TO 8 NM EITHER SIDE OF CENTERLINE AT F 8 NM EITHER SIDE OF CENTERLINE AT F WIDENING TO 10 NM EITHER SIDE OF CENTERLINE AT G | — |
+| VR-1142 | ZAB, ZFW | NEEDS PILOT ENTRY | 3 of 7 legs; 3 FAA text not readable: 10 NM TAPERING TO 8 NM EITHER SIDE OF CENTERLINE FROM B TO C 8 NM EITHER SIDE OF CENTERLINE AT C TAPERING TO 7 NM EITHER SIDE OF CENTERLINE AT D 7 NM EITHER SIDE OF CENTERLINE AT E WIDENING TO 10 NM AT F / 8 NM EITHER SIDE OF CENTERLINE AT C TAPERING TO 7 NM EITHER SIDE OF CENTERLINE AT D 7 NM EITHER SIDE OF CENTERLINE AT E WIDENING TO 10 NM AT F | — |
+| VR-1143 | ZFW | FULL | — | — |
+| VR-1144 | ZFW | FULL | — | — |
+| VR-1145 | ZFW | FULL | — | — |
+| VR-1146 | ZFW | FULL | — | — |
+| VR-1175 | ZAB, ZDV | FULL | — | — |
+| VR-1176 | ZAB, ZDV | FULL | — | — |
+| VR-1195 | ZAB | FULL | — | — |
+| VR-1196 | ZHU | FULL | — | — |
+| VR-1205 | ZLA, ZOA | FULL | — | — |
+| VR-1214 | ZLA, ZOA | FULL | — | — |
+| VR-1215 | ZLA | FULL | — | — |
+| VR-1217 | ZLA | FULL | — | — |
+| VR-1218 | ZLA | FULL | — | — |
+| VR-1252 | ZLA, ZOA | FULL | — | — |
+| VR-1253 | ZLA, ZLC | FULL | — | — |
+| VR-1255 | ZLA, ZOA | FULL | — | — |
+| VR-1256 | ZLA | FULL | — | — |
+| VR-1257 | ZLA, ZOA | FULL | — | — |
+| VR-1259 | ZLA, ZLC, ZOA | FULL | — | — |
+| VR-1262 | ZLA, ZOA | FULL | — | — |
+| VR-1265 | ZLA | FULL | — | — |
+| VR-1266 | ZLA | FULL | — | — |
+| VR-1267 | ZAB, ZLA | FULL | — | — |
+| VR-1267A | ZAB, ZLA | FULL | — | — |
+| VR-1268 | ZAB, ZLA | FULL | — | — |
+| VR-1427 | ZDV | FULL | — | — |
+| VR-1520 | ZDV, ZMP | FULL | — | — |
+| VR-1521 | ZDV, ZMP | FULL | — | — |
+| VR-1525 | ZKC | FULL | — | — |
+| VR-1546 | ZKC | FULL | — | — |
+| VR-1679 | ZKC, ZID | FULL | — | — |
