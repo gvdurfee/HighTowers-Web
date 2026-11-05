@@ -551,10 +551,9 @@ export function FlightPlanDetailPage() {
                 <>
                   <strong>Export full route</strong> downloads the complete G1000{' '}
                   <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> — every waypoint
-                  in the plan. Copy that file to the root of a FAT32 SD card, then eject the card
-                  before you remove it from the reader so the file is not corrupted. Insert the card
-                  in the top slot of the MFD before you power up; otherwise the panel may say there
-                  is no flight plan to import.
+                  in the plan. Follow the G1000 Pilot&apos;s Guide for importing user flight plans from
+                  the SD card. Eject the card before you remove it from the reader so the file is not
+                  corrupted.
                 </>
               }
               isSeen={isSeen(HINT_FP_EXPORT_FULL)}

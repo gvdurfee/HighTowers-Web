@@ -1,6 +1,6 @@
 # HighTowers-Web — En-route recovery (staged refuel) survey planning
 
-**Product brief · Phase B · Coordinator Survey Console**
+**Product brief · Phase B · Team Dispatch**
 
 Wing **what-if** extension for Low Level Route surveys when home base is far from the MTR and crews want to **complete both corridor sides in one flying day** by recovering at an **en-route refuel airport** instead of returning home after the first sortie.
 
@@ -13,7 +13,7 @@ Related: [COORDINATOR_SURVEY_CONSOLE.md](./COORDINATOR_SURVEY_CONSOLE.md) · [PH
 Today the sortie planner models every sortie as **home → survey → home**. That fits teams based near the route (e.g. KABQ for VR114) but **overstates ferry NM** when:
 
 - Home base is distant from the MTR.
-- Corridor half-width is **narrow (e.g. 5 NM)** — fewer parallel-track passes per side, so survey legs are short but ferry dominates the budget.
+- Corridor half-width is **narrow (e.g. 5 NM)** — fewer offset lanes per side, so survey legs are short but ferry dominates the budget.
 - Two aircraft fly **opposite sides** and each could **refuel near the route** between sides instead of flying home mid-day.
 
 **Phase B** adds one **shared recovery / refuel airport** per scenario (coordinator-selected, ideally closest practical field near the MTR). Every aircraft uses the **same** refuel airport; each team keeps its own **home** departure. The planner can compare:
@@ -42,7 +42,7 @@ Objective remains: minimize **wing sorties** and **wing NM** within the per-sort
 | Leg | Path | Typical length |
 |-----|------|----------------|
 | **Ferry in** | Home → route entry | Can be **long** (distant home base) |
-| **Along route** | Parallel-track passes on assigned fragment | Often **short** on 5 NM corridors |
+| **Along route** | Offset lanes on the assigned segment | Often **short** on 5 NM corridors |
 | **Ferry out** | Route exit → **shared refuel** | Should be **short** (refuel near the MTR) |
 
 Avoiding **route exit → home** on sortie 1 is what makes a second sortie the same day feasible. Sortie 2: **refuel → route entry**, opposite side, **route exit → home**.
@@ -66,11 +66,11 @@ Avoiding **route exit → home** on sortie 1 is what makes a second sortie the s
 
 These rules apply whenever **multiple aircraft** survey the same corridor segment. They belong in **hints, pilot briefs, and wing handouts** — not in automated separation logic.
 
-1. **Deconfliction is pilot responsibility.** Stay in **radio contact** with the other survey aircraft on the assigned frequency. **Stagger takeoff times** so opposite-side or sequential legs do not conflict in the corridor.
+1. **Deconfliction is pilot responsibility.** Stay in **radio contact** with the other survey aircraft. **Stagger takeoff times** so opposite-side or sequential legs do not conflict in the corridor. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O).
 2. **Sortie 1 destination** for every aircraft is the **same shared recovery / refuel airport** (not home), when the coordinator selects en-route recovery mode.
-3. **Sortie 2 (opposite side)** — after refuel at the **shared** field, each pilot flies the assigned side (fragment may **differ per aircraft** if the planner optimizes that way) and returns **home**. On the G1000, **inverting the active flight plan** is an acceptable way to fly the return leg structure after survey work.
-4. **Waypoint assignment per sortie** follows the planner’s optimized sub-ranges (same as today). For sortie 2, a pilot may load the **full sortie `.fpl`**, then **remove unused waypoints from the active route only**. Removing fixes from the **active flight plan** does **not** delete user waypoints from G1000 memory — only from that active plan.
-5. **Parallel track offsets** are still set manually on the G1000 per wing SOP; they are not embedded in the `.fpl`.
+3. **Sortie 2 (the other side)** — after refuel at the **shared** field, each pilot flies the assigned side (the file may **differ per aircraft**) and returns **home**. The sortie `.fpl` already lists that side’s offset waypoints.
+4. **Waypoint assignment per sortie** follows the planner’s ranges. Removing fixes from the **active flight plan** does **not** delete user waypoints from G1000 memory — only from that active plan. Delete old user waypoints before loading a new card, because short names can repeat and the G1000 may keep an old waypoint’s stored coordinates.
+5. **Offset lanes are in the file.** Every lane is user waypoints at the real offset coordinates. Do not set a G1000 offset. Fly leg to leg, by hand or with the autopilot in GPS/NAV. Pilots deconflict by announcing entry and exit positions, keeping radio contact, and staggering takeoff times.
 
 ---
 
@@ -88,7 +88,7 @@ These rules apply whenever **multiple aircraft** survey the same corridor segmen
 5. **Compare mode extension:** return-home each sortie vs en-route recovery (1-team sequential and 2-team opposite-side scenarios).
 6. **Fixture:** 5 NM entire-route width + distant home(s) + one shared recovery airport near route (unit tests, no live FAA in CI).
 
-### UI (Coordinator Survey Console)
+### UI (Team Dispatch)
 
 1. **Shared recovery airport** lookup (one field for the scenario; used by all teams).
 2. Toggle or planner mode: **Return home each sortie** vs **En-route recovery between sides**.
@@ -98,8 +98,8 @@ These rules apply whenever **multiple aircraft** survey the same corridor segmen
 ### Export (.fpl)
 
 1. Sortie 1 `.fpl`: home → serpentine → **recovery** airport.
-2. Sortie 2 `.fpl`: **recovery** → serpentine → **home** (or pilot inverts / trims active plan per SOP).
-3. Pilot brief modal: note recovery airport, sortie role (first side / second side / return home), and G1000 trim guidance.
+2. Sortie 2 `.fpl`: **recovery** → the other side’s offset waypoints → **home**. The file lists that side. Do not build the offset on the G1000.
+3. Pilot brief modal: note recovery airport and sortie role (first side / second side / return home). The card says Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own `.fpl` file.
 
 **Out of scope for Phase B:** Phase A scenario persistence (can follow or overlap); automatic NOTAM/FBO lookup; fuel burn modeling.
 
@@ -134,7 +134,7 @@ Sortie 2 outer: KXYZ → A→D outer → **KABC** (~295 NM). Sortie 2 fragment m
 | **Phase B1** | Ferry endpoint logic in `surveySortiePacker.js` + tests |
 | **Phase B2** | Console inputs, compare return-home vs recovery |
 | **Phase B3** | `.fpl` export dep/dest per sortie role; pilot brief fields |
-| **Phase A** (parallel) | Save/load scenarios including recovery airport choices |
+| **Phase A** (same time as B) | Save/load scenarios including recovery airport choices |
 
 ---
 

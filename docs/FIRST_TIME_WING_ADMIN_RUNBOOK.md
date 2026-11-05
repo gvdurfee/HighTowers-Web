@@ -171,7 +171,7 @@ You do **not** need Railway running on your laptop for day-to-day coding. Railwa
 ### Day-one smoke checks for pilots
 
 - Crew app loads at the Pages URL.
-- **Coordinator Survey Console** (from a flight plan) loads NASR width lines — confirms Railway + `VITE_API_BASE_URL` + CORS.
+- **Team Dispatch** (from a flight plan) loads NASR width lines — confirms Railway + `VITE_API_BASE_URL` + CORS. The sidebar label and the page heading are both Team Dispatch.
 - Wing admin and content packs work if you use those features (Part 3 onward).
 
 ---

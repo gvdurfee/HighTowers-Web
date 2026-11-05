@@ -36,7 +36,7 @@ async function main() {
 
   h.drawHeading('Purpose', 10)
   h.drawParagraph(
-    'HighTowers-Web supports crew mission work (flight plans, tower analysis, reports, content packs) and a Coordinator Survey Console for sortie planning when teams or weather change. Today, coordinator plans are not saved on the server - they exist only in the coordinator browser until re-entered.',
+    'HighTowers-Web supports crew mission work (flight plans, tower analysis, reports, content packs) and Team Dispatch for sortie planning when teams or weather change. Today, coordinator plans are not saved on the server - they exist only in the coordinator browser until re-entered.',
     { size: 9 }
   )
   h.drawParagraph(

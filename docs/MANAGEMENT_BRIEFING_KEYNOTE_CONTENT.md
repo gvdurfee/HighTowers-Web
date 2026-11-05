@@ -121,11 +121,11 @@ This slide is your “elevator + training spine.” Crew training should always 
 **Flight Plans module**
 
 - **New Flight Plan:** Departure/destination from **FAA data** (ICAO **or** FAA location ID / NASR identifier, e.g. `KABQ` or `0E0`).
-- **Load full route** vs **Waypoint sequence** (aircrew). Wing coordinators load the published MTR in **Coordinator Console**, then email each sortie `.fpl` to that aircraft’s Mission Pilot.
+- **Load full route** vs **Waypoint sequence** (aircrew). Wing coordinators load the published MTR in **Team Dispatch**, then email each sortie `.fpl` to that aircraft’s Mission Pilot.
 - **Export `.fpl`** for **G1000** import; **Map View** supports visual validation.
 
 **Speaker notes:**  
-Management angle: **standardization** with ForeFlight Military Flight Bag for full-route loads; **flexibility** for complex corridors via waypoint sequence. **Coordinator Console** is for **survey what-if** staffing before crews receive emailed sortie `.fpl` files.
+Management angle: **standardization** with ForeFlight Military Flight Bag for full-route loads; **flexibility** for complex corridors via waypoint sequence. **Team Dispatch** is for **survey what-if** staffing before crews receive emailed sortie `.fpl` files.
 
 ---
 

@@ -1,21 +1,80 @@
-# Coordinator Survey Console — Wing handout
+# Team Dispatch — Wing handout
 
 **HighTowers-Web** · Wing planning aid for Low Level Route tower surveys  
-**Audience:** Wing coordinators, squadron leadership, and aircrew who need to understand how staffing decisions are made.
+**Audience:** Wing coordinators, squadron leadership, and the pilots who fly the sortie files.
+
+The sidebar name and the page heading are both **Team Dispatch** (Mission Planning). The address is `/coordinator/survey`.
 
 ---
 
-## What this tool is
+## What the sortie file is
 
-The **Coordinator Survey Console** helps a wing coordinator answer:
+There is **no G1000 Parallel Track** in these files. Every lane is its own set of user waypoints at the real offset coordinates. The G1000 navigates leg to leg between the loaded user waypoints. Fly by hand, or with the autopilot in GPS/NAV mode.
 
-- How many **sorties** does each team need?
-- Which **contiguous MTR waypoint ranges** should each aircraft fly?
-- How do **1 vs 2 vs 3 teams** compare on **total wing sorties**?
+The download is the `.fpl`. Before you start each lane, confirm the aircraft symbol is on the intended yellow track on both the ForeFlight moving map and the G1000 MFD (multi-function display) map.
 
-It uses **NASR corridor width**, your **flight-plan waypoint sequence**, **departure airports you choose**, and a **per-sortie distance budget** (typically 400–500 NM). It models **G1000 parallel-track offsets** on each side of the centerline.
+---
 
-**It is not:** a weather tool, MOA planner, ATC product, or ForeFlight replacement. Crews still fly corridors in **ForeFlight Military Flight Bag**.
+## Inner and Outer
+
+**Inner** is the side toward the inside of the route’s overall curve, as seen on the map. **Outer** is the other side.
+
+If the route is nearly straight or S-shaped, it has no clear inside. The app then uses Inner = left of the route as flown from the entry point, and it says so on the Sortie 1 side picker: “This route has no clear inside; Inner = left of the route flown from [entry point].”
+
+The side picker always shows which side is Inner. Pilots go by the side shown on the picker, not by their own reading of the map.
+
+The picker labels are **Inner (inside the route’s curve)** and **Outer (outside the route’s curve)**.
+
+---
+
+## Waypoint names
+
+**Solo Flight Plans.** Point letters, a 3-digit route position, then I or O. Examples: `A001I`, `A001O`. Sortie 1 flies the chosen side. Sortie 2 flies the other side, and those waypoints are listed in reverse order in the `.fpl`.
+
+**Team Dispatch.** Point letters, the lane number, then I or O. Examples: `B1O`, `XM2I`.
+
+Think of the first one or two letters as the MTR point the waypoint is offset from. The 1, 2, or 3 is the offset lane of the serpentine route the G1000 flies to cover the corridor, counted outward from the centerline. The last letter says Inner or Outer.
+
+A rare repeat on the same lane adds a digit (example: `B12I`).
+
+Names are at most 6 characters, A–Z and 0–9 only, and unique within each file. A solo name drops the leading zero only when that is needed to fit (example: `XYZ01I`).
+
+Lane offsets are real distances stated for that plan (often 3, 9, and 15 NM). Lane 1 is closest to the centerline. A team `.fpl` contains no published centerline fixes.
+
+---
+
+## Before the SD card
+
+Not a concern: per the Director of Operations, user waypoints and the flight plans that created them are erased after each mission. Confirm no leftover user waypoints before loading, because short names repeat between routes. After import, spot-check one waypoint’s coordinates against the plan.
+
+Follow the G1000 Pilot's Guide for importing user flight plans from the SD card.
+
+---
+
+## How dispatchers staff a route
+
+Team Dispatch staffs **one, two, or three teams**. **1 team** is one aircraft that flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own `.fpl` file.
+
+The screen is one page, not a numbered wizard. Work it in this order. The words in parentheses are the headings on the screen today:
+
+1. **Crews and aircraft** (Teams & parameters — look up each team’s departure).
+2. **Route** (load the published MTR; the empty page says “Load the published route”).
+3. **Corridor and tracks** (Scenario — corridor and lane spacing). Published widths are **Left NM** and **Right NM** of the centerline as flown. Lane lists are **Left offsets** and **Right offsets**. Those fields are not the Inner/Outer choice.
+4. **Segments and refuel** (Results — segment from/to and the refuel stop).
+5. **Sortie 1 side** (the Inner / Outer radios).
+6. **Results** (download each sortie `.fpl` and email it to that aircraft’s Mission Pilot).
+
+Neighboring teams are recommended on opposite sides. Recommended: each segment flies the opposite side from the segments next to it (e.g. segment 1 Inner, segment 2 Outer, segment 3 Inner). This is a recommendation, not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O). Keep radio contact and stagger takeoff times.
+
+The aircraft-count choice **1 team** is one aircraft flying both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own `.fpl` file.
+
+---
+
+## Map View
+
+The map legend reads: “Map: ultramarine centerline with point letters, white edges, yellow sortie tracks, blue arrows.” The centerline color is `#3F00FF`.
+
+The centerline is the published route, labeled with the published point letters only. Corridor edges are white. The sortie tracks are yellow. Direction arrows are blue. The highlighted sortie is drawn through the same coordinates as the labels and the `.fpl`.
 
 ---
 
@@ -23,93 +82,16 @@ It uses **NASR corridor width**, your **flight-plan waypoint sequence**, **depar
 
 | Role | Uses |
 |------|------|
-| **Wing coordinator** | Coordinator Survey Console — staffing what-if, sortie briefs |
-| **Aircrew** | Main app — flight plans, tower analysis, maps, PDF export, content packs |
-| **Wing administrator** | Content Pack console — pack lifecycle (separate from coordinator planning) |
-
----
-
-## How coordinators work in practice
-
-1. **Start with available squadrons** — CAP teams operate from airports near their home base. The tool does **not** pick airports for you; you enter the teams that can participate.
-2. **Build or open a flight plan** for the MTR and open the console from **Flight Plans**.
-3. **Run a what-if** — enter Team 2 and/or Team 3 departure airports; choose planner mode or **Compare 1 vs 2** / **Compare 2 vs 3**.
-4. **Brief teams** — each team gets sortie rows: waypoint from→to, offsets, ferry in / along-route / ferry out NM.
-5. **Re-run when the roster changes** — if weather or availability drops a team the day before:
-   - Recalculate with **two teams** and re-brief waypoint assignments, **or**
-   - **Replace** the dropped team with another squadron’s airport and re-run (other teams may get new segments too).
-
-> **Management one-liner:** The coordinator names which teams and airports can play; HighTowers calculates how to divide the route and sorties to cover the MTR with the fewest flights practical under the distance cap—and you can re-run when the roster changes.
-
----
-
-## Planner modes (quick reference)
-
-| Mode | Idea |
-|------|------|
-| **1 team** | One aircraft: **inner then outer** passes on the **full route** from one base. |
-| **2 teams** | **Parallel staffing:** Team 1 = one side of the corridor, Team 2 = the other; **same geography**, different bases. |
-| **3 teams** | **Geographic split:** Route cut into **three segments**; each team flies **both sides** of its segment. The optimizer picks **where to split** and **which base serves which segment** (fewest total sorties, then NM). |
-| **Compare 1 vs 2** | One aircraft (full corridor, both sides sequential) vs two aircraft (opposite sides). |
-| **Compare 2 vs 3** | Two aircraft (opposite sides) vs three aircraft (geographic split). |
-
-Use **Compare** when you have a **surplus** of squadrons statewide and need to decide how many teams to assign.
-
----
-
-## What the optimizer does (and does not do)
-
-**Does:**
-
-- Minimize **total wing sorties**; tie-break **total NM**.
-- Pack contiguous waypoint chains into sorties that fit the **NM budget**.
-- Include **ferry** legs (base ↔ route) and **parallel-track** legs in each sortie’s distance.
-- For each sortie, pick the **best end** of the assigned chain to start from (shortest total NM for that sortie).
-- For **3-team geographic** mode, search segment boundaries and team-to-segment assignments.
-
-**Does not:**
-
-- Choose which CAP squadrons or airports to use (coordinator input).
-- Change the MTR waypoint list (comes from the flight plan).
-- Replace ForeFlight corridor display or wing weather judgment.
-
----
-
-## Reading the results
-
-| Label | Meaning |
-|-------|---------|
-| **Inner / Outer** | Left and right of MTR centerline (offset lists differ on asymmetric spans, e.g. VR114 B→M1). |
-| **Offsets (3, 9, 15…)** | G1000 parallel-track spacing in NM (default policy: 3 → 9 → 15 → +1 NM past published half-width). |
-| **Ferry in / out** | Departure airport ↔ route entry or exit for that sortie. |
-| **Along route** | Directed offset legs on the assigned waypoint chain. |
-| **⚠ in Total** | Sortie exceeds the NM budget — consider a shorter segment or more teams. |
-| **Geographic split** | Shared boundary waypoints; tool assigns segments to bases. |
-
----
-
-## URLs (NM Wing pilot hosting)
-
-| Purpose | URL |
-|---------|-----|
-| **Crew app** | `https://gvdurfee.github.io/HighTowers-Web/` |
-| **Coordinator console** | Flight Plans → **Coordinator Survey Console**, or `/coordinator/survey?plan=<flightPlanId>` |
-| **Wing admin (content packs)** | `/admin/content-packs` — wing staff only; not in the main sidebar |
-
-After updates on `main`, **hard refresh** the browser (Cmd+Shift+R). The static app rebuilds on GitHub Pages; the API on Railway updates automatically when `server/` changes.
+| **Wing coordinator** | Team Dispatch — two or three teams, sortie `.fpl` files |
+| **Aircrew** | Flight Plans, Map View, tower analysis, the Air Force report |
+| **Wing administrator** | Content pack console — separate from Team Dispatch |
 
 ---
 
 ## Disclaimer
 
-**Wing planning aid only.** Verify corridors and procedures in **ForeFlight Military Flight Bag** before flying.
+**Wing planning aid only.** Verify the corridor in ForeFlight Military Flight Bag before flying. Go by the Sortie 1 side the app shows.
 
 ---
 
-## Related documentation (in repo)
-
-- `docs/COORDINATOR_SURVEY_CONSOLE.md` — technical product spec
-- `docs/content-pack-wing-workflow.md` — crew close-out and ForeFlight packs (separate from coordinator planning)
-- `docs/FIRST_TIME_WING_ADMIN_RUNBOOK.md` — hosting and wing admin setup
-
-*Printable PDF: `docs/handouts/Coordinator-Survey-Console-Handout.pdf`*
+*Printable PDF: `docs/handouts/Coordinator-Survey-Console-Handout.pdf` (regenerate with `npm run handout:coordinator-pdf`).*

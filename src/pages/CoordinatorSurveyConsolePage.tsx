@@ -318,17 +318,24 @@ function CoordinatorConsoleGuide() {
           <h3 className="font-semibold text-gray-900 mb-2">Planner modes</h3>
           <ul className="space-y-2 list-disc pl-5">
             <li>
-              <strong>Single — 1 team:</strong> one aircraft, full corridor, inner then outer passes sequentially.
+              <strong>Single — 1 team:</strong> one aircraft flies both sides in sequence (Sortie 1 side, then the other
+              side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited
+              resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight
+              plan on the G1000. Sortie 2 is its own .fpl file.
             </li>
             <li>
-              <strong>Single — 2 teams:</strong> parallel staffing — Team 1 inner, Team 2 outer, same geography.
+              <strong>Single — 2 teams:</strong> two teams working neighboring sides at the same time — Team 1 inner,
+              Team 2 outer, same geography.
             </li>
             <li>
               <strong>Single — 3 teams:</strong> geographic split — three route segments; each team flies both sides of
-              its segment from its own base (summer weather / shorter sorties).
+              its segment from its own base. Recommended: each segment flies the opposite side from the segments next
+              to it (e.g. segment 1 Inner, segment 2 Outer, segment 3 Inner). This is a recommendation, not guaranteed
+              separation; pilots still deconflict.
             </li>
             <li>
-              <strong>Compare 1 vs 2:</strong> full corridor with one aircraft vs opposite-side parallel staffing.
+              <strong>Compare 1 vs 2:</strong> full corridor with one aircraft vs two teams working neighboring sides
+              at the same time.
             </li>
             <li>
               <strong>Compare 2 vs 3:</strong> opposite-side vs geographic split (both full corridor).
@@ -350,16 +357,19 @@ function CoordinatorConsoleGuide() {
               survey work when it fits the NM budget, otherwise a separate ferry-only return sortie (pilots plan fuel).
             </li>
             <li>
-              <strong>1 team (both sides sequential):</strong> sortie 1 — first side → refuel; final sortie — opposite
-              side → home (merged when within budget).
+              <strong>1 team — one aircraft flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2).</strong>{' '}
+              Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 1
+              lands at the shared refuel airport. Sortie 2 is already in flying order; load it and fly it as listed. Do
+              not invert the flight plan on the G1000. Sortie 2 is its own .fpl file.
             </li>
             <li>
               <strong>Multi-aircraft:</strong> deconfliction is <strong>pilot responsibility</strong> — maintain radio
-              contact and <strong>stagger takeoff times</strong>.
+              contact and <strong>stagger takeoff times</strong>. Announce when you enter and exit each lane, giving
+              your position by waypoint name (for example, entering B1O).
             </li>
             <li>
-              <strong>G1000 sortie 2:</strong> invert the active flight plan, or trim unused waypoints from the{' '}
-              <strong>active route only</strong> (user waypoints stay in G1000 memory).
+              <strong>G1000 sortie 2:</strong> Sortie 2 is already in flying order; load it and fly it as listed. Do
+              not invert the flight plan on the G1000. Sortie 2 is its own .fpl file.
             </li>
           </ul>
           <p className="mt-2 text-xs text-gray-600">
@@ -1631,7 +1641,7 @@ export function CoordinatorSurveyConsolePage() {
       )}
       <div className="app-panel w-full p-6 md:p-8">
         <header className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Coordinator Survey Console</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Team Dispatch</h1>
           <p className="text-sm text-gray-700 mt-2 max-w-4xl">
             Complete the <strong>published MTR</strong> here, then assign aircraft and Mission Pilots when
             they are available. After you design the team effort, export each sortie{' '}
@@ -1652,16 +1662,19 @@ export function CoordinatorSurveyConsolePage() {
                   Coordinator picks <strong>one shared refuel airport</strong> near the MTR for all aircraft.{' '}
                   <strong>2 teams:</strong> sortie 1 surveys one side and lands at refuel; the <strong>final sortie</strong>{' '}
                   returns home — merged with remaining survey legs when within the NM budget.{' '}
-                  <strong>1 team both sides:</strong> sortie 1 → refuel; final sortie opposite side → home when budget
-                  allows.
+                  <strong>1 team</strong> flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2).
+                  Use it to finish a partial route fragment left incomplete because of weather or limited resources.
+                  Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on
+                  the G1000. Sortie 2 is its own .fpl file.
                   <br />
                   <br />
                   <strong>Multi-aircraft:</strong> pilots deconflict — radio contact and <strong>staggered
-                  takeoffs</strong>.
+                  takeoffs</strong>. Announce when you enter and exit each lane, giving your position by waypoint name
+                  (for example, entering B1O).
                   <br />
                   <br />
-                  <strong>G1000 sortie 2:</strong> invert the active plan or trim unused waypoints from the{' '}
-                  <strong>active route only</strong> (user waypoints remain in memory).
+                  <strong>G1000 sortie 2:</strong> Sortie 2 is already in flying order; load it and fly it as listed.
+                  Do not invert the flight plan on the G1000. Sortie 2 is its own .fpl file.
                 </>
               }
               isSeen={isSeen(HINT_COORD_ENROUTE_RECOVERY)}
@@ -1725,10 +1738,10 @@ export function CoordinatorSurveyConsolePage() {
                       : runMode === 'compare-2-3'
                         ? 'Compare: 2 opposite-side vs 3 geographic'
                         : teamCount === 1
-                        ? 'Single team, both sides sequential'
-                        : teamCount === 2
-                          ? 'Opposite-side (inner / outer)'
-                          : 'Geographic split (3 teams)'}
+                          ? 'Single team, both sides sequential'
+                          : teamCount === 2
+                            ? 'Opposite-side (inner / outer)'
+                            : 'Geographic split (3 teams)'}
                   </dd>
                 </div>
               </dl>
@@ -1831,14 +1844,19 @@ export function CoordinatorSurveyConsolePage() {
                 <fieldset className="mb-5">
                   <legend className="text-sm font-medium text-gray-700 mb-2">Aircraft count</legend>
                   <div className="flex flex-col gap-3 text-sm">
-                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <label className="inline-flex items-start gap-2 cursor-pointer">
                       <input
                         type="radio"
                         name="team-count"
+                        className="mt-1"
                         checked={teamCount === 1}
                         onChange={() => setTeamCount(1)}
                       />
-                      1 team (both sides, sequential)
+                      <span>
+                        1 team — one aircraft flies both sides in sequence (Sortie 1 side, then the other side on Sortie
+                        2). Use it to finish a partial route fragment left incomplete because of weather or limited
+                        resources.
+                      </span>
                     </label>
                     <label className="inline-flex items-center gap-2 cursor-pointer">
                       <input
@@ -1862,9 +1880,10 @@ export function CoordinatorSurveyConsolePage() {
                   {teamCount === 3 && (
                     <p className="text-sm text-gray-600 mt-2">
                       Route is divided into three contiguous segments. Each team flies <strong>both sides</strong> of
-                      its segment from its own departure (~{sortieBudgetNm} NM sortie budget ≈ 4.5–5 hr). Segments and
-                      team assignments are optimized for fewest wing sorties; unfinished range after weather can be flown
-                      on a later sortie from the same base.
+                      its segment from its own departure (~{sortieBudgetNm} NM sortie budget ≈ 4.5–5 hr). Recommended:
+                      each segment flies the opposite side from the segments next to it (e.g. segment 1 Inner, segment 2
+                      Outer, segment 3 Inner). This is a recommendation, not guaranteed separation; pilots still
+                      deconflict.
                     </p>
                   )}
                 </fieldset>
@@ -1873,8 +1892,8 @@ export function CoordinatorSurveyConsolePage() {
               {runMode === 'compare-1-2' && (
                 <p className="text-sm text-gray-600 mb-5">
                   Runs two what-if scenarios with the same budget: <strong>1 team</strong> flies the full corridor
-                  (inner then outer, sequential sorties from Team 1&apos;s departure); <strong>2 teams</strong> split
-                  inner and outer in parallel from each departure.
+                  (inner then outer, sequential sorties from Team 1&apos;s departure); <strong>2 teams</strong> work
+                  neighboring sides at the same time, one from each departure.
                 </p>
               )}
 
@@ -2134,8 +2153,9 @@ export function CoordinatorSurveyConsolePage() {
                       With <strong>2 teams (opposite sides)</strong>, each aircraft completes its corridor side on sortie
                       1 and lands here. The <strong>final sortie</strong> returns home — combined with any remaining
                       survey legs when total NM fits the budget, otherwise a separate return-only sortie. With{' '}
-                      <strong>1 team (both sides)</strong>, sortie 1 ends here after the first side; the final sortie
-                      flies the opposite side and returns home when budget allows.
+                      <strong>1 team</strong>, sortie 1 flies the chosen side and lands here. Sortie 2 is already in
+                      flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2
+                      is its own .fpl file.
                     </p>
                     <div className="flex gap-2 min-w-0">
                       <input
@@ -2548,7 +2568,7 @@ export function CoordinatorSurveyConsolePage() {
                           </td>
                           <td className="py-2 pr-4 tabular-nums">{compareBundle.data.twoTeams.totalSorties}</td>
                           <td className="py-2 pr-4 tabular-nums">{compareBundle.data.twoTeams.totalWingNm}</td>
-                          <td className="py-2 pr-4 text-gray-700">Full corridor (parallel)</td>
+                          <td className="py-2 pr-4 text-gray-700">Full corridor (neighboring sides at the same time)</td>
                           <td className="py-2 tabular-nums">
                             {compareBundle.data.twoTeamsOverBudgetSorties > 0
                               ? `${compareBundle.data.twoTeamsOverBudgetSorties} sortie(s) ⚠`
@@ -2561,9 +2581,9 @@ export function CoordinatorSurveyConsolePage() {
                       {compareBundle.data.deltaSorties === 0 ? (
                         <>
                           Both scenarios require <strong>{compareBundle.data.twoTeams.totalSorties} wing sorties</strong>{' '}
-                          for full corridor coverage. A second aircraft lets inner and outer passes fly in parallel; wing
-                          NM differs by <strong>{compareBundle.data.deltaWingNm} NM</strong> based on each team&apos;s
-                          departure geometry.
+                          for full corridor coverage. A second aircraft lets the two teams work neighboring sides at the
+                          same time; wing NM differs by <strong>{compareBundle.data.deltaWingNm} NM</strong> based on
+                          each team&apos;s departure geometry.
                         </>
                       ) : compareBundle.data.deltaSorties > 0 ? (
                         <>
@@ -2606,7 +2626,7 @@ export function CoordinatorSurveyConsolePage() {
                           </td>
                           <td className="py-2 pr-4 tabular-nums">{compareBundle.data.twoTeams.totalSorties}</td>
                           <td className="py-2 pr-4 tabular-nums">{compareBundle.data.twoTeams.totalWingNm}</td>
-                          <td className="py-2 pr-4 text-gray-700">Full corridor (parallel)</td>
+                          <td className="py-2 pr-4 text-gray-700">Full corridor (neighboring sides at the same time)</td>
                           <td className="py-2 tabular-nums">
                             {compareBundle.data.twoTeamsOverBudgetSorties > 0
                               ? `${compareBundle.data.twoTeamsOverBudgetSorties} sortie(s) ⚠`

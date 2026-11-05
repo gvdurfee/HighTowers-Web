@@ -697,7 +697,7 @@ export function OffsetRoutePanel(props: {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-white/70">Map: blue centerline with point letters, white edges, yellow sortie tracks, blue arrows.</span>
+        <span className="text-xs text-white/70">Map: ultramarine centerline with point letters, white edges, yellow sortie tracks, blue arrows.</span>
         {route.kind === 'irvr' && (
           <button
             type="button"

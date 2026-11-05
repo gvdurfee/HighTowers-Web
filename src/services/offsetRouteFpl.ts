@@ -43,9 +43,8 @@ export function orderSortieTrack(opts: {
   return { side, waypoints }
 }
 
-export function sortie2Explanation(departureIdent: string | null | undefined): string {
-  const place = departureIdent?.trim() || 'departure'
-  return `Sortie 2 automatically flies the other side, in reverse, back to ${place}.`
+export function sortie2Explanation(_departureIdent: string | null | undefined): string {
+  return 'Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own .fpl file.'
 }
 
 export function missingSortieChoiceNotice(): string {

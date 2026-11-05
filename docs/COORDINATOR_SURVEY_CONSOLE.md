@@ -1,10 +1,31 @@
-# Coordinator Survey Console — product spec
+# Team Dispatch — product spec
 
-Wing **coordinator what-if planner** for Low Level Route tower surveys: given MTR waypoint geometry, NASR corridor width text, team departure airports, and a per-sortie distance budget, recommend **how many sorties** each team needs and **which sequential waypoint ranges** to assign—minimizing total wing sorties.
+The sidebar label and the page heading are both **Team Dispatch**. Address: `/coordinator/survey` (optional `?plan=<flightPlanId>`).
+
+This is the wing tool for staffing **one, two, or three teams** on a Low Level Route. **1 team** is one aircraft that flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own `.fpl` file.
+
+**Shipped sortie files.** There is no G1000 Parallel Track. Every lane is user waypoints at the real offset coordinates. The G1000 flies leg to leg between those waypoints, by hand or on autopilot in GPS/NAV. A team file has no published centerline fixes. The download is the `.fpl`.
+
+**Inner and Outer.** Inner is the side toward the inside of the route’s overall curve. Outer is the other side. A nearly straight or S-shaped route has no clear inside; the app then uses Inner = left of the route flown from the entry point and says so on the Sortie 1 side picker. Pilots go by the side the picker shows.
+
+**Names.** Solo: point letters + 3-digit route position + I or O (`A001I`, `A001O`). Sortie 2 is the other side, listed in reverse. Team lanes: point letters + lane number + I or O (`B1O`, `XM2I`). Lane 1 is closest to the centerline. Distances are the ones stated for that plan (often 3, 9, and 15 NM). At most 6 characters, A–Z and 0–9, unique in the file. A solo name drops a leading zero only to fit (`XYZ01I`). A repeated visit on one lane adds a digit (`B12I`).
+
+**On-screen order** (the page is not a numbered stepper; parentheses are the headings):
+
+1. Crews and aircraft (Teams & parameters)
+2. Route (Load the published route)
+3. Corridor and tracks (Scenario — Left NM / Right NM and Left offsets / Right offsets are the published sides of the centerline as flown, not the Inner/Outer choice)
+4. Segments and refuel (Results)
+5. Sortie 1 side (Inner / Outer radios)
+6. Results (download each `.fpl`)
+
+Neighboring teams are recommended on opposite sides. Recommended: each segment flies the opposite side from the segments next to it (e.g. segment 1 Inner, segment 2 Outer, segment 3 Inner). This is a recommendation, not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O).
+
+**Map View legend:** “Map: ultramarine centerline with point letters, white edges, yellow sortie tracks, blue arrows.” The drawn centerline is ultramarine `#3F00FF` so it reads on satellite imagery. Edges are white. Tracks are yellow `#FFD911`.
 
 **Not in scope:** ForeFlight corridor display (crews use Military Flight Bag), maintenance scheduling, crew availability, MOA activation, or ATP-quality routing.
 
-**Launch:** Sidebar **Mission Planning** → **Coordinator Console** (`/coordinator/survey`; optional `?plan=<flightPlanId>`). Load the published MTR in the console. After staffing, email each sortie `.fpl` to that aircraft’s Mission Pilot.
+**Launch:** Sidebar **Mission Planning** → **Team Dispatch**. Load the published MTR. After staffing, email each sortie `.fpl` to that aircraft’s Mission Pilot.
 
 **Wing handout (print/PDF):** [`docs/handouts/Coordinator-Survey-Console-Handout.pdf`](./handouts/Coordinator-Survey-Console-Handout.pdf) — coordinator and crew communication; source [`COORDINATOR_SURVEY_CONSOLE_HANDOUT.md`](./COORDINATOR_SURVEY_CONSOLE_HANDOUT.md). Regenerate: `npm run handout:coordinator-pdf`.
 
@@ -14,7 +35,7 @@ Wing **coordinator what-if planner** for Low Level Route tower surveys: given MT
 
 ## 1. Problem
 
-Wide MTR corridors (e.g. **VR114**: 20 NM each side on A→B, asymmetric 10 L / 20 R on B→M1) require multiple **G1000 parallel track** passes per side. Wings often assign **two aircraft** from **different departure airports**, each surveying **opposite sides** of the centerline for safety.
+Wide MTR corridors (for example **VR114**: 20 NM each side on A→B, then 10 NM left and 20 NM right of the centerline as flown on B→M1) need several offset lanes on a side. Wings often assign **two aircraft** from **different departure airports**. Neighboring teams are recommended on opposite sides. The serpentine flight test for these files is **VR-114 only**.
 
 Coordinators need a **numeric** answer for management:
 
@@ -36,21 +57,14 @@ Coordinators need a **numeric** answer for management:
 
 ## 3. G1000 maneuver model
 
-For one **side** and one **assigned waypoint chain** (e.g. three waypoints → two legs):
+For one **side** and one **assigned waypoint chain**:
 
-1. Ferry: **team departure → closest waypoint** in assignment (entry).
-2. Fly along the chain at offset **O₁** (e.g. 3 NM) toward the far end of the assignment.
-3. **Turn around** at the last waypoint; fly back at **O₂** (e.g. 9 NM).
-4. Repeat for all offsets on that side for that width span (e.g. 15 NM out, 21 NM back for 20 NM half-width).
-5. **Return to departure airport** from the last leg’s end.
+1. Ferry from the team’s departure to the start of that sortie.
+2. Fly the loaded user waypoints. Each lane is already at its offset (for example 3 NM, then 9 NM, then 15 NM), counted outward from the centerline. Lane 1 is closest to the centerline.
+3. The file turns the airplane around by the order of those waypoints. The pilot does not set a G1000 offset.
+4. Land at the sortie’s destination (home, or the refuel stop on sortie 1 when one is set).
 
-Offsets are **1 NM multiples** on the G1000. Default wing policy (configurable):
-
-- First offset: **3 NM**
-- Step: **6 NM** between track centers
-- Outer margin: **+1 NM** past published half-width (e.g. 21 NM for a 20 NM corridor)
-
-**Offset order:** inner-out (3→9→15→21) or outer-in; optimizer picks orientation and order that **minimizes total NM** and **turnarounds** when tied.
+Default spacing, when the coordinator has not typed a different list: first lane **3 NM**, then a **6 NM** step, and no lane past that side’s published width. The distances in the file are the real distances for that plan.
 
 **Along-route NM** for one sortie on one side (one contiguous assignment):
 
@@ -85,13 +99,13 @@ Coordinator selects per scenario:
 
 | Model | Use |
 |-------|-----|
-| **Opposite-side** | Team 1 = left offsets only; Team 2 = right only; same geography |
-| **Geographic split** | Team 1 = waypoints A→D; Team 2 = D→M1 (etc.) |
-| **Single team** | Both sides sequentially, or one side only |
+| **Opposite sides** | Two teams, recommended for neighbors: one team Inner, the other Outer. The screen label is “2 teams (opposite sides)”. |
+| **Geographic split** | Three teams, each assigned a segment. Each team flies both sides of its segment. Recommended: each segment flies the opposite side from the segments next to it (e.g. segment 1 Inner, segment 2 Outer, segment 3 Inner). The app does not assign those sides; the coordinator chooses Sortie 1 side for each crew. |
+| **1 team** | One aircraft flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. The screen label starts “1 team — one aircraft flies both sides in sequence”. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own `.fpl` file. |
 
 Entry waypoint per team: **closest** in the coordinator’s sequence to that team’s departure (not user-picked).
 
-Return: **same departure airport** unless a later version adds alternate recovery fields.
+Return: **same departure airport**, or the shared refuel stop when staged refuel is selected. Sortie 2 then returns home.
 
 **Phase B (planned):** one **shared en-route recovery / refuel airport** per scenario (closest practical field near the MTR); sortie 1 ferry out ends at recovery; sortie 2 returns home. See [COORDINATOR_ENROUTE_RECOVERY_BRIEF.md](./COORDINATOR_ENROUTE_RECOVERY_BRIEF.md).
 
@@ -113,7 +127,7 @@ Return: **same departure airport** unless a later version adds alternate recover
 - Flight plan / waypoint sequence (from existing plan or route load)
 - Route type + number (for width API)
 - 1 team: departure airport, survey side, sortie NM cap
-- Offset policy defaults (3 / 6 / +1)
+- Lane spacing defaults: first lane 3 NM, then a 6 NM step. A lane past that side’s published width is not flown. There is no extra mile past the published width.
 
 ### Phase 2+
 
@@ -133,7 +147,7 @@ Per scenario:
 - Parsed **width table** (auditable vs ForeFlight)
 - **Passes per side per leg**
 - Per team: sortie list with waypoint range, offsets, NM breakdown (ferry / along-route / return)
-- **G1000 sortie `.fpl` export** per sortie row (serpentine route + pilot brief modal with offsets and Heading-mode SOP)
+- **G1000 sortie `.fpl` export** per sortie (offset-coordinate user waypoints; no Parallel Track step)
 - **Manual Export sortie fragment (.fpl)** (From/To/offsets without running the planner)
 - ForeFlight **content pack** reminder card (baseline pack for crews)
 - **Total sorties** and **total NM**
@@ -175,4 +189,4 @@ Per scenario:
 - [handouts/README.md](./handouts/README.md) — all handouts and regenerate commands
 - [MTR_DATA_SOURCE_INVESTIGATION.md](./MTR_DATA_SOURCE_INVESTIGATION.md) — NASR vs ArcGIS
 - [content-pack-wing-workflow.md](./content-pack-wing-workflow.md) — crew close-out (separate from coordinator planning)
-- [G1000_SORTIE_FPL_FLIGHT_TEST.md](./G1000_SORTIE_FPL_FLIGHT_TEST.md) — G1000 import and parallel-track flight test checklist
+- [G1000_SORTIE_FPL_FLIGHT_TEST.md](./G1000_SORTIE_FPL_FLIGHT_TEST.md) — VR-114 serpentine flight test (offset waypoints, no Parallel Track)

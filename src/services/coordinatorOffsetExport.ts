@@ -48,6 +48,20 @@ export function coordinatorMissingSideNotice(): string {
   return "Choose this crew's Sortie 1 side before downloading offset routes."
 }
 
+export const SAVED_SIDE_CHANGED_NOTICE =
+  'Side changed since this plan was saved — save the plan again to download the new side'
+
+/** Same curve rule as the offset track: Inner/Outer, then left or right of the course as flown. */
+export function sortieButtonLabel(
+  sortieNumber: 1 | 2,
+  side: SortieSide,
+  curve: { innerSide: 'left' | 'right'; outerSide: 'left' | 'right' }
+): string {
+  const role = side === 'inner' ? 'Inner' : 'Outer'
+  const flown = side === 'inner' ? curve.innerSide : curve.outerSide
+  return `Sortie ${sortieNumber} — ${role} (${flown} of course)`
+}
+
 /** Same disable rules as Map View: every leg needs both widths, and Sortie 1 side is chosen. */
 export function coordinatorOffsetDownloadBlock(opts: {
   rows: Array<{ left: string; right: string }>

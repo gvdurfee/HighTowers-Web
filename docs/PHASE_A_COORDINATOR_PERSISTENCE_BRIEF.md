@@ -6,7 +6,7 @@
 
 ## Purpose
 
-HighTowers-Web supports **crew mission work** (flight plans, tower analysis, reports, content packs) and a **Coordinator Survey Console** (sortie planning when teams or weather change). Today, **coordinator plans are not saved on the server**—they exist only in the coordinator’s browser until re-entered.
+HighTowers-Web supports **crew mission work** (flight plans, tower analysis, reports, content packs) and **Team Dispatch** (sortie planning when teams or weather change). Today, **coordinator plans are not saved on the server**—they exist only in the coordinator’s browser until re-entered.
 
 **Phase A** adds **wing-level persistence for coordinator scenarios** so replanning does not mean starting over, and published sortie briefs can be **reopened and shared** by reference.
 
@@ -40,7 +40,7 @@ HighTowers-Web supports **crew mission work** (flight plans, tower analysis, rep
 
 | Role | Tool | Phase A change |
 |------|------|----------------|
-| **Wing coordinator** | Coordinator Survey Console | Can **save, reload, and republish** plans |
+| **Wing coordinator** | Team Dispatch | Can **save, reload, and republish** plans |
 | **Aircrew** | Main app | Receive **coordinator brief**; crew workflow unchanged |
 | **Wing administrator** | Content Pack console | Unchanged |
 

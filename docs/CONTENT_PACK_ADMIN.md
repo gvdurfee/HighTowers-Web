@@ -37,7 +37,7 @@ Publishing uploads and “create empty pack” require **both** the API key and 
 
 > Our content packs carry exactly what ForeFlight has no other source for: **surveyed tower waypoints**. Charts, instrument approach plates, MOAs, MBTiles overlays, and other ForeFlight-managed content go stale on the 28-day AIRAC cycle — embedding them creates a divergent second source of truth. **We do not add a way to bundle them in this app.**
 
-If a ZIP you upload contains extra ForeFlight artifacts (KML layers, PDFs, etc.), the server will accept the upload but report a **non-essential file count** so you can decide whether to strip and re-publish a leaner ZIP.
+If a ZIP you upload contains extra ForeFlight artifacts (map layers, PDFs, and similar files), the server will accept the upload but report a **non-essential file count** so you can decide whether to strip and re-publish a leaner ZIP.
 
 ---
 

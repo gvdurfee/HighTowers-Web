@@ -20,7 +20,7 @@ export function parseWaypointCode(
   }
 }
 
-/** Published point letters only, for the blue centerline marker. */
+/** Published point letters only, for the ultramarine centerline marker. */
 export function publishedPointLabel(originalName: string): string | null {
   const letter = parseWaypointCode(originalName)?.waypointLetter
   return letter || null

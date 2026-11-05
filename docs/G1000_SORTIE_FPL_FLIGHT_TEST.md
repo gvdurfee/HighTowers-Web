@@ -1,56 +1,54 @@
 # G1000 sortie `.fpl` — flight test checklist
 
-Manual validation for **Coordinator Survey Console → Export .fpl** (planner results) or **Export sortie fragment (.fpl)** (manual From/To).
+The serpentine flight test is flown on **VR-114 only**.
 
-Use one real sortie before wing-wide rollout — VR114 **C→M1** with four offsets (3, 9, 15, 21 NM) from **KABQ** is a good first case.
+Use this list when you load a Team Dispatch sortie file, or a solo offset sortie downloaded from Map View, and check it on the airplane or in the simulator.
 
----
-
-## Before import
-
-- [ ] Clear or review existing **survey user waypoints** in the G1000 per wing SOP.
-- [ ] Confirm the linked flight plan in HighTowers has the full route waypoint sequence loaded.
-- [ ] Run the coordinator planner (or manual fragment export) and note **Start at**, **Offsets**, and **side** from the pilot brief modal.
+The file does **not** use G1000 Parallel Track. Every lane is its own set of user waypoints at the real offset coordinates. The G1000 flies leg to leg between those waypoints, by hand or with the autopilot in GPS/NAV mode. Do not turn Parallel Track on.
 
 ---
 
-## Import
+## What you should see in the file
 
-- [ ] Import the downloaded `.fpl` via your usual G1000 flight-plan transfer method.
-- [ ] Open **User Waypoints** — each MTR name in the sortie fragment appears **once** with correct coordinates.
-- [ ] Open the **active route** — order should show:
-  - Departure (team base, e.g. KABQ)
-  - Serpentine traversal along the fragment (outbound / inbound legs alternating)
-  - Return to the same departure airport
-
----
-
-## Parallel track
-
-- [ ] Activate **Parallel Track** for the **first offset** and correct **left/right** side before the first survey leg.
-- [ ] Fly or simulate the first outbound leg; confirm track spacing matches the brief.
-- [ ] At the turnaround, set the **next offset** before the inbound leg (per pilot brief list).
+- **Team Dispatch names** are the MTR point, then the lane number, then I or O. Example: `B1O`, `XM2I`. Think of the first one or two letters as the MTR point the waypoint is offset from. The 1, 2, or 3 is the offset lane of the serpentine route, counted outward from the centerline. The last letter says Inner or Outer. A rare repeat on the same lane adds a digit (example: `B12I`).
+- **Solo Flight Plan names** are the point letters, a 3-digit route position, then I or O. Example: `A001I`, `A001O`. Sortie 1 flies the side chosen on the flight plan. Sortie 2 flies the other side, and its waypoints are listed in reverse order in the file. A name drops the leading zero only when that is required to stay within 6 characters (example: `XYZ01I`).
+- Names are at most 6 characters, letters and digits only, and unique inside that file.
+- Lane distances are the ones stated for that plan (often 3, 9, and 15 NM). Lane 1 is the lane closest to the centerline.
+- A team file has **no published centerline fixes**. The survey points in the file are the offset lanes.
+- Inner and Outer come from the route’s overall curve, as shown on the Sortie 1 side picker. Go by the side the picker shows.
 
 ---
 
-## Heading mode at sharp turns (>120°)
+## Before you load the card
 
-- [ ] Identify at least one MTR kink where parallel track drops or GPS goes direct to the next fix.
-- [ ] Use **Heading** mode to hold offset manually through the turn.
-- [ ] Re-enable **Parallel Track** in the flight plan menu, then return to **GPS** navigation.
-- [ ] Document which waypoint pairs need this SOP for your airframe/software version.
+- [ ] Not a concern: per the Director of Operations, user waypoints and the flight plans that created them are erased after each mission. Confirm no leftover user waypoints before loading, because short names repeat between routes.
+- [ ] Confirm the HighTowers plan still has the published route you mean to fly.
+
+Follow the G1000 Pilot's Guide for importing user flight plans from the SD card.
 
 ---
 
-## Limits and cleanup
+## After import (VR-114 serpentine)
 
-- [ ] Note total **route-point count** from the pilot brief; confirm the G1000 accepts the full active route (warning appears in-app above ~30 user route points).
-- [ ] After the sortie (or sim), remove or archive survey user waypoints per wing SOP.
-- [ ] Record any avionics quirks in wing training notes.
+- [ ] Open the active route. It should run from the departure airport, through the offset user waypoints, to the landing airport for that sortie.
+- [ ] Spot-check one user waypoint’s coordinates against the plan.
+- [ ] Before you start each lane, confirm the aircraft symbol is on the intended yellow track on **both** the ForeFlight moving map and the G1000 MFD (multi-function display) map.
+- [ ] Fly or simulate the lane in GPS/NAV. Spacing should match the offsets named in the pilot brief for that file.
+- [ ] At a sharp turn, stay on the loaded flight plan. The file already places the offset through the turn. Do not select Parallel Track.
+
+The sortie download is the `.fpl`.
+
+---
+
+## After the sortie
+
+- [ ] Delete the survey user waypoints from the G1000 when the route is finished, so the next route does not reuse a short name with old coordinates.
+- [ ] Write down any avionics quirk in the wing training notes, including the G1000 software version.
 
 ---
 
 ## Related
 
-- [COORDINATOR_SURVEY_CONSOLE.md](./COORDINATOR_SURVEY_CONSOLE.md) — planner model and outputs
-- [TRAINING_VIDEO_SCRIPT.md](./TRAINING_VIDEO_SCRIPT.md) — crew workflow (Chapter 2 flight planning)
+- [COORDINATOR_SURVEY_CONSOLE.md](./COORDINATOR_SURVEY_CONSOLE.md) — Team Dispatch
+- [COORDINATOR_SURVEY_CONSOLE_HANDOUT.md](./COORDINATOR_SURVEY_CONSOLE_HANDOUT.md) — pilot and dispatcher handout
+- [TRAINING_VIDEO_SCRIPT.md](./TRAINING_VIDEO_SCRIPT.md) — crew workflow

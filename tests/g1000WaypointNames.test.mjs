@@ -164,9 +164,9 @@ describe('two-sortie offset plans', () => {
 
   it('requires a saved sortie side and explains the return', () => {
     expect(sortie2Explanation('KABQ')).toBe(
-      'Sortie 2 automatically flies the other side, in reverse, back to KABQ.'
+      'Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own .fpl file.'
     )
-    expect(sortie2Explanation('')).toMatch(/back to departure\.$/)
+    expect(sortie2Explanation('')).toMatch(/its own \.fpl file\.$/)
     expect(missingSortieChoiceNotice()).toMatch(/Flight Plans/)
     expect(otherSortieSide('inner')).toBe('outer')
     expect(otherSortieSide('outer')).toBe('inner')

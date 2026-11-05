@@ -173,7 +173,7 @@ async function main() {
   fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
   newPage(doc)
 
-  drawTextSafe('Coordinator Survey Console', {
+  drawTextSafe('Team Dispatch', {
     x: MARGIN_L,
     y: y - 22,
     size: 20,
@@ -181,15 +181,15 @@ async function main() {
     color: ULTRAMARINE,
   })
   y -= 30
-  drawParagraph(doc, 'HighTowers-Web — Wing planning aid for Low Level Route tower surveys', {
+  drawParagraph(doc, 'HighTowers-Web - Wing planning aid for Low Level Route tower surveys', {
     size: 11,
     color: MUTED,
   })
-  drawParagraph(doc, 'Audience: Wing coordinators, squadron leadership, and aircrew who need to understand how staffing decisions are made.', {
-    size: 9.5,
-    color: MUTED,
-    after: 10,
-  })
+  drawParagraph(
+    doc,
+    'Audience: Wing coordinators, squadron leadership, and the pilots who fly the sortie files. The sidebar name and the page heading are both Team Dispatch.',
+    { size: 9.5, color: MUTED, after: 10 }
+  )
   page.drawLine({
     start: { x: MARGIN_L, y: y },
     end: { x: PAGE_W - MARGIN_R, y },
@@ -198,86 +198,70 @@ async function main() {
   })
   y -= 14
 
-  drawHeading(doc, 'What this tool is')
-  drawBullets(doc, [
-    'How many sorties does each team need?',
-    'Which contiguous MTR waypoint ranges should each aircraft fly?',
-    'How do 1 vs 2 vs 3 teams compare on total wing sorties?',
-  ])
+  drawHeading(doc, 'What the sortie file is')
   drawParagraph(
     doc,
-    'It uses NASR corridor width, your flight-plan waypoint sequence, departure airports you choose, and a per-sortie distance budget (typically 400–500 NM). It models G1000 parallel-track offsets on each side of the centerline.'
+    'There is no G1000 Parallel Track in these files. Every lane is its own set of user waypoints at the real offset coordinates. The G1000 navigates leg to leg between the loaded user waypoints, flown by hand or with the autopilot in GPS/NAV mode. HighTowers exports the .fpl. Before each lane, confirm the aircraft symbol is on the intended yellow track on both the ForeFlight moving map and the G1000 MFD map.'
+  )
+
+  drawHeading(doc, 'Inner and Outer')
+  drawParagraph(
+    doc,
+    "Inner is the side toward the inside of the route's overall curve, as seen on the map. Outer is the other side. A nearly straight or S-shaped route has no clear inside. The app then uses Inner = left of the route as flown from the entry point, and it says so on the Sortie 1 side picker. Pilots go by the side shown on the picker. The labels are Inner (inside the route's curve) and Outer (outside the route's curve)."
+  )
+
+  drawHeading(doc, 'Waypoint names')
+  drawParagraph(
+    doc,
+    'Solo Flight Plans: point letters, a 3-digit route position, then I or O (A001I, A001O). Sortie 1 flies the chosen side. Sortie 2 flies the other side, listed in reverse order in the file. A name drops the leading zero only to stay within 6 characters (XYZ01I).'
   )
   drawParagraph(
     doc,
-    'It is not a weather tool, MOA planner, ATC product, or ForeFlight replacement. Crews still fly corridors in ForeFlight Military Flight Bag.',
-    { after: 8 }
+    'Team Dispatch: point letters, the lane number, then I or O (B1O, XM2I). Think of the first one or two letters as the MTR point the waypoint is offset from. The 1, 2, or 3 is the offset lane of the serpentine route the G1000 flies to cover the corridor, counted outward from the centerline. The last letter says Inner or Outer. A rare repeat on the same lane adds a digit (B12I). Names are at most 6 characters, A-Z and 0-9 only, unique in the file. Lane 1 is closest to the centerline. Distances are the ones stated for that plan (often 3, 9, and 15 NM). A team file has no published centerline fixes.'
+  )
+
+  drawHeading(doc, 'Before the SD card')
+  drawParagraph(
+    doc,
+    "Not a concern: per the Director of Operations, user waypoints and the flight plans that created them are erased after each mission. Confirm no leftover user waypoints before loading, because short names repeat between routes. After import, spot-check one waypoint against the plan. Follow the G1000 Pilot's Guide for importing user flight plans from the SD card."
+  )
+
+  drawHeading(doc, 'How dispatchers staff a route')
+  drawParagraph(
+    doc,
+    'Team Dispatch staffs one, two, or three teams. 1 team is one aircraft that flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own .fpl file. The screen is one page. Work it in this order. Words in parentheses are the headings on the screen:'
+  )
+  drawNumbered(doc, [
+    'Crews and aircraft (Teams & parameters).',
+    'Route (Load the published route).',
+    'Corridor and tracks (Scenario). Published widths are Left NM and Right NM of the centerline as flown. Lane lists are Left offsets and Right offsets. Those fields are not the Inner/Outer choice.',
+    'Segments and refuel (Results).',
+    'Sortie 1 side (the Inner / Outer radios).',
+    'Results (download each sortie .fpl and email it to the Mission Pilot for that aircraft).',
+  ])
+  drawParagraph(
+    doc,
+    'Neighboring teams are recommended on opposite sides. Recommended: each segment flies the opposite side from the segments next to it (for example segment 1 Inner, segment 2 Outer, segment 3 Inner). This is a recommendation, not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O). The 1-team choice is one aircraft flying both sides in sequence, used to finish a partial route fragment left incomplete because of weather or limited resources.'
+  )
+
+  drawHeading(doc, 'Map View')
+  drawParagraph(
+    doc,
+    'The map legend reads: Map: ultramarine centerline with point letters, white edges, yellow sortie tracks, blue arrows. The centerline color is #3F00FF. The centerline is the published route, labeled with the published point letters only. The highlighted sortie uses the same coordinates as the labels and the .fpl.'
   )
 
   drawHeading(doc, 'Who uses what')
   drawTable(doc, [
-    ['Wing coordinator', 'Coordinator Survey Console — staffing what-if, sortie briefs'],
-    ['Aircrew', 'Main app — flight plans, tower analysis, maps, PDF export, content packs'],
-    ['Wing administrator', 'Content Pack console — pack lifecycle (separate from coordinator planning)'],
-  ])
-
-  drawHeading(doc, 'How coordinators work in practice')
-  drawNumbered(doc, [
-    'Start with available squadrons — CAP teams operate from airports near their home base. The tool does not pick airports for you.',
-    'Build or open a flight plan for the MTR; open the console from Flight Plans.',
-    'Run a what-if — enter Team 2 and/or Team 3 airports; choose a mode or Compare 1 vs 2 / Compare 2 vs 3.',
-    'Brief teams — sortie rows: waypoint from-to, offsets, ferry and along-route NM.',
-    'Re-run when the roster changes — weather or availability may drop a team the day before: recalculate with fewer teams, or swap in another squadron’s airport and re-brief everyone.',
-  ])
-  ensureSpace(doc, 50)
-  page.drawRectangle({
-    x: MARGIN_L,
-    y: y - 44,
-    width: CONTENT_W,
-    height: 44,
-    color: rgb(0.97, 0.98, 0.99),
-    borderColor: ULTRAMARINE,
-    borderWidth: 1,
-  })
-  const callout =
-    'Management one-liner: The coordinator names which teams and airports can play; HighTowers calculates how to divide the route and sorties to cover the MTR with the fewest flights practical under the distance cap—and you can re-run when the roster changes.'
-  drawParagraph(doc, callout, { size: 9.5, after: 10 })
-
-  drawHeading(doc, 'Planner modes')
-  drawTable(doc, [
-    ['1 team', 'One aircraft: inner then outer passes on the full route from one base.'],
-    ['2 teams', 'Parallel: opposite sides of the corridor; same geography, different bases.'],
-    ['3 teams', 'Geographic split: three segments; each team flies both sides of its segment. Optimizer picks splits and base assignments.'],
-    ['Compare 1 vs 2', 'One aircraft (full corridor) vs two aircraft (opposite sides).'],
-    ['Compare 2 vs 3', 'Two aircraft (opposite sides) vs three aircraft (geographic split).'],
-  ])
-
-  drawHeading(doc, 'What the optimizer does (and does not)')
-  drawTable(doc, [
-    [
-      'Does',
-      'Minimize total wing sorties (tie-break NM); pack waypoint chains into sorties under the budget; include ferry and offset legs; optimize each sortie’s start end; for 3-team mode, search segment boundaries and team assignments.',
-    ],
-    [
-      'Does not',
-      'Choose squadrons or airports; change the MTR waypoint list; replace ForeFlight or weather judgment.',
-    ],
-  ])
-
-  drawHeading(doc, 'Reading the results')
-  drawTable(doc, [
-    ['Inner / Outer', 'Left and right of centerline (asymmetric spans use different offset lists).'],
-    ['Offsets', 'G1000 parallel-track spacing in NM (default: 3, 9, 15, outer margin).'],
-    ['Ferry in / out', 'Base to/from route entry or exit for that sortie.'],
-    ['Along route', 'Directed offset legs on the assigned waypoint chain.'],
-    ['Warning in Total', 'Over NM budget — shorter segment or more teams.'],
+    ['Wing coordinator', 'Team Dispatch - two or three teams, sortie .fpl files'],
+    ['Aircrew', 'Flight Plans, Map View, tower analysis, the Air Force report'],
+    ['Wing administrator', 'Content pack console - separate from Team Dispatch'],
   ])
 
   drawHeading(doc, 'URLs (NM Wing pilot hosting)')
   drawTable(doc, [
     ['Crew app', 'https://gvdurfee.github.io/HighTowers-Web/'],
-    ['Coordinator console', 'Flight Plans → Coordinator Survey Console, or /coordinator/survey?plan=<id>'],
-    ['Wing admin', '/admin/content-packs — wing staff only'],
+    ['Team Dispatch', 'Sidebar Mission Planning, or /coordinator/survey?plan=<id>'],
+    ['Wing admin', '/admin/content-packs - wing staff only'],
   ])
   drawParagraph(
     doc,

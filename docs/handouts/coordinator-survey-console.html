@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Coordinator Survey Console — Wing handout</title>
+  <title>Team Dispatch — Wing handout</title>
   <style>
     :root {
       --cap-ultramarine: #0e2b8d;
@@ -100,68 +100,51 @@
 </head>
 <body>
   <header>
-    <h1>Coordinator Survey Console</h1>
+    <h1>Team Dispatch</h1>
     <p class="subtitle"><strong>HighTowers-Web</strong> — Wing planning aid for Low Level Route tower surveys</p>
-    <p class="audience"><strong>Audience:</strong> Wing coordinators, squadron leadership, and aircrew who need to understand how staffing decisions are made.</p>
+    <p class="audience"><strong>Audience:</strong> Wing coordinators, squadron leadership, and the pilots who fly the sortie files. The sidebar name and the page heading are both <strong>Team Dispatch</strong>.</p>
   </header>
 
-  <h2>What this tool is</h2>
-  <p>The <strong>Coordinator Survey Console</strong> helps a wing coordinator answer:</p>
-  <ul>
-    <li>How many <strong>sorties</strong> does each team need?</li>
-    <li>Which <strong>contiguous MTR waypoint ranges</strong> should each aircraft fly?</li>
-    <li>How do <strong>1 vs 2 vs 3 teams</strong> compare on <strong>total wing sorties</strong>?</li>
-  </ul>
-  <p>It uses <strong>NASR corridor width</strong>, your <strong>flight-plan waypoint sequence</strong>, <strong>departure airports you choose</strong>, and a <strong>per-sortie distance budget</strong> (typically 400–500 NM). It models <strong>G1000 parallel-track offsets</strong> on each side of the centerline.</p>
-  <p><strong>It is not:</strong> a weather tool, MOA planner, ATC product, or ForeFlight replacement. Crews still fly corridors in <strong>ForeFlight Military Flight Bag</strong>.</p>
+  <h2>What the sortie file is</h2>
+  <p>There is <strong>no G1000 Parallel Track</strong> in these files. Every lane is its own set of user waypoints at the real offset coordinates. The G1000 navigates leg to leg between the loaded user waypoints, flown by hand or with the autopilot in GPS/NAV mode. HighTowers exports the <strong>.fpl</strong>. Before each lane, confirm the aircraft symbol is on the intended yellow track on both the ForeFlight moving map and the G1000 MFD map.</p>
+
+  <h2>Inner and Outer</h2>
+  <p><strong>Inner</strong> is the side toward the inside of the route’s overall curve, as seen on the map. <strong>Outer</strong> is the other side. A nearly straight or S-shaped route has no clear inside. The app then uses Inner = left of the route as flown from the entry point, and it says so on the Sortie 1 side picker. Pilots go by the side shown on the picker. The labels are <strong>Inner (inside the route’s curve)</strong> and <strong>Outer (outside the route’s curve)</strong>.</p>
+
+  <h2>Waypoint names</h2>
+  <p><strong>Solo Flight Plans:</strong> point letters, a 3-digit route position, then I or O (<span class="mono">A001I</span>, <span class="mono">A001O</span>). Sortie 1 flies the chosen side. Sortie 2 flies the other side, listed in reverse order. A name drops the leading zero only to stay within 6 characters (<span class="mono">XYZ01I</span>).</p>
+  <p><strong>Team Dispatch:</strong> point letters, the lane number, then I or O (<span class="mono">B1O</span>, <span class="mono">XM2I</span>). Think of the first one or two letters as the MTR point the waypoint is offset from. The 1, 2, or 3 is the offset lane of the serpentine route the G1000 flies to cover the corridor, counted outward from the centerline. The last letter says Inner or Outer. A rare repeat on the same lane adds a digit (<span class="mono">B12I</span>). Lane 1 is closest to the centerline. A team file has no published centerline fixes.</p>
+
+  <h2>Before the SD card</h2>
+  <p>Not a concern: per the Director of Operations, user waypoints and the flight plans that created them are erased after each mission. Confirm no leftover user waypoints before loading, because short names repeat between routes. After import, spot-check one waypoint against the plan.</p>
+  <p>Follow the G1000 Pilot's Guide for importing user flight plans from the SD card.</p>
+
+  <h2>How dispatchers staff a route</h2>
+  <p>Team Dispatch staffs <strong>one, two, or three teams</strong>. <strong>1 team</strong> is one aircraft that flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own .fpl file. The screen is one page. Words in parentheses are the headings on the screen:</p>
+  <ol>
+    <li><strong>Crews and aircraft</strong> (Teams &amp; parameters).</li>
+    <li><strong>Route</strong> (Load the published route).</li>
+    <li><strong>Corridor and tracks</strong> (Scenario). Published widths are Left NM and Right NM. Lane lists are Left offsets and Right offsets. Those fields are not the Inner/Outer choice.</li>
+    <li><strong>Segments and refuel</strong> (Results).</li>
+    <li><strong>Sortie 1 side</strong> (the Inner / Outer radios).</li>
+    <li><strong>Results</strong> (download each sortie .fpl and email it to the Mission Pilot for that aircraft).</li>
+  </ol>
+  <p>Neighboring teams are recommended on opposite sides. Recommended: each segment flies the opposite side from the segments next to it (e.g. segment 1 Inner, segment 2 Outer, segment 3 Inner). This is a recommendation, not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O). The 1-team choice is one aircraft flying both sides in sequence, used to finish a partial route fragment left incomplete because of weather or limited resources.</p>
+
+  <h2>Map View</h2>
+  <p>The map legend reads: “Map: ultramarine centerline with point letters, white edges, yellow sortie tracks, blue arrows.” The centerline color is #3F00FF. The centerline is the published route, labeled with the published point letters only.</p>
 
   <h2>Who uses what</h2>
   <table>
-    <tr><th>Wing coordinator</th><td>Coordinator Survey Console — staffing what-if, sortie briefs</td></tr>
-    <tr><th>Aircrew</th><td>Main app — flight plans, tower analysis, maps, PDF export, content packs</td></tr>
-    <tr><th>Wing administrator</th><td>Content Pack console — pack lifecycle (separate from coordinator planning)</td></tr>
-  </table>
-
-  <h2>How coordinators work in practice</h2>
-  <ol>
-    <li><strong>Start with available squadrons</strong> — CAP teams operate from airports near their home base. The tool does <strong>not</strong> pick airports for you.</li>
-    <li><strong>Build or open a flight plan</strong> for the MTR; open the console from <strong>Flight Plans</strong>.</li>
-    <li><strong>Run a what-if</strong> — enter Team 2 and/or Team 3 airports; choose a mode or <strong>Compare 1 vs 2</strong> / <strong>Compare 2 vs 3</strong>.</li>
-    <li><strong>Brief teams</strong> — sortie rows: waypoint from→to, offsets, ferry and along-route NM.</li>
-    <li><strong>Re-run when the roster changes</strong> — weather or availability may drop a team the day before: recalculate with fewer teams, or swap in another squadron’s airport and re-brief everyone.</li>
-  </ol>
-  <div class="callout">
-    <strong>Management one-liner:</strong> The coordinator names which teams and airports can play; HighTowers calculates how to divide the route and sorties to cover the MTR with the fewest flights practical under the distance cap—and you can re-run when the roster changes.
-  </div>
-
-  <h2>Planner modes</h2>
-  <table>
-    <tr><th>1 team</th><td>One aircraft: inner then outer passes on the <strong>full route</strong> from one base.</td></tr>
-    <tr><th>2 teams</th><td><strong>Parallel:</strong> opposite sides of the corridor; same geography, different bases.</td></tr>
-    <tr><th>3 teams</th><td><strong>Geographic split:</strong> three route segments; each team flies both sides of its segment. Optimizer picks splits and base assignments (fewest sorties, then NM).</td></tr>
-    <tr><th>Compare 1 vs 2</th><td>One aircraft (full corridor) vs two aircraft (opposite sides).</td></tr>
-    <tr><th>Compare 2 vs 3</th><td>Two aircraft (opposite sides) vs three aircraft (geographic split).</td></tr>
-  </table>
-
-  <h2>What the optimizer does (and does not)</h2>
-  <table>
-    <tr><th>Does</th><td>Minimize total wing sorties (tie-break NM); pack waypoint chains into sorties under the budget; include ferry and offset legs; optimize each sortie’s start end; for 3-team mode, search segment boundaries and team assignments.</td></tr>
-    <tr><th>Does not</th><td>Choose squadrons or airports; change the MTR waypoint list; replace ForeFlight or weather judgment.</td></tr>
-  </table>
-
-  <h2>Reading the results</h2>
-  <table>
-    <tr><th>Inner / Outer</th><td>Left and right of centerline (asymmetric spans use different offset lists).</td></tr>
-    <tr><th>Offsets</th><td>G1000 parallel-track spacing in NM (default: 3 → 9 → 15 → outer margin).</td></tr>
-    <tr><th>Ferry in / out</th><td>Base ↔ route entry or exit for that sortie.</td></tr>
-    <tr><th>Along route</th><td>Directed offset legs on the assigned waypoint chain.</td></tr>
-    <tr><th>⚠ in Total</th><td>Over NM budget — shorter segment or more teams.</td></tr>
+    <tr><th>Wing coordinator</th><td>Team Dispatch — two or three teams, sortie .fpl files</td></tr>
+    <tr><th>Aircrew</th><td>Flight Plans, Map View, tower analysis, the Air Force report</td></tr>
+    <tr><th>Wing administrator</th><td>Content pack console — separate from Team Dispatch</td></tr>
   </table>
 
   <h2>URLs (NM Wing pilot hosting)</h2>
   <table>
     <tr><th>Crew app</th><td class="mono">https://gvdurfee.github.io/HighTowers-Web/</td></tr>
-    <tr><th>Coordinator console</th><td>Flight Plans → <strong>Coordinator Survey Console</strong>, or <span class="mono">/coordinator/survey?plan=&lt;id&gt;</span></td></tr>
+    <tr><th>Team Dispatch</th><td>Sidebar Mission Planning, or <span class="mono">/coordinator/survey?plan=&lt;id&gt;</span></td></tr>
     <tr><th>Wing admin</th><td><span class="mono">/admin/content-packs</span> — wing staff only</td></tr>
   </table>
   <p>After updates on <span class="mono">main</span>, hard refresh (Cmd+Shift+R). Pages rebuilds automatically; Railway API updates when <span class="mono">server/</span> changes.</p>

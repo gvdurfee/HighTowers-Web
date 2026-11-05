@@ -4,7 +4,7 @@ Printable PDFs for wing operations and training. Regenerate after editing the ma
 
 | PDF | Audience | Source | Regenerate |
 |-----|----------|--------|------------|
-| [Coordinator-Survey-Console-Handout.pdf](./Coordinator-Survey-Console-Handout.pdf) | Coordinators, squadrons, aircrew | [../COORDINATOR_SURVEY_CONSOLE_HANDOUT.md](../COORDINATOR_SURVEY_CONSOLE_HANDOUT.md) | `npm run handout:coordinator-pdf` |
+| [Coordinator-Survey-Console-Handout.pdf](./Coordinator-Survey-Console-Handout.pdf) | Coordinators, squadrons, pilots (Team Dispatch) | [../COORDINATOR_SURVEY_CONSOLE_HANDOUT.md](../COORDINATOR_SURVEY_CONSOLE_HANDOUT.md) | `npm run handout:coordinator-pdf` |
 | [Phase-A-Coordinator-Persistence-Brief.pdf](./Phase-A-Coordinator-Persistence-Brief.pdf) | Director of Operations, wing leadership | [../PHASE_A_COORDINATOR_PERSISTENCE_BRIEF.md](../PHASE_A_COORDINATOR_PERSISTENCE_BRIEF.md) | `npm run handout:phase-a-pdf` |
 
 Generate both:

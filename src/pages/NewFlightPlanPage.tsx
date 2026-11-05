@@ -961,9 +961,8 @@ export function NewFlightPlanPage() {
                   function, otherwise the flight plan will need to be recreated. If a waypoint is missing or
                   extra on the next page, use <strong>Correct waypoint sequence</strong> instead of starting
                   over. If any waypoints are missing coordinates, fill them on the detail page, then export a
-                  .fpl for the G1000 to your SD card when ready. When importing into the G1000, insert the SD
-                  card into the top slot of the MFD <strong>before</strong> you power up the MFD. Otherwise, you
-                  may see an error saying there is no flight plan to import.
+                  .fpl for the G1000 to your SD card when ready. Follow the G1000 Pilot&apos;s Guide for
+                  importing user flight plans from the SD card.
                 </>
               )
             }

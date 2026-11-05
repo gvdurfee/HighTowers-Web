@@ -88,10 +88,9 @@ export function FlightPlanLoadMethodHelpModal({
             your entries so you can fix them without starting over. You can find coordinates in the{' '}
             <strong>AP/1B</strong>, or in{' '}
             <strong>ForeFlight</strong> by tapping a waypoint in the flight plan and copying the
-            lat/long from the popup. Put{' '}
-            <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> files in the{' '}
-            <strong>root</strong> of a FAT32 SD card for G1000 import (see your avionics docs)
-            EJECT the card before removing from card reader to avoid file corruption.
+            lat/long from the popup. Follow the G1000 Pilot&apos;s Guide for importing user flight
+            plans from the SD card. Eject the card before removing it from the card reader to avoid
+            file corruption.
           </p>
         </div>
         <button

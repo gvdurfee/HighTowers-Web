@@ -127,7 +127,7 @@ export function CorridorTrackPlanEditor({
                   if (Number.isFinite(next) && next > 0) onFirstOffsetNmChange(next)
                 }}
                 className={`${NM_INPUT_CLASS} mt-1`}
-                aria-label="First parallel offset in nautical miles"
+                aria-label="First offset in nautical miles"
               />
             </label>
             <label className="block">
@@ -142,7 +142,7 @@ export function CorridorTrackPlanEditor({
                   if (Number.isFinite(next) && next > 0) onStepNmChange(next)
                 }}
                 className={`${NM_INPUT_CLASS} mt-1`}
-                aria-label="Spacing between parallel offsets in nautical miles"
+                aria-label="Spacing between offsets in nautical miles"
               />
             </label>
             <p className="self-end text-xs text-gray-600 max-w-md pb-2">

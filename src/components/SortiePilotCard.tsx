@@ -95,7 +95,8 @@ export function SortiePilotCard({ brief, isOpen, onClose }: SortiePilotCardProps
             <h3 className="font-semibold text-gray-900 mb-1">Multi-aircraft &amp; recovery days</h3>
             <p className="mb-2">
               When several aircraft survey the same corridor, <strong>deconfliction is pilot responsibility</strong>
-              — maintain radio contact and <strong>stagger takeoff times</strong>.
+              — maintain radio contact and <strong>stagger takeoff times</strong>. Announce when you enter and exit
+              each lane, giving your position by waypoint name (for example, entering B1O).
             </p>
             <p className="mb-2">
               Coordinator assigns <strong>one shared refuel airport</strong> near the route for all aircraft. On
@@ -104,10 +105,8 @@ export function SortiePilotCard({ brief, isOpen, onClose }: SortiePilotCardProps
               Sortie 2 waypoint ranges may differ per aircraft when the planner optimizes that way.
             </p>
             <p>
-              For sortie 2 you may <strong>invert</strong> the G1000 active flight plan, or load this{' '}
-              <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> and delete waypoints you will not fly
-              from the <strong>active route only</strong>. That does not remove user waypoints from G1000 memory — only
-              from the selected active plan.
+              Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the
+              G1000. Sortie 2 is its own .fpl file.
             </p>
           </section>
         </div>

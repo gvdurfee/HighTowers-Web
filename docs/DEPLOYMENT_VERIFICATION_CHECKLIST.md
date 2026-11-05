@@ -157,7 +157,7 @@ Follow **`docs/SMOKE_TEST.md` Section A** for comprehensive verification:
 3. Flight Plan → New → MTR waypoint lookup works
 4. Tower Analysis → Map loads with satellite imagery
 5. Export Data → PDF generation succeeds (uses Mapbox proxy on API)
-6. Coordinator Survey Console → Width text loads (FAA NASR from API)
+6. Team Dispatch → Width text loads (FAA NASR from API)
 
 ---
 
@@ -192,7 +192,7 @@ Once all steps above are done:
 - [ ] Mapbox maps load on Tower Analysis page
 - [ ] MTR waypoint lookup works (Flight Plan detail)
 - [ ] PDF export succeeds with mission map
-- [ ] Coordinator Survey Console loads NASR width text
+- [ ] Team Dispatch loads NASR width text
 - [ ] Wing Administrator Console sign-in works (if using Content Packs)
 - [ ] All smoke tests pass (`docs/SMOKE_TEST.md`)
 

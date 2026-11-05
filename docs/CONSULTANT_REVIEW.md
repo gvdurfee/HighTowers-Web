@@ -523,7 +523,7 @@ git push origin main
 
 4. **Local ZIP workflow for content pack close-out** — Crews download updated pack to Wing shared storage. Server inventory is optional. Do not force server-upload workflow without Wing coordinator approval (see `docs/content-pack-wing-workflow.md`).
 
-5. **Coordinator Survey Console as multi-crew tool** — Complex UI for splitting routes across aircraft, serpentine sorties, track planning. Do not simplify without pilot feedback (heavily documented in `docs/COORDINATOR_SURVEY_CONSOLE.md`).
+5. **Team Dispatch as multi-crew tool** — Complex UI for splitting routes across aircraft, serpentine sorties, track planning. The sidebar label is Team Dispatch. Do not simplify without pilot feedback (heavily documented in `docs/COORDINATOR_SURVEY_CONSOLE.md`).
 
 ### Code patterns (intentional)
 
