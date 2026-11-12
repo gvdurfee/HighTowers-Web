@@ -1,8 +1,10 @@
 /**
- * Halfway-offset flight tracks for an MTR corridor.
- * Each side sits halfway from the centerline to that side's published edge
- * (6 NM side → 3 NM offset). Corners are the intersection of the adjacent
- * shifted legs. Sharp turns do not gain extra waypoints; bad corners are flagged.
+ * Offset flight tracks for an MTR corridor.
+ * The corridor edge is the full side width. The flown track defaults to halfway
+ * from the centerline to that edge (6 NM side → 3 NM offset). An explicit
+ * track offset on the leg replaces that halfway distance and is not halved again.
+ * Corners are the intersection of the adjacent shifted legs. Sharp turns do not
+ * gain extra waypoints; bad corners are flagged.
  */
 
 import { halfWidthNmForLeg, legContainedInSpan, readMtrWidth } from './mtrWidthParser.js'
@@ -393,7 +395,23 @@ export function routeCurveSide(waypoints) {
 }
 
 /**
- * Inner sits on the inside of the route's curve. Offsets are half that side's width.
+ * Flown distance for one side. A missing track offset is half the corridor width.
+ * A present value is used as-is, including when it equals the corridor width.
+ * @param {number | null | undefined} explicitNm
+ * @param {number} corridorNm
+ */
+export function trackDistanceNm(explicitNm, corridorNm) {
+  if (explicitNm == null) return corridorNm / 2
+  if (!Number.isFinite(explicitNm) || explicitNm < 0) {
+    throw new Error('Track offset must be a finite number of nautical miles, zero or greater.')
+  }
+  return explicitNm
+}
+
+/**
+ * Inner sits on the inside of the route's curve.
+ * The flown track uses an explicit track offset when the leg has one, and otherwise half that side's corridor width.
+ * The white corridor edge stays at the full side width.
  * `shapePoints` is the full published centerline when `waypoints` is only a segment.
  * @param {OffsetRoutePoint[]} waypoints
  * @param {OffsetLegWidth[]} legWidths
@@ -404,14 +422,14 @@ export function buildOffsetRoutes(waypoints, legWidths, shapePoints) {
     throw new Error('Width list must have one entry per leg.')
   }
   const curve = routeCurveSide(shapePoints?.length ? shapePoints : waypoints)
-  const leftHalf = legWidths.map((leg) => leg.leftNm / 2)
-  const rightHalf = legWidths.map((leg) => leg.rightNm / 2)
+  const leftTrack = legWidths.map((leg) => trackDistanceNm(leg.trackLeftNm, leg.leftNm))
+  const rightTrack = legWidths.map((leg) => trackDistanceNm(leg.trackRightNm, leg.rightNm))
   const leftFull = legWidths.map((leg) => leg.leftNm)
   const rightFull = legWidths.map((leg) => leg.rightNm)
-  const half = { left: leftHalf, right: rightHalf }
+  const track = { left: leftTrack, right: rightTrack }
   const full = { left: leftFull, right: rightFull }
-  const inner = buildOffsetTrack(waypoints, half[curve.innerSide], full[curve.innerSide], curve.innerSide)
-  const outer = buildOffsetTrack(waypoints, half[curve.outerSide], full[curve.outerSide], curve.outerSide)
+  const inner = buildOffsetTrack(waypoints, track[curve.innerSide], full[curve.innerSide], curve.innerSide)
+  const outer = buildOffsetTrack(waypoints, track[curve.outerSide], full[curve.outerSide], curve.outerSide)
   const corridorLeft = buildOffsetTrack(waypoints, leftFull, leftFull, 'left')
   const corridorRight = buildOffsetTrack(waypoints, rightFull, rightFull, 'right')
   assignTrackNames(inner, 'inner')

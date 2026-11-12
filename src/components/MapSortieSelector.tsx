@@ -1,16 +1,31 @@
-import { mapSortieButtons } from '@/services/teamPlanRecord'
+import type { SortieSide } from '@/services/offsetRouteFpl'
 import type { MapSortieNumber } from '@/services/serpentineDisplay'
+import { singleAircrewSortieButtonLabel } from '@/services/singleAircrewMap'
+import { mapSortieButtons } from '@/services/teamPlanRecord'
 
 export function MapSortieSelector(props: {
   sorties: Array<{ number: number }>
   selected: MapSortieNumber
   onSelect: (sortie: MapSortieNumber) => void
+  singleAircrew?: {
+    departure?: string | null
+    destination?: string | null
+    sortie1Side?: SortieSide | null
+  } | null
 }) {
   const buttons = mapSortieButtons(props.sorties)
   return (
     <div role="radiogroup" aria-label="Sortie" className="flex items-center gap-1">
       {buttons.map((sortie) => {
         const selected = props.selected === sortie.number
+        const label = props.singleAircrew
+          ? singleAircrewSortieButtonLabel({
+              number: sortie.number,
+              departure: props.singleAircrew.departure,
+              destination: props.singleAircrew.destination,
+              sortie1Side: props.singleAircrew.sortie1Side,
+            })
+          : `Sortie ${sortie.number}`
         return (
           <span key={sortie.number} title={sortie.title}>
             <button
@@ -31,7 +46,7 @@ export function MapSortieSelector(props: {
                     : 'bg-white/10 text-white border-white/40 hover:bg-white/20'
               }`}
             >
-              Sortie {sortie.number}
+              {label}
             </button>
           </span>
         )

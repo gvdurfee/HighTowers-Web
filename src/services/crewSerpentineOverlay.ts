@@ -1,5 +1,5 @@
 import { orderSortieTrack, type SortieSide } from '@/services/offsetRouteFpl'
-import { type OffsetRoutePoint } from '@survey-planning/offsetRoutePlan.js'
+import { crossTrackNm, type OffsetRoutePoint } from '@survey-planning/offsetRoutePlan.js'
 
 export type CrewOverlayId = 'team1' | 'team2' | 'team3'
 
@@ -15,7 +15,7 @@ export type SerpentinePass = {
   names: string[]
   /** [lon, lat] along this lane. Airport transits are drawn separately. */
   coordinates: [number, number][]
-  waypoints: Array<{ lat: number; lon: number; name: string }>
+  waypoints: Array<{ lat: number; lon: number; name: string; surveySide?: 'left' | 'right' }>
   laneIndex?: number
   laneGroup?: number
   offsetNm?: number
@@ -44,12 +44,29 @@ export function sortieWaypointLine(
   return waypoints.map((point) => [point.lon, point.lat])
 }
 
+/** Which side of the centerline this flown track is on. Positive cross-track is right. */
+export function surveySideOfTrack(
+  track: Array<{ lat: number; lon: number }>,
+  centerline: Array<{ lat: number; lon: number }>
+): 'left' | 'right' | undefined {
+  const count = Math.min(track.length, centerline.length)
+  for (let index = 0; index < count; index += 1) {
+    const a = centerline[Math.max(0, index - 1)]
+    const b = centerline[Math.min(count - 1, Math.max(index, 1))]
+    if (a.lat === b.lat && a.lon === b.lon) continue
+    const cross = crossTrackNm(track[index], a, b)
+    if (Math.abs(cross) >= 0.02) return cross > 0 ? 'right' : 'left'
+  }
+  return undefined
+}
+
 function passFromTrack(opts: {
   number: 1 | 2
   side: SortieSide
   track: OffsetRoutePoint[]
   start: SerpentineAirport | null
   end: SerpentineAirport | null
+  centerline?: Array<{ lat: number; lon: number }>
 }): SerpentinePass {
   const ordered = opts.track
   const coordinates: [number, number][] = []
@@ -66,6 +83,7 @@ function passFromTrack(opts: {
       lon: point.lon,
       name: waypointName(point),
     })),
+    surveySide: opts.centerline ? surveySideOfTrack(ordered, opts.centerline) : undefined,
   }
 }
 
@@ -81,9 +99,13 @@ export function serpentineFromTracks(opts: {
   outer: OffsetRoutePoint[]
   departure?: SerpentineAirport | null
   destination?: SerpentineAirport | null
+  /** Published centerline, same order as the unreversed offset tracks. Display only. */
+  centerline?: Array<{ lat: number; lon: number }>
 }): CrewSerpentine {
   const departure = opts.departure ?? null
   const destination = opts.destination ?? null
+  const centerline = opts.centerline ?? []
+  const reversedCenterline = [...centerline].reverse()
   const sortie1 = orderSortieTrack({
     inner: opts.inner,
     outer: opts.outer,
@@ -107,6 +129,7 @@ export function serpentineFromTracks(opts: {
         track: sortie1.waypoints,
         start: departure,
         end: destination,
+        centerline,
       }),
       passFromTrack({
         number: 2,
@@ -114,6 +137,7 @@ export function serpentineFromTracks(opts: {
         track: sortie2.waypoints,
         start: destination,
         end: departure,
+        centerline: reversedCenterline,
       }),
     ],
   }

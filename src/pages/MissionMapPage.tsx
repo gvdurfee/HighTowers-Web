@@ -10,16 +10,16 @@ import { nearestWaypointInfo } from '@/utils/towerWaypointGeometry'
 import { parseWaypointCode, publishedPointLabel } from '@/utils/mtrWaypointCode'
 import { TowerLeaderMarker, TOWER_MAP_COLOR } from '@/components/TowerLeaderMarker'
 import { GuidedHint } from '@/components/GuidedHint'
-import { MapSortieSelector } from '@/components/MapSortieSelector'
+import { MapViewCrewControls } from '@/components/MapViewCrewControls'
 import { OffsetRoutePanel, type OffsetMapGeometry } from '@/components/OffsetRoutePanel'
 import { confirmLeaveOffsetPlan } from '@/services/offsetPlanLeaveGuard'
 import type { OffsetLegWidth } from '@survey-planning/offsetRoutePlan.js'
 import { expandPlanningRoute } from '@survey-planning/planComparison.js'
+import { isSingleAircrewPlan, singleAircrewSortieHint } from '@/services/singleAircrewMap'
 import {
   drawSavedTeam,
   formatSortieHeader,
   mapSortieButtons,
-  NO_TEAM_PLAN_NOTE,
 } from '@/services/teamPlanRecord'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import {
@@ -30,6 +30,7 @@ import {
   type CrewOverlayId,
   type CrewSerpentine,
 } from '@/services/crewSerpentineOverlay'
+import { singleAircrewSortieTrack } from '@/services/singleAircrewSpur'
 import {
   airportsForSortie,
   buildSerpentineDisplay,
@@ -37,6 +38,7 @@ import {
   DEFAULT_MAP_SORTIE,
   labelPixelOffset,
   labelPlacement,
+  markerPlacementAway,
   legArrowSizePx,
   MAP_ROUTE_BLUE,
   passesForSortie,
@@ -314,9 +316,14 @@ export function MissionMapPage() {
   }, [selectedPlanId])
 
   const savedTeamPlan = useLiveQuery(
-    () => (selectedPlanId ? db.teamPlans.get(selectedPlanId) : undefined),
+    async () => {
+      if (!selectedPlanId) return null
+      return (await db.teamPlans.get(selectedPlanId)) ?? null
+    },
     [selectedPlanId]
   )
+  const singleAircrew =
+    savedTeamPlan !== undefined && isSingleAircrewPlan(planData?.plan ?? null, savedTeamPlan)
 
   useEffect(() => {
     if (!savedTeamPlan || savedTeamPlan.teams.length === 0) return
@@ -371,6 +378,14 @@ export function MissionMapPage() {
 
   const crewOverlays = useMemo(() => {
     if (teamDraws) return teamDraws.map((draw) => draw.overlay)
+    const centerline = [...(planData?.waypoints ?? [])]
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((wp) => ({
+        lat: wp.latitude,
+        lon: wp.longitude,
+        originalName: wp.originalName,
+        ptIdent: wp.g1000Name,
+      }))
     const team1 =
       offsetGeometry && planData?.plan.sortie1Side
         ? serpentineFromTracks({
@@ -381,14 +396,54 @@ export function MissionMapPage() {
             outer: offsetGeometry.outer,
             departure: planData.departure,
             destination: planData.destination,
+            centerline,
           })
         : { ...emptyCrewOverlay('team1', 'Team 1'), airport: planData?.departure?.identifier ?? null }
+    if (singleAircrew && offsetGeometry && planData?.plan.sortie1Side && team1.passes.length > 0) {
+      team1.passes = team1.passes.map((pass) => {
+        const track = singleAircrewSortieTrack({
+          centerline,
+          inner: offsetGeometry.inner,
+          outer: offsetGeometry.outer,
+          sortie1Side: planData.plan.sortie1Side as 'inner' | 'outer',
+          sortieNumber: pass.number,
+        })
+        const same =
+          track.waypoints.length === pass.waypoints.length &&
+          track.waypoints.every(
+            (point, index) =>
+              point.lat === pass.waypoints[index].lat &&
+              point.lon === pass.waypoints[index].lon &&
+              (point.g1000Name || point.ptIdent) === pass.waypoints[index].name
+          )
+        if (same) return pass
+        const start = pass.number === 1 ? planData.departure : planData.destination
+        const end = pass.number === 1 ? planData.destination : planData.departure
+        const coordinates: [number, number][] = []
+        if (start) coordinates.push([start.longitude, start.latitude])
+        for (const point of track.waypoints) coordinates.push([point.lon, point.lat])
+        if (end) coordinates.push([end.longitude, end.latitude])
+        return {
+          ...pass,
+          side: track.side,
+          names: track.waypoints.map((point) => point.g1000Name || point.ptIdent),
+          coordinates,
+          surveySide: track.waypoints.find((point) => point.surveySide)?.surveySide ?? pass.surveySide,
+          waypoints: track.waypoints.map((point) => ({
+            lat: point.lat,
+            lon: point.lon,
+            name: point.g1000Name || point.ptIdent,
+            surveySide: point.surveySide,
+          })),
+        }
+      })
+    }
     return [
       team1,
       emptyCrewOverlay('team2', 'Team 2'),
       emptyCrewOverlay('team3', 'Team 3'),
     ] satisfies CrewSerpentine[]
-  }, [teamDraws, offsetGeometry, planData])
+  }, [teamDraws, offsetGeometry, planData, singleAircrew])
 
   const activeOverlay = selectedCrewOverlay(crewOverlays, selectedCrew)
   const selectorSorties = useMemo(() => {
@@ -670,44 +725,20 @@ export function MissionMapPage() {
           </button>
         )}
         {planData && (
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Each team shows Sortie 1 first. Sortie 2 is the next day. */}
-            <div role="radiogroup" aria-label="Crew overlay" className="flex flex-wrap items-center gap-1">
-            {crewOverlays.map((crew) => {
-              const selected = crew.id === selectedCrew
-              return (
-                <button
-                  key={crew.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  onClick={() => setSelectedCrew(crew.id)}
-                  className={`px-3 py-2 text-sm rounded-lg border ${
-                    selected
-                      ? 'bg-cap-ultramarine text-white border-cap-ultramarine'
-                      : 'bg-white/10 text-white border-white/40 hover:bg-white/20'
-                  }`}
-                >
-                  {crew.label}
-                  {crew.airport ? ` · ${crew.airport}` : ''}
-                </button>
-              )
-            })}
-            </div>
-            {selectorSorties && selectorSorties.length > 0 && (
-              <MapSortieSelector
-                sorties={selectorSorties}
-                selected={drawnSortie}
-                onSelect={setSelectedSortie}
-              />
-            )}
-            <p className="text-sm text-white/80">
-              For assigning more than one team to this route. Each team shows Sortie 1 first; switch to Sortie 2 for the next day.
-            </p>
-          </div>
-        )}
-        {!savedTeamPlan && planData && (
-          <p className="text-sm text-white/80">{NO_TEAM_PLAN_NOTE}</p>
+          <MapViewCrewControls
+            singleAircrew={singleAircrew}
+            crews={crewOverlays}
+            selectedCrew={selectedCrew}
+            onSelectCrew={setSelectedCrew}
+            sorties={selectorSorties}
+            selectedSortie={drawnSortie}
+            onSelectSortie={setSelectedSortie}
+            departure={planData.departure?.identifier ?? null}
+            destination={planData.destination?.identifier ?? null}
+            sortie1Side={planData.plan.sortie1Side ?? null}
+            showNoTeamPlan={!savedTeamPlan}
+            hint={singleAircrew ? singleAircrewSortieHint() : null}
+          />
         )}
         {teamDraws
           ?.find((draw) => draw.overlay.id === selectedCrew)
@@ -759,6 +790,8 @@ export function MissionMapPage() {
           departure={planData.departure}
           destination={planData.destination}
           sortie1Side={planData.plan.sortie1Side ?? null}
+          creationLoadMethod={planData.plan.creationLoadMethod ?? null}
+          savedTeamPlan={savedTeamPlan}
           onGeometry={setOffsetGeometry}
           onLegWidths={setLegWidths}
           teamPlanDownload={
@@ -844,7 +877,7 @@ export function MissionMapPage() {
             </Source>
           )}
 
-          {lineFromPoints(offsetGeometry?.corridorLeft) && (
+          {!singleAircrew && lineFromPoints(offsetGeometry?.corridorLeft) && (
             <Source id="corridor-left" type="geojson" data={lineFromPoints(offsetGeometry?.corridorLeft)!}>
               <Layer
                 id="corridor-left-line"
@@ -853,7 +886,7 @@ export function MissionMapPage() {
               />
             </Source>
           )}
-          {lineFromPoints(offsetGeometry?.corridorRight) && (
+          {!singleAircrew && lineFromPoints(offsetGeometry?.corridorRight) && (
             <Source id="corridor-right" type="geojson" data={lineFromPoints(offsetGeometry?.corridorRight)!}>
               <Layer
                 id="corridor-right-line"
@@ -1045,7 +1078,10 @@ export function MissionMapPage() {
           ))}
 
           {serpentine?.labels.map((label) => {
-            const place = labelPlacement(label.bearing)
+            const place =
+              label.awayBearing == null
+                ? labelPlacement(label.bearing)
+                : markerPlacementAway(label.awayBearing)
             return (
               <Marker
                 key={`g1000-${label.pass}-${label.name}-${label.lon}-${label.lat}`}
@@ -1053,7 +1089,7 @@ export function MissionMapPage() {
                 latitude={label.lat}
                 anchor={place.anchor}
                 offset={place.offset}
-                style={{ zIndex: label.role ? 35 : 20 }}
+                style={{ zIndex: 12 }}
               >
                 <div className="pointer-events-none text-center leading-tight">
                   <div
@@ -1081,7 +1117,7 @@ export function MissionMapPage() {
             const letter = publishedPointLabel(wp.originalName)
             if (!letter) return null
             return (
-              <Marker key={wp.id} longitude={wp.longitude} latitude={wp.latitude} anchor="center" style={{ zIndex: 30 }}>
+              <Marker key={wp.id} longitude={wp.longitude} latitude={wp.latitude} anchor="center" style={{ zIndex: 40 }}>
                 <span
                   className="pointer-events-none text-[11px] font-semibold text-white"
                   style={{ color: MAP_ROUTE_BLUE, textShadow: '0 0 2px #fff, 0 0 3px #fff' }}

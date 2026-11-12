@@ -8,6 +8,12 @@ import {
   rowComplete,
   type PilotWidthRow,
 } from '@/services/offsetPilotEntry'
+import { db } from '@/db/schema'
+import {
+  assessSavedOffsetPlan,
+  freshnessForSavedPlan,
+  RESAVE_IN_MAP_VIEW,
+} from '@/services/offsetPlanRecord'
 import { downloadSortieFpl } from '@/services/sortieFplExport'
 import { otherSortieSide, sortie2Explanation, type SortieSide } from '@/services/offsetRouteFpl'
 import {
@@ -41,9 +47,19 @@ function blankRows(count: number): PilotWidthRow[] {
   return Array.from({ length: count }, () => emptyRow())
 }
 
-function parseWidthRow(row: PilotWidthRow): OffsetLegWidth | null {
+function parseTrackField(text: string): number | null | 'invalid' {
+  if (text.trim() === '') return null
+  const nm = Number(text)
+  if (!Number.isFinite(nm) || nm < 0) return 'invalid'
+  return nm
+}
+
+function parseWidthRow(row: PilotWidthRow, track?: { left: string; right: string }): OffsetLegWidth | null {
   if (!rowComplete(row)) return null
-  return { leftNm: Number(row.left), rightNm: Number(row.right) }
+  const trackLeftNm = parseTrackField(track?.left ?? '')
+  const trackRightNm = parseTrackField(track?.right ?? '')
+  if (trackLeftNm === 'invalid' || trackRightNm === 'invalid') return null
+  return { leftNm: Number(row.left), rightNm: Number(row.right), trackLeftNm, trackRightNm }
 }
 
 export function CoordinatorOffsetPlans(props: {
@@ -58,11 +74,15 @@ export function CoordinatorOffsetPlans(props: {
   /** Saved team plan. When a crew is in it, the .fpl uses that crew's segment. */
   savedTeams?: TeamPlanTeam[]
   onSidesChange?: (sides: Record<string, SortieSide | null>) => void
+  /** When set, a stale solo offset plan holds these crew offset downloads. Lane files are separate. */
+  flightPlanId?: string
 }) {
-  const { routeLabel, waypoints, widthTexts, widthBusy, widthError, routeKind, onReloadWidths, crews, savedTeams, onSidesChange } = props
+  const { routeLabel, waypoints, widthTexts, widthBusy, widthError, routeKind, onReloadWidths, crews, savedTeams, onSidesChange, flightPlanId } = props
   const points = useMemo(() => offsetPointsFromWaypoints(waypoints), [waypoints])
   const legCount = Math.max(0, points.length - 1)
   const [rows, setRows] = useState<PilotWidthRow[]>([])
+  const [trackRows, setTrackRows] = useState<Array<{ left: string; right: string }>>([])
+  const [exportHold, setExportHold] = useState<string | null>(null)
   const [published, setPublished] = useState<OffsetLegWidth[] | null>(null)
   const [entryMessage, setEntryMessage] = useState<string | null>(null)
   const [faaNotes, setFaaNotes] = useState<string[]>([])
@@ -82,6 +102,45 @@ export function CoordinatorOffsetPlans(props: {
   useEffect(() => {
     onSidesChange?.(sides)
   }, [sides, onSidesChange])
+
+  useEffect(() => {
+    setTrackRows((current) =>
+      current.length === legCount ? current : Array.from({ length: legCount }, () => ({ left: '', right: '' }))
+    )
+  }, [legCount])
+
+  useEffect(() => {
+    if (!flightPlanId) {
+      setExportHold(null)
+      return
+    }
+    let cancelled = false
+    void db.offsetPlans.get(flightPlanId).then((saved) => {
+      if (cancelled) return
+      if (!saved) {
+        setExportHold(null)
+        return
+      }
+      const decision = assessSavedOffsetPlan(
+        saved,
+        freshnessForSavedPlan({
+          waypoints: points.map((point) => ({
+            originalName: point.originalName ?? point.ptIdent,
+            lat: point.lat,
+            lon: point.lon,
+          })),
+          saved,
+          sortie1Side: saved.sortie1Side,
+          departureIdent: saved.departureIdent ?? null,
+          destinationIdent: saved.destinationIdent ?? null,
+        })
+      )
+      setExportHold(decision.status === 'match' ? null : RESAVE_IN_MAP_VIEW)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [flightPlanId, points])
 
   useEffect(() => {
     if (points.length < 2) return
@@ -151,12 +210,23 @@ export function CoordinatorOffsetPlans(props: {
   }, [signature, legCount, points, widthTexts, widthBusy, widthError, routeKind])
 
   const activeWidths = useMemo(() => {
-    if (published) return published
+    const tracks = trackRows.length === legCount ? trackRows : []
+    const withTrack = (leg: OffsetLegWidth, index: number): OffsetLegWidth | null => {
+      const trackLeftNm = parseTrackField(tracks[index]?.left ?? '')
+      const trackRightNm = parseTrackField(tracks[index]?.right ?? '')
+      if (trackLeftNm === 'invalid' || trackRightNm === 'invalid') return null
+      return { ...leg, trackLeftNm, trackRightNm }
+    }
+    if (published) {
+      const parsed = published.map(withTrack)
+      if (parsed.some((leg) => leg == null)) return null
+      return parsed as OffsetLegWidth[]
+    }
     if (rows.length !== legCount) return null
-    const parsed = rows.map(parseWidthRow)
+    const parsed = rows.map((row, index) => parseWidthRow(row, tracks[index]))
     if (parsed.some((leg) => leg == null)) return null
     return parsed as OffsetLegWidth[]
-  }, [published, rows, legCount])
+  }, [published, rows, trackRows, legCount])
 
   const built = useMemo(() => {
     if (!activeWidths || points.length < 2) return null
@@ -247,8 +317,9 @@ export function CoordinatorOffsetPlans(props: {
         <p className="text-sm text-gray-700 mt-1">
           Inner is halfway from the centerline to the inside of the route&apos;s curve. Outer is halfway to
           the outside. Each crew chooses which side Sortie 1 flies. Sortie 2 is the other side, already
-          listed in flying order in its own .fpl file. These half-width files are separate from the team
-          lane files.
+          listed in flying order in its own .fpl file. A blank track offset keeps that halfway path. A
+          filled-in track offset is the flown distance and is not halved again. These files are separate
+          from the team lane files, which keep their own lane offset.
         </p>
         {widthBusy && <p className="text-sm text-gray-600 mt-2">Loading FAA widths…</p>}
       </div>
@@ -306,8 +377,10 @@ export function CoordinatorOffsetPlans(props: {
             <thead className="text-left text-gray-600 sticky top-0 bg-white">
               <tr>
                 <th className="px-2 py-1">Segment</th>
-                <th className="px-2 py-1">Left NM</th>
-                <th className="px-2 py-1">Right NM</th>
+                <th className="px-2 py-1">Corridor left NM</th>
+                <th className="px-2 py-1">Corridor right NM</th>
+                <th className="px-2 py-1">Track offset left NM</th>
+                <th className="px-2 py-1">Track offset right NM</th>
               </tr>
             </thead>
             <tbody>
@@ -368,6 +441,30 @@ export function CoordinatorOffsetPlans(props: {
                         className="w-20 px-2 py-1 rounded border border-gray-300 bg-white text-gray-900"
                       />
                     </td>
+                    <td className="px-2 py-1">
+                      <input
+                        aria-label={`Track offset left ${point.ptIdent} to ${nextPoint?.ptIdent}`}
+                        value={trackRows[index]?.left ?? ''}
+                        onChange={(event) => {
+                          const next = trackRows.slice()
+                          next[index] = { left: event.target.value, right: trackRows[index]?.right ?? '' }
+                          setTrackRows(next)
+                        }}
+                        className="w-20 px-2 py-1 rounded border border-gray-300 bg-white text-gray-900"
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <input
+                        aria-label={`Track offset right ${point.ptIdent} to ${nextPoint?.ptIdent}`}
+                        value={trackRows[index]?.right ?? ''}
+                        onChange={(event) => {
+                          const next = trackRows.slice()
+                          next[index] = { left: trackRows[index]?.left ?? '', right: event.target.value }
+                          setTrackRows(next)
+                        }}
+                        className="w-20 px-2 py-1 rounded border border-gray-300 bg-white text-gray-900"
+                      />
+                    </td>
                   </tr>
                 )
               })}
@@ -376,6 +473,7 @@ export function CoordinatorOffsetPlans(props: {
         </div>
       )}
 
+      {exportHold && <p className="text-sm text-gray-900">{exportHold}</p>}
       <div className="space-y-4">
         {crews.map((crew) => {
           const pickerSide = sides[crew.id] ?? null
@@ -389,7 +487,7 @@ export function CoordinatorOffsetPlans(props: {
             nameError,
           })
           const sortie2Side = fileSide ? otherSortieSide(fileSide) : null
-          const canDownload = Boolean(built) && Boolean(fileSide) && !block && !sideChanged
+          const canDownload = Boolean(built) && Boolean(fileSide) && !block && !sideChanged && !exportHold
           const sortie1Label = fileSide
             ? `Download ${sortieButtonLabel(1, fileSide, routeCurve)} .fpl`
             : 'Download Sortie 1 .fpl'

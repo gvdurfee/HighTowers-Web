@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useLocation } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/schema'
 import { generateId } from '@/utils/id'
 import type {
@@ -12,6 +13,24 @@ import type {
 import { G1000Service } from '@/services/g1000'
 import { assignG1000WaypointNames } from '@/utils/g1000WaypointName'
 import { sortie2Explanation } from '@/services/offsetRouteFpl'
+import { downloadSortieFpl } from '@/services/sortieFplExport'
+import {
+  assessSavedOffsetPlan,
+  freshnessForSavedPlan,
+  formatOffsetSavedAt,
+  RESAVE_IN_MAP_VIEW,
+  type SavedOffsetPlan,
+} from '@/services/offsetPlanRecord'
+import {
+  lateralFor,
+  oppositeSideSentence,
+  sideOfRouteLabel,
+  soloSortieDownload,
+  soloSortiePanel,
+} from '@/services/soloSortieExport'
+import { SpurPlanNotice } from '@/components/SpurPlanNotice'
+import { offsetSortieFilesHint } from '@/content/spurHints'
+import { handledSpurTipIndexes } from '@/services/singleAircrewSpur'
 import { parseWaypointCode } from '@/utils/mtrWaypointCode'
 import { routeCurveSide } from '@survey-planning/offsetRoutePlan.js'
 
@@ -30,6 +49,7 @@ function creationLoadMethodLabel(m: FlightPlanCreationLoadMethod): string {
 import { GuidedHint } from '@/components/GuidedHint'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
+import { showFullFlightPlanSection, isSingleAircrewPlan } from '@/services/singleAircrewMap'
 
 const HINT_FP_WAYPOINTS = 'flightPlans.detail.waypoints'
 const HINT_FP_EXPORT_FULL = 'flightPlans.detail.exportFullRoute'
@@ -189,7 +209,16 @@ export function FlightPlanDetailPage() {
   const [coordsByPending, setCoordsByPending] = useState<Record<string, DegMinFields>>({})
   const [supplyingCode, setSupplyingCode] = useState<string | null>(null)
   const [editingWaypointId, setEditingWaypointId] = useState<string | null>(null)
+  const [savedOffset, setSavedOffset] = useState<SavedOffsetPlan | undefined>(undefined)
+  const [sortieDownloadNote, setSortieDownloadNote] = useState<string | null>(null)
   const { isSeen, markSeen, resetAll: resetAllHints } = useHintsSeen()
+  const savedTeamPlan = useLiveQuery(
+    async () => {
+      if (!id) return null
+      return (await db.teamPlans.get(id)) ?? null
+    },
+    [id]
+  )
 
   useEffect(() => {
     if (!id) return
@@ -211,6 +240,7 @@ export function FlightPlanDetailPage() {
             const d = await db.airports.get(p.destinationAirportId)
             setDestination(d ?? null)
           }
+          setSavedOffset(await db.offsetPlans.get(id))
         }
       } finally {
         setLoading(false)
@@ -262,6 +292,32 @@ export function FlightPlanDetailPage() {
     const dateModified = new Date().toISOString()
     await db.flightPlans.update(plan.id, { sortie1Side: side, dateModified })
     setPlan({ ...plan, sortie1Side: side, dateModified })
+  }
+
+  function downloadSoloSortie(sortieNumber: 1 | 2) {
+    if (!plan || (plan.sortie1Side !== 'inner' && plan.sortie1Side !== 'outer') || !savedOffset) return
+    const decision = assessSavedOffsetPlan(savedOffset, offsetFreshness)
+    if (decision.status !== 'match') return
+    if (!departure || !destination) return
+    const file = soloSortieDownload({
+      routeLabel: plan.name,
+      sortieNumber,
+      sortie1Side: plan.sortie1Side,
+      plan: decision.plan,
+      departure,
+      destination,
+      singleAircrew: savedTeamPlan !== undefined && isSingleAircrewPlan(plan, savedTeamPlan),
+      centerline: [...waypoints]
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((waypoint) => ({
+          lat: waypoint.latitude,
+          lon: waypoint.longitude,
+          originalName: waypoint.originalName,
+          ptIdent: waypoint.g1000Name,
+        })),
+    })
+    downloadSortieFpl(file.xml, file.filename)
+    setSortieDownloadNote(`Downloaded ${file.filename}.`)
   }
 
   const setCoordForPending = (
@@ -393,6 +449,18 @@ export function FlightPlanDetailPage() {
   }
 
   const isAnchorPlan = isCoordinatorSurveyAnchor(plan)
+  const orderedWaypoints = [...waypoints].sort((a, b) => a.sequence - b.sequence)
+  const offsetFreshness = freshnessForSavedPlan({
+    waypoints: orderedWaypoints.map((waypoint) => ({
+      originalName: waypoint.originalName,
+      lat: waypoint.latitude,
+      lon: waypoint.longitude,
+    })),
+    saved: savedOffset,
+    sortie1Side: plan.sortie1Side,
+    departureIdent: departure?.identifier ?? null,
+    destinationIdent: destination?.identifier ?? null,
+  })
   const sortieCurve = routeCurveSide(
     [...waypoints]
       .sort((a, b) => a.sequence - b.sequence)
@@ -405,6 +473,49 @@ export function FlightPlanDetailPage() {
           waypoint.originalName,
       }))
   )
+  const sortiePanel = soloSortiePanel({
+    isAnchorPlan,
+    saved: savedOffset,
+    freshness: offsetFreshness,
+    sortie1Side: plan.sortie1Side,
+    curve: { innerSide: sortieCurve.innerSide, outerSide: sortieCurve.outerSide },
+    departureIdent: departure?.identifier ?? null,
+    destinationIdent: destination?.identifier ?? null,
+    singleAircrew: savedTeamPlan !== undefined && isSingleAircrewPlan(plan, savedTeamPlan),
+    centerline: [...waypoints]
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((waypoint) => ({
+        lat: waypoint.latitude,
+        lon: waypoint.longitude,
+        originalName: waypoint.originalName,
+        ptIdent: waypoint.g1000Name,
+      })),
+  })
+  const teamKnown = savedTeamPlan !== undefined
+  const singleAircrew = teamKnown && isSingleAircrewPlan(plan, savedTeamPlan)
+  const spurCenterline = orderedWaypoints.map((waypoint) => ({
+    ptIdent:
+      parseWaypointCode(waypoint.originalName)?.waypointLetter ??
+      waypoint.g1000Name ??
+      waypoint.originalName,
+    originalName: waypoint.originalName,
+    lat: waypoint.latitude,
+    lon: waypoint.longitude,
+  }))
+  const hasSingleAircrewSpur = singleAircrew && handledSpurTipIndexes(spurCenterline).length > 0
+  const spurWidths = savedOffset
+    ? savedOffset.widths.map((width, index) => {
+        const track = savedOffset.trackOffsets?.[index]
+        return {
+          leftNm: width.leftNm,
+          rightNm: width.rightNm,
+          trackLeftNm: track?.leftMode === 'explicit' ? track.leftNm : null,
+          trackRightNm: track?.rightMode === 'explicit' ? track.rightNm : null,
+        }
+      })
+    : null
+  const innerChoice = sideOfRouteLabel('inner', lateralFor('inner', sortieCurve))
+  const outerChoice = sideOfRouteLabel('outer', lateralFor('outer', sortieCurve))
 
   return (
     <div className="app-page-shell overflow-auto">
@@ -511,35 +622,125 @@ export function FlightPlanDetailPage() {
         <section
           className={`p-4 bg-white rounded-lg border ${plan.sortie1Side ? 'border-gray-200' : 'border-cap-yellow'}`}
         >
-          <h2 className="font-semibold text-gray-900 mb-2">Sortie 1 side</h2>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="radio"
-                name="sortie1Side"
-                className="accent-cap-ultramarine"
-                checked={plan.sortie1Side === 'inner'}
-                onChange={() => void saveSortie1Side('inner')}
-              />
-              Inner (inside the route&apos;s curve)
-            </label>
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="radio"
-                name="sortie1Side"
-                className="accent-cap-ultramarine"
-                checked={plan.sortie1Side === 'outer'}
-                onChange={() => void saveSortie1Side('outer')}
-              />
-              Outer (outside the route&apos;s curve)
-            </label>
-          </div>
+          <fieldset>
+            <legend className="font-semibold text-gray-900 mb-2">Choose the side flown first</legend>
+            <p className="text-sm text-gray-700 mb-3">
+              This is the side for Sortie 1. {oppositeSideSentence(plan.sortie1Side, sortieCurve)}
+            </p>
+            {!plan.sortie1Side && (
+              <p className="text-sm text-gray-800 mb-3">Choose a side before downloading a sortie file.</p>
+            )}
+            <div className="flex flex-col gap-2 text-sm">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="sortie1Side"
+                  className="accent-cap-ultramarine"
+                  checked={plan.sortie1Side === 'inner'}
+                  onChange={() => void saveSortie1Side('inner')}
+                />
+                {innerChoice}
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="sortie1Side"
+                  className="accent-cap-ultramarine"
+                  checked={plan.sortie1Side === 'outer'}
+                  onChange={() => void saveSortie1Side('outer')}
+                />
+                {outerChoice}
+              </label>
+            </div>
+          </fieldset>
           {waypoints.length >= 2 && sortieCurve.note && (
             <p className="text-sm text-gray-700 mt-2">{sortieCurve.note}</p>
           )}
           <p className="text-sm text-cap-ultramarine mt-2">{sortie2Explanation(departure?.identifier)}</p>
         </section>
 
+        {sortiePanel.status !== 'hidden' && (
+          <section className="p-4 bg-white rounded-lg border border-gray-200" aria-labelledby="offset-sortie-files">
+            <h2 id="offset-sortie-files" className="font-semibold text-gray-900">Offset sortie files</h2>
+            <p className="text-sm text-gray-600 mt-1 mb-3">
+              {offsetSortieFilesHint(hasSingleAircrewSpur)}
+            </p>
+            {sortiePanel.status === 'none' && (
+              <p className="text-sm text-gray-800">
+                Map View has not saved an offset plan for this route.{' '}
+                <Link to="/map" className="text-cap-ultramarine font-medium hover:underline">
+                  Open Map View
+                </Link>{' '}
+                and save the offset plan. Downloads stay off until that geometry is saved.
+              </p>
+            )}
+            {sortiePanel.status === 'stale' && (
+              <p className="text-sm text-gray-800">
+                {RESAVE_IN_MAP_VIEW}{' '}
+                {sortiePanel.reason === 'sequence'
+                  ? 'The saved offset plan is for a different waypoint list'
+                  : 'The saved coordinates do not match the current corridor, track offset, and airports'}
+                {sortiePanel.savedAt ? ` (saved ${formatOffsetSavedAt(sortiePanel.savedAt)})` : ''}.{' '}
+                <Link to="/map" className="text-cap-ultramarine font-medium hover:underline">
+                  Open Map View
+                </Link>
+              </p>
+            )}
+            {sortiePanel.status === 'choose-side' && (
+              <p className="text-sm text-gray-800">
+                Choose the side flown first. Both downloads stay off until you choose a side.
+              </p>
+            )}
+            {sortiePanel.status !== 'none' && (
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {sortiePanel.cards.map((card) => (
+                  <article key={card.sortieNumber} className="rounded-lg border border-gray-200 p-3">
+                    <h3 className="font-medium text-gray-900">Sortie {card.sortieNumber}</h3>
+                    <p className="text-sm text-gray-800 mt-1">{card.label}</p>
+                    {card.fromIdent && card.toIdent ? (
+                      <p className="text-sm text-gray-700 mt-1">
+                        {card.fromIdent} → {card.toIdent}
+                      </p>
+                    ) : null}
+                    {card.order.length > 0 ? (
+                      <p className="text-sm text-gray-700 mt-1">
+                        <span className="text-gray-500">Waypoint order: </span>
+                        {card.order.join(' → ')}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="mt-3 px-4 py-2 bg-cap-ultramarine text-white rounded-lg font-medium hover:bg-cap-ultramarine/90 disabled:opacity-50"
+                      disabled={!card.enabled}
+                      onClick={() => downloadSoloSortie(card.sortieNumber)}
+                    >
+                      {`Download Sortie ${card.sortieNumber}${sortiePanel.status === 'ready' ? ` (${card.role})` : ''} (.fpl)`}
+                    </button>
+                    {!card.enabled && card.disabledReason ? (
+                      <p className="text-sm text-gray-700 mt-2">{card.disabledReason}</p>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            )}
+            {sortieDownloadNote ? (
+              <p className="text-sm text-gray-800 mt-3" role="status">
+                {sortieDownloadNote}
+              </p>
+            ) : null}
+          </section>
+        )}
+
+        <SpurPlanNotice
+          teamKnown={teamKnown}
+          singleAircrew={singleAircrew}
+          isAnchorPlan={isAnchorPlan}
+          waypoints={spurCenterline}
+          legWidths={spurWidths}
+          sortie1Side={plan.sortie1Side === 'inner' || plan.sortie1Side === 'outer' ? plan.sortie1Side : null}
+        />
+
+        {showFullFlightPlanSection(plan, savedTeamPlan) && (
         <section className="p-4 bg-white rounded-lg border border-gray-200">
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-semibold text-gray-900">Full flight plan</h3>
@@ -596,11 +797,12 @@ export function FlightPlanDetailPage() {
             </p>
           ) : (
             <p className="text-xs text-gray-500 mt-2">
-              Offset sortie files are downloaded from Map View. Email each sortie{' '}
-              <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> to that aircraft&apos;s Mission Pilot.
+              Email each sortie <code className="bg-gray-100 px-0.5 rounded text-xs">.fpl</code> to that
+              aircraft&apos;s Mission Pilot.
             </p>
           )}
         </section>
+        )}
         </div>
 
         <section className="p-4 bg-white rounded-lg border border-gray-200 min-w-0 h-full flex flex-col">

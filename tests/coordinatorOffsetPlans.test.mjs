@@ -84,7 +84,7 @@ function mount(saved) {
 }
 
 function fillWidths(host) {
-  const inputs = [...host.querySelectorAll('input[aria-label]')]
+  const inputs = [...host.querySelectorAll('input[aria-label^="Left width"], input[aria-label^="Right width"]')]
   act(() => {
     for (const input of inputs) {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set

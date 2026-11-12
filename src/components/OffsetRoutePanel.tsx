@@ -16,14 +16,29 @@ import {
   orderSortieTrack,
   type SortieSide,
 } from '@/services/offsetRouteFpl'
+import { singleAircrewSortieTrack } from '@/services/singleAircrewSpur'
 import { assignG1000WaypointNames } from '@/utils/g1000WaypointName'
-import { db, type AirportRecord, type WaypointRecord } from '@/db/schema'
+import { db, type AirportRecord, type FlightPlanCreationLoadMethod, type WaypointRecord } from '@/db/schema'
+import {
+  isSingleAircrewPlan,
+  SINGLE_AIRCREW_MAP_LEGEND,
+  SINGLE_AIRCREW_TRACK_LINE,
+  visibleOffsetFlags,
+} from '@/services/singleAircrewMap'
 import {
   assessSavedOffsetPlan,
+  blankTrackRecord,
   formatOffsetSavedAt,
+  OFFSET_PLAN_VERSION,
   offsetFormIsDirty,
+  offsetPlanFingerprint,
   offsetSequenceSignature,
+  RESAVE_IN_MAP_VIEW,
+  SPUR_PROPOSAL_VERSION,
+  trackRecordFromLeg,
+  type OffsetFreshnessInput,
   type SavedOffsetPlan,
+  type TrackOffsetRecord,
 } from '@/services/offsetPlanRecord'
 import { setOffsetPlanLeaveGuard } from '@/services/offsetPlanLeaveGuard'
 import {
@@ -106,29 +121,81 @@ function routeOf(waypoints: OffsetPanelWaypoint[]) {
   }
 }
 
-function parseWidthRow(row: WidthRow): OffsetLegWidth | null {
-  const leftNm = Number(row.left)
-  const rightNm = Number(row.right)
-  if (!Number.isFinite(leftNm) || !Number.isFinite(rightNm) || leftNm < 0 || rightNm < 0) {
-    return null
+type TrackDraft = { left: string; right: string }
+
+function emptyTrack(): TrackDraft {
+  return { left: '', right: '' }
+}
+
+function blankTracks(count: number): TrackDraft[] {
+  return Array.from({ length: count }, () => emptyTrack())
+}
+
+/** Empty means the legacy halfway track. A typed value is the flown distance. */
+function parseTrackField(text: string): number | null | 'invalid' {
+  if (text.trim() === '') return null
+  const nm = Number(text)
+  if (!Number.isFinite(nm) || nm < 0) return 'invalid'
+  return nm
+}
+
+function tracksFromSaved(plan: SavedOffsetPlan, count: number): TrackDraft[] {
+  return Array.from({ length: count }, (_, index) => {
+    const track = plan.trackOffsets?.[index] ?? blankTrackRecord()
+    return {
+      left: track.leftMode === 'explicit' && track.leftNm != null ? String(track.leftNm) : '',
+      right: track.rightMode === 'explicit' && track.rightNm != null ? String(track.rightNm) : '',
+    }
+  })
+}
+
+function formKey(corridor: unknown, tracks: TrackDraft[]): string {
+  return JSON.stringify({ corridor, tracks })
+}
+
+function typedCorridorNm(text: string): number | null | 'invalid' {
+  if (text.trim() === '') return null
+  const nm = Number(text)
+  if (!Number.isFinite(nm) || nm < 0) return 'invalid'
+  return nm
+}
+
+/** A hidden blank corridor uses the typed track offset. A saved corridor number is kept. */
+export function legWidthFromEntry(
+  row: { left: string; right: string },
+  track: TrackDraft | undefined,
+  singleAircrew: boolean
+): OffsetLegWidth | null {
+  const trackLeftNm = parseTrackField(track?.left ?? '')
+  const trackRightNm = parseTrackField(track?.right ?? '')
+  if (trackLeftNm === 'invalid' || trackRightNm === 'invalid') return null
+  if (!singleAircrew) {
+    const leftNm = Number(row.left)
+    const rightNm = Number(row.right)
+    if (!Number.isFinite(leftNm) || !Number.isFinite(rightNm) || leftNm < 0 || rightNm < 0) return null
+    return { leftNm, rightNm, trackLeftNm, trackRightNm }
   }
-  return { leftNm, rightNm }
+  const leftTyped = typedCorridorNm(row.left)
+  const rightTyped = typedCorridorNm(row.right)
+  if (leftTyped === 'invalid' || rightTyped === 'invalid') return null
+  const leftNm = leftTyped ?? (typeof trackLeftNm === 'number' ? trackLeftNm : null)
+  const rightNm = rightTyped ?? (typeof trackRightNm === 'number' ? trackRightNm : null)
+  if (leftNm == null || rightNm == null) return null
+  return { leftNm, rightNm, trackLeftNm, trackRightNm }
 }
 
 function blankRows(count: number): WidthRow[] {
   return Array.from({ length: count }, () => emptyRow())
 }
 
-function rowKey(rows: { left: string; right: string }[]): string {
-  return JSON.stringify(rows)
-}
-
 function applySavedPlan(
   plan: SavedOffsetPlan,
   setPublished: (legs: OffsetLegWidth[] | null) => void,
   setManual: (seed: ManualSeed | null) => void,
-  setRows: (rows: WidthRow[]) => void
+  setRows: (rows: WidthRow[]) => void,
+  setTrackRows: (tracks: TrackDraft[]) => void
 ) {
+  setTrackRows(tracksFromSaved(plan, plan.widths.length))
   const seeded = plan.widths.map((width, index) => ({
     left: String(width.leftNm),
     right: String(width.rightNm),
@@ -157,6 +224,9 @@ export function OffsetRoutePanel(props: {
   departure: AirportRecord | null
   destination: AirportRecord | null
   sortie1Side: SortieSide | null
+  creationLoadMethod?: FlightPlanCreationLoadMethod | null
+  /** Undefined while the team-plan lookup is still running. Null when none is saved. */
+  savedTeamPlan?: unknown
   onGeometry: (geometry: OffsetMapGeometry | null) => void
   onLegWidths?: (widths: OffsetLegWidth[] | null) => void
   /** Saved team for the crew selected on the map. Absent on the route-only view. */
@@ -169,7 +239,9 @@ export function OffsetRoutePanel(props: {
     policy?: { firstOffsetNm?: number; stepNm?: number }
   } | null
 }) {
-  const { flightPlanId, waypoints, departure, destination, sortie1Side, onGeometry, onLegWidths, teamPlanDownload } = props
+  const { flightPlanId, waypoints, departure, destination, sortie1Side, creationLoadMethod, savedTeamPlan, onGeometry, onLegWidths, teamPlanDownload } = props
+  const singleAircrew =
+    savedTeamPlan !== undefined && isSingleAircrewPlan({ creationLoadMethod }, savedTeamPlan)
   const signature = offsetSequenceSignature(waypoints)
   const points = useMemo(() => pointsFrom(waypoints), [signature])
   const route = useMemo(() => routeOf(waypoints), [signature])
@@ -179,11 +251,16 @@ export function OffsetRoutePanel(props: {
   const [published, setPublished] = useState<OffsetLegWidth[] | null>(null)
   const [manual, setManual] = useState<ManualSeed | null>(null)
   const [rows, setRows] = useState<WidthRow[]>([])
+  const [trackRows, setTrackRows] = useState<TrackDraft[]>([])
   const [applyLeft, setApplyLeft] = useState('')
   const [applyRight, setApplyRight] = useState('')
+  const [applyTrackLeft, setApplyTrackLeft] = useState('')
+  const [applyTrackRight, setApplyTrackRight] = useState('')
   const [baseline, setBaseline] = useState<string | null>(null)
+  const [savedRecord, setSavedRecord] = useState<SavedOffsetPlan | undefined>(undefined)
   const [savedAt, setSavedAt] = useState<string | null>(null)
   const [sequenceMismatchAt, setSequenceMismatchAt] = useState<string | null>(null)
+  const [legacySave, setLegacySave] = useState(false)
   const [saving, setSaving] = useState(false)
   const [faaNotes, setFaaNotes] = useState<string[]>([])
   const [namesOpen, setNamesOpen] = useState(false)
@@ -203,8 +280,12 @@ export function OffsetRoutePanel(props: {
     let cancelled = false
     setPublished(null)
     setManual(null)
+    setRows([])
+    setTrackRows(blankTracks(legCount))
     setLoadError(null)
     setSequenceMismatchAt(null)
+    setLegacySave(false)
+    setSavedRecord(undefined)
     setSavedAt(null)
     setBaseline(null)
     setFaaNotes([])
@@ -213,40 +294,42 @@ export function OffsetRoutePanel(props: {
     if (points.length < 2) return
 
     const seedManual = (message: string, details: string[], seeded: WidthRow[]) => {
+      const tracks = blankTracks(seeded.length)
       setManual({ message, details, rows: seeded })
       setRows(seeded)
-      setBaseline(rowKey(seeded))
+      setTrackRows(tracks)
+      setBaseline(
+        formKey(
+          seeded.map((row) => ({ left: row.left, right: row.right })),
+          tracks
+        )
+      )
     }
 
     async function load() {
       const saved = await db.offsetPlans.get(flightPlanId)
       if (cancelled) return
-      const decision = assessSavedOffsetPlan(saved, signature)
-      if (!ignoreSavedRef.current && decision.status === 'match') {
-        applySavedPlan(decision.plan, setPublished, setManual, setRows)
-        setSavedAt(decision.plan.savedAt)
-        setBaseline(
-          decision.plan.mode === 'published'
-            ? JSON.stringify(decision.plan.widths)
-            : rowKey(
-                decision.plan.widths.map((width) => ({
-                  left: String(width.leftNm),
-                  right: String(width.rightNm),
-                }))
-              )
-        )
-        onGeometryRef.current({
-          inner: decision.plan.inner,
-          outer: decision.plan.outer,
-          corridorLeft: decision.plan.corridorLeft,
-          corridorRight: decision.plan.corridorRight,
-          flags: decision.plan.flags,
-        })
+      const sequenceMatches = Boolean(saved && saved.sequenceSignature === signature)
+      if (!ignoreSavedRef.current && saved && sequenceMatches) {
+        applySavedPlan(saved, setPublished, setManual, setRows, setTrackRows)
+        setSavedRecord(saved)
+        setSavedAt(saved.savedAt)
+        setLegacySave(saved.planVersion !== OFFSET_PLAN_VERSION || !saved.fingerprint)
+        const corridorKey =
+          saved.mode === 'published'
+            ? saved.widths
+            : saved.widths.map((width) => ({
+                left: String(width.leftNm),
+                right: String(width.rightNm),
+              }))
+        setBaseline(formKey(corridorKey, tracksFromSaved(saved, saved.widths.length)))
         return
       }
 
-      if (decision.status === 'mismatch') {
-        setSequenceMismatchAt(decision.savedAt)
+      if (saved && !sequenceMatches) {
+        setSequenceMismatchAt(saved.savedAt)
+        setSavedRecord(saved)
+        setLegacySave(saved.planVersion !== OFFSET_PLAN_VERSION || !saved.fingerprint)
       }
 
       if (route.kind === 'sr') {
@@ -302,8 +385,10 @@ export function OffsetRoutePanel(props: {
         const seeded = mergeReloadedWidths(faaRows, kept)
         if (resolved.status === 'published' && seeded.every((row) => row.source === 'faa')) {
           const legs = resolved.legs.flatMap((leg) => (leg ? [leg] : []))
+          const tracks = blankTracks(legs.length)
           setPublished(legs)
-          setBaseline(JSON.stringify(legs))
+          setTrackRows(tracks)
+          setBaseline(formKey(legs, tracks))
           return
         }
         const filled = seeded.filter((row) => row.source === 'faa').length
@@ -328,13 +413,30 @@ export function OffsetRoutePanel(props: {
     }
   }, [signature, legCount, points, route, flightPlanId, reloadNonce])
 
+  const trackError = trackRows.some(
+    (track) => parseTrackField(track.left) === 'invalid' || parseTrackField(track.right) === 'invalid'
+  )
+    ? 'Track offset must be a finite number of nautical miles, zero or greater. Leave a box blank to fly halfway to the corridor edge.'
+    : null
+
   const activeWidths = useMemo(() => {
-    if (published) return published
+    const tracks = trackRows.length === legCount ? trackRows : blankTracks(legCount)
+    if (published) {
+      if (published.length !== legCount) return null
+      const parsed = published.map((leg, index) => {
+        const trackLeftNm = parseTrackField(tracks[index]?.left ?? '')
+        const trackRightNm = parseTrackField(tracks[index]?.right ?? '')
+        if (trackLeftNm === 'invalid' || trackRightNm === 'invalid') return null
+        return { ...leg, trackLeftNm, trackRightNm }
+      })
+      if (parsed.some((leg) => leg == null)) return null
+      return parsed as OffsetLegWidth[]
+    }
     if (!manual || rows.length !== legCount) return null
-    const parsed = rows.map(parseWidthRow)
+    const parsed = rows.map((row, index) => legWidthFromEntry(row, tracks[index], singleAircrew))
     if (parsed.some((leg) => leg == null)) return null
     return parsed as OffsetLegWidth[]
-  }, [published, manual, rows, legCount])
+  }, [published, manual, rows, trackRows, legCount, singleAircrew])
 
   const built = useMemo(() => {
     if (!activeWidths || points.length < 2) return null
@@ -357,14 +459,16 @@ export function OffsetRoutePanel(props: {
     onGeometryRef.current({
       inner: built.inner.waypoints,
       outer: built.outer.waypoints,
-      corridorLeft: built.corridorLeft,
-      corridorRight: built.corridorRight,
-      flags: built.flags,
+      corridorLeft: singleAircrew ? [] : built.corridorLeft,
+      corridorRight: singleAircrew ? [] : built.corridorRight,
+      flags: visibleOffsetFlags(built.flags, singleAircrew, points),
     })
-  }, [built])
+  }, [built, singleAircrew])
 
-  const dirty =
-    manual != null && baseline != null && offsetFormIsDirty(baseline, rowKey(rows))
+  const corridorKey = published
+    ? published
+    : rows.map((row) => ({ left: row.left, right: row.right }))
+  const dirty = baseline != null && offsetFormIsDirty(baseline, formKey(corridorKey, trackRows))
   const dirtyRef = useRef(dirty)
   dirtyRef.current = dirty
 
@@ -398,11 +502,22 @@ export function OffsetRoutePanel(props: {
     if (!built || !activeWidths) return
     setSaving(true)
     try {
+      const trackOffsets: TrackOffsetRecord[] = activeWidths.map((width) => trackRecordFromLeg(width))
+      const freshness: OffsetFreshnessInput = {
+        waypoints,
+        widths: activeWidths.map((width) => ({ leftNm: width.leftNm, rightNm: width.rightNm })),
+        trackOffsets,
+        sortie1Side: sortie1Side === 'inner' || sortie1Side === 'outer' ? sortie1Side : null,
+        departureIdent: departure?.identifier ?? null,
+        destinationIdent: destination?.identifier ?? null,
+        spurDecision: 'unset',
+        spurProposalVersion: SPUR_PROPOSAL_VERSION,
+      }
       const record: SavedOffsetPlan = {
         flightPlanId,
         savedAt: new Date().toISOString(),
         sequenceSignature: signature,
-        widths: activeWidths.map((width) => ({ leftNm: width.leftNm, rightNm: width.rightNm })),
+        widths: freshness.widths,
         mode: published ? 'published' : 'manual',
         sources: published ? null : rows.map((row) => row.source),
         manualMessage: manual?.message ?? null,
@@ -411,11 +526,21 @@ export function OffsetRoutePanel(props: {
         corridorLeft: built.corridorLeft,
         corridorRight: built.corridorRight,
         flags: built.flags,
+        planVersion: OFFSET_PLAN_VERSION,
+        fingerprint: offsetPlanFingerprint(freshness),
+        trackOffsets,
+        sortie1Side: freshness.sortie1Side,
+        departureIdent: freshness.departureIdent,
+        destinationIdent: freshness.destinationIdent,
+        spurDecision: 'unset',
+        spurProposalVersion: SPUR_PROPOSAL_VERSION,
       }
       await db.offsetPlans.put(record)
+      setSavedRecord(record)
       setSavedAt(record.savedAt)
+      setLegacySave(false)
       setSequenceMismatchAt(null)
-      setBaseline(manual ? rowKey(rows) : JSON.stringify(record.widths))
+      setBaseline(formKey(published ? record.widths : corridorKey, trackRows))
     } finally {
       setSaving(false)
     }
@@ -471,10 +596,44 @@ export function OffsetRoutePanel(props: {
     })
   }
 
+  const exportFreshness: OffsetFreshnessInput | null = activeWidths
+    ? {
+        waypoints,
+        widths: activeWidths.map((width) => ({ leftNm: width.leftNm, rightNm: width.rightNm })),
+        trackOffsets: activeWidths.map((width) => trackRecordFromLeg(width)),
+        sortie1Side: sortie1Side === 'inner' || sortie1Side === 'outer' ? sortie1Side : null,
+        departureIdent: departure?.identifier ?? null,
+        destinationIdent: destination?.identifier ?? null,
+        spurDecision: 'unset',
+        spurProposalVersion: SPUR_PROPOSAL_VERSION,
+      }
+    : null
+  const exportDecision = exportFreshness
+    ? assessSavedOffsetPlan(savedRecord, exportFreshness)
+    : ({ status: 'none' } as const)
+  const offsetExportReady = exportDecision.status === 'match' && !dirty && !trackError
+  const offsetExportHold = offsetExportReady
+    ? null
+    : savedRecord || sequenceMismatchAt
+      ? RESAVE_IN_MAP_VIEW
+      : 'Save the offset plan in Map View before downloading.'
+
   function downloadSortie(sortieNumber: 1 | 2) {
-    if (!built || !sortieReady || !sortie1Side || nameError) return
-    const ordered = sortieWaypoints(sortieNumber)
-    if (!ordered) return
+    if (!offsetExportReady || !savedRecord || !sortieReady || !sortie1Side || nameError) return
+    const ordered = singleAircrew
+      ? singleAircrewSortieTrack({
+          centerline: points,
+          inner: savedRecord.inner as OffsetRoutePoint[],
+          outer: savedRecord.outer as OffsetRoutePoint[],
+          sortie1Side,
+          sortieNumber,
+        })
+      : orderSortieTrack({
+          inner: savedRecord.inner as OffsetRoutePoint[],
+          outer: savedRecord.outer as OffsetRoutePoint[],
+          sortie1Side,
+          sortieNumber,
+        })
     const file = buildSortieOffsetFpl({
       routeLabel,
       sortieNumber,
@@ -511,16 +670,25 @@ export function OffsetRoutePanel(props: {
 
       {sequenceMismatchAt && (
         <p className="text-sm text-cap-yellow">
-          Saved offsets from {formatOffsetSavedAt(sequenceMismatchAt)} were built for a different
-          waypoint sequence. They were not applied. Review the widths and save again.
+          {RESAVE_IN_MAP_VIEW} Saved offsets from {formatOffsetSavedAt(sequenceMismatchAt)} were built
+          for a different waypoint sequence. They were not applied.
         </p>
       )}
+      {!sequenceMismatchAt && legacySave && (
+        <p className="text-sm text-cap-yellow">
+          {RESAVE_IN_MAP_VIEW} This save has no track-offset fingerprint, so its stored coordinates stay
+          off the download buttons.
+        </p>
+      )}
+      {trackError && <p className="text-sm text-cap-yellow">{trackError}</p>}
 
       {namesOpen && (
         <div id="offset-flight-plan-names" className="space-y-2">
           <p className="text-xs text-white/75">
-            Inner is halfway from the centerline to the inside of the route's curve. Outer is halfway
-            to the outside. Names below are in the same flight order as the sortie file.
+            Inner is the inside of the route&apos;s curve. Outer is the outside. A blank track offset flies
+            halfway from the centerline to the corridor edge. A filled-in track offset is the flown
+            distance, and it may equal the corridor width. Turns and mitered corners can fall outside
+            the corridor. Names below are in the same flight order as the sortie file.
           </p>
           {widthNote && <p className="text-xs text-white/80">{widthNote}</p>}
           <div className="max-h-28 overflow-auto rounded border border-white/15">
@@ -578,8 +746,8 @@ export function OffsetRoutePanel(props: {
 
       {manual && (
         <div className="space-y-2">
-          <p className="text-sm text-cap-yellow">{manual.message}</p>
-          {manual.details.length > 0 && (
+          {!singleAircrew && <p className="text-sm text-cap-yellow">{manual.message}</p>}
+          {!singleAircrew && manual.details.length > 0 && (
             <ul className="text-xs text-white/80 list-disc pl-5 space-y-1">
               {manual.details.map((line) => (
                 <li key={line}>{line}</li>
@@ -587,21 +755,61 @@ export function OffsetRoutePanel(props: {
             </ul>
           )}
           <div className="flex flex-wrap items-end gap-2">
+            {!singleAircrew && (
+              <>
+                <label className="text-xs">
+                  Left NM for every segment
+                  <input
+                    value={applyLeft}
+                    onChange={(event) => setApplyLeft(event.target.value)}
+                    inputMode="decimal"
+                    className="mt-1 block w-28 px-2 py-1 rounded bg-white text-gray-900"
+                  />
+                </label>
+                <label className="text-xs">
+                  Right NM for every segment
+                  <input
+                    value={applyRight}
+                    onChange={(event) => setApplyRight(event.target.value)}
+                    inputMode="decimal"
+                    className="mt-1 block w-28 px-2 py-1 rounded bg-white text-gray-900"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 text-sm rounded-lg bg-white/15 hover:bg-white/25"
+                  onClick={() => {
+                    setRows(
+                      rows.map((row) => ({
+                        ...row,
+                        left: applyLeft,
+                        right: applyRight,
+                        source: 'pilot',
+                      }))
+                    )
+                  }}
+                >
+                  Apply corridor to every segment
+                </button>
+              </>
+            )}
             <label className="text-xs">
-              Left NM for every segment
+              Track offset left NM for every segment
               <input
-                value={applyLeft}
-                onChange={(event) => setApplyLeft(event.target.value)}
+                value={applyTrackLeft}
+                onChange={(event) => setApplyTrackLeft(event.target.value)}
                 inputMode="decimal"
+                aria-label="Track offset left NM for every segment"
                 className="mt-1 block w-28 px-2 py-1 rounded bg-white text-gray-900"
               />
             </label>
             <label className="text-xs">
-              Right NM for every segment
+              Track offset right NM for every segment
               <input
-                value={applyRight}
-                onChange={(event) => setApplyRight(event.target.value)}
+                value={applyTrackRight}
+                onChange={(event) => setApplyTrackRight(event.target.value)}
                 inputMode="decimal"
+                aria-label="Track offset right NM for every segment"
                 className="mt-1 block w-28 px-2 py-1 rounded bg-white text-gray-900"
               />
             </label>
@@ -609,33 +817,34 @@ export function OffsetRoutePanel(props: {
               type="button"
               className="px-3 py-1.5 text-sm rounded-lg bg-white/15 hover:bg-white/25"
               onClick={() => {
-                setRows(
-                  rows.map((row) => ({
-                    ...row,
-                    left: applyLeft,
-                    right: applyRight,
-                    source: 'pilot',
-                  }))
-                )
+                setTrackRows(rows.map(() => ({ left: applyTrackLeft, right: applyTrackRight })))
               }}
             >
-              Apply to every segment
+              Apply track offset to every segment
             </button>
           </div>
+          <p className="text-xs text-white/75">
+            {singleAircrew
+              ? SINGLE_AIRCREW_TRACK_LINE
+              : 'Corridor half-width is the white edge on each side. Track offset is the yellow flown path. Leave track offset blank to keep the halfway path. A track offset equal to the corridor width is allowed. Corners can still fall outside the corridor.'}
+          </p>
           <div className="max-h-36 overflow-auto border border-white/15 rounded-lg">
             <table className="w-full text-xs">
               <thead className="text-left text-white/70">
                 <tr>
                   <th className="px-2 py-1">Segment</th>
-                  <th className="px-2 py-1">Left NM</th>
-                  <th className="px-2 py-1">Right NM</th>
+                  {!singleAircrew && <th className="px-2 py-1">Corridor left NM</th>}
+                  {!singleAircrew && <th className="px-2 py-1">Corridor right NM</th>}
+                  <th className="px-2 py-1">Track offset left NM</th>
+                  <th className="px-2 py-1">Track offset right NM</th>
                 </tr>
               </thead>
               <tbody>
                 {points.slice(0, -1).map((point, index) => {
                   const row = rows[index]
                   const nextPoint = points[index + 1]
-                  const needsEntry = !row || row.left.trim() === '' || row.right.trim() === ''
+                  const needsEntry =
+                    !singleAircrew && (!row || row.left.trim() === '' || row.right.trim() === '')
                   const why = legEntryReason(row?.reason ?? null, row?.clause)
                   return (
                     <tr
@@ -646,43 +855,157 @@ export function OffsetRoutePanel(props: {
                         <div>
                           {point.ptIdent}–{nextPoint?.ptIdent}
                         </div>
-                        {row?.source === 'pilot' && (
+                        {row?.source === 'pilot' && !singleAircrew && (
                           <div className="text-cap-yellow">entered by pilot</div>
                         )}
                         {needsEntry && why && <div className="text-cap-yellow">{why}</div>}
                       </td>
+                      {!singleAircrew && (
+                        <td className="px-2 py-1">
+                          <input
+                            aria-label={`Left width ${point.ptIdent} to ${nextPoint?.ptIdent}`}
+                            value={row?.left ?? ''}
+                            onChange={(event) => {
+                              const next = rows.slice()
+                              next[index] = {
+                                left: event.target.value,
+                                right: rows[index]?.right ?? '',
+                                source: 'pilot',
+                                reason: rows[index]?.reason ?? null,
+                                clause: rows[index]?.clause ?? null,
+                              }
+                              setRows(next)
+                            }}
+                            className="w-20 px-2 py-1 rounded bg-white text-gray-900"
+                          />
+                        </td>
+                      )}
+                      {!singleAircrew && (
+                        <td className="px-2 py-1">
+                          <input
+                            aria-label={`Right width ${point.ptIdent} to ${nextPoint?.ptIdent}`}
+                            value={row?.right ?? ''}
+                            onChange={(event) => {
+                              const next = rows.slice()
+                              next[index] = {
+                                left: rows[index]?.left ?? '',
+                                right: event.target.value,
+                                source: 'pilot',
+                                reason: rows[index]?.reason ?? null,
+                                clause: rows[index]?.clause ?? null,
+                              }
+                              setRows(next)
+                            }}
+                            className="w-20 px-2 py-1 rounded bg-white text-gray-900"
+                          />
+                        </td>
+                      )}
                       <td className="px-2 py-1">
                         <input
-                          aria-label={`Left width ${point.ptIdent} to ${nextPoint?.ptIdent}`}
-                          value={row?.left ?? ''}
+                          aria-label={`Track offset left ${point.ptIdent} to ${nextPoint?.ptIdent}`}
+                          value={trackRows[index]?.left ?? ''}
                           onChange={(event) => {
-                            const next = rows.slice()
-                            next[index] = {
-                              left: event.target.value,
-                              right: rows[index]?.right ?? '',
-                              source: 'pilot',
-                              reason: rows[index]?.reason ?? null,
-                              clause: rows[index]?.clause ?? null,
-                            }
-                            setRows(next)
+                            const next = trackRows.slice()
+                            next[index] = { left: event.target.value, right: trackRows[index]?.right ?? '' }
+                            setTrackRows(next)
                           }}
                           className="w-20 px-2 py-1 rounded bg-white text-gray-900"
                         />
                       </td>
                       <td className="px-2 py-1">
                         <input
-                          aria-label={`Right width ${point.ptIdent} to ${nextPoint?.ptIdent}`}
-                          value={row?.right ?? ''}
+                          aria-label={`Track offset right ${point.ptIdent} to ${nextPoint?.ptIdent}`}
+                          value={trackRows[index]?.right ?? ''}
                           onChange={(event) => {
-                            const next = rows.slice()
-                            next[index] = {
-                              left: rows[index]?.left ?? '',
-                              right: event.target.value,
-                              source: 'pilot',
-                              reason: rows[index]?.reason ?? null,
-                              clause: rows[index]?.clause ?? null,
-                            }
-                            setRows(next)
+                            const next = trackRows.slice()
+                            next[index] = { left: trackRows[index]?.left ?? '', right: event.target.value }
+                            setTrackRows(next)
+                          }}
+                          className="w-20 px-2 py-1 rounded bg-white text-gray-900"
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {published && (
+        <div className="space-y-2">
+          <p className="text-xs text-white/75">
+            {singleAircrew
+              ? SINGLE_AIRCREW_TRACK_LINE
+              : 'Corridor half-width comes from the published width. Track offset is the yellow flown path. Leave it blank to fly halfway to that edge. A track offset equal to the corridor width is allowed. Corners can still fall outside the corridor.'}
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs">
+              Track offset left NM for every segment
+              <input
+                value={applyTrackLeft}
+                onChange={(event) => setApplyTrackLeft(event.target.value)}
+                inputMode="decimal"
+                aria-label="Track offset left NM for every segment"
+                className="mt-1 block w-28 px-2 py-1 rounded bg-white text-gray-900"
+              />
+            </label>
+            <label className="text-xs">
+              Track offset right NM for every segment
+              <input
+                value={applyTrackRight}
+                onChange={(event) => setApplyTrackRight(event.target.value)}
+                inputMode="decimal"
+                aria-label="Track offset right NM for every segment"
+                className="mt-1 block w-28 px-2 py-1 rounded bg-white text-gray-900"
+              />
+            </label>
+            <button
+              type="button"
+              className="px-3 py-1.5 text-sm rounded-lg bg-white/15 hover:bg-white/25"
+              onClick={() => setTrackRows(published.map(() => ({ left: applyTrackLeft, right: applyTrackRight })))}
+            >
+              Apply track offset to every segment
+            </button>
+          </div>
+          <div className="max-h-36 overflow-auto border border-white/15 rounded-lg">
+            <table className="w-full text-xs">
+              <thead className="text-left text-white/70">
+                <tr>
+                  <th className="px-2 py-1">Segment</th>
+                  <th className="px-2 py-1">Track offset left NM</th>
+                  <th className="px-2 py-1">Track offset right NM</th>
+                </tr>
+              </thead>
+              <tbody>
+                {points.slice(0, -1).map((point, index) => {
+                  const nextPoint = points[index + 1]
+                  return (
+                    <tr key={`track-${point.ptIdent}-${index}`} className="border-t border-white/10">
+                      <td className="px-2 py-1 font-mono">
+                        {point.ptIdent}–{nextPoint?.ptIdent}
+                      </td>
+                      <td className="px-2 py-1">
+                        <input
+                          aria-label={`Track offset left ${point.ptIdent} to ${nextPoint?.ptIdent}`}
+                          value={trackRows[index]?.left ?? ''}
+                          onChange={(event) => {
+                            const next = trackRows.slice()
+                            next[index] = { left: event.target.value, right: trackRows[index]?.right ?? '' }
+                            setTrackRows(next)
+                          }}
+                          className="w-20 px-2 py-1 rounded bg-white text-gray-900"
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <input
+                          aria-label={`Track offset right ${point.ptIdent} to ${nextPoint?.ptIdent}`}
+                          value={trackRows[index]?.right ?? ''}
+                          onChange={(event) => {
+                            const next = trackRows.slice()
+                            next[index] = { left: trackRows[index]?.left ?? '', right: event.target.value }
+                            setTrackRows(next)
                           }}
                           className="w-20 px-2 py-1 rounded bg-white text-gray-900"
                         />
@@ -697,8 +1020,12 @@ export function OffsetRoutePanel(props: {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-white/70">Map: ultramarine centerline with point letters, white edges, yellow sortie tracks, blue arrows.</span>
-        {route.kind === 'irvr' && (
+        <span className="text-xs text-white/70">
+          {singleAircrew
+            ? SINGLE_AIRCREW_MAP_LEGEND
+            : 'Map: ultramarine centerline with point letters, white edges, yellow sortie tracks, blue arrows.'}
+        </span>
+        {route.kind === 'irvr' && !singleAircrew && (
           <button
             type="button"
             onClick={() => void reloadFaaWidths()}
@@ -720,7 +1047,7 @@ export function OffsetRoutePanel(props: {
         ) : (
           savedAt && <span className="text-xs text-white/80">Saved {formatOffsetSavedAt(savedAt)}</span>
         )}
-        {teamPlanDownload
+        {teamPlanDownload && !singleAircrew
           ? ([1, 2] as const).map((number) => {
               const offer = teamSortieDownloadOffer(
                 teamPlanDownload.team,
@@ -755,8 +1082,10 @@ export function OffsetRoutePanel(props: {
               )
             })
           : ([1, 2] as const).map((number) => {
-              const enabled = Boolean(built) && sortieReady && !nameError
-              const title = !sortieReady ? missingSortieChoiceNotice() : nameError ?? undefined
+              const enabled = Boolean(built) && sortieReady && !nameError && offsetExportReady
+              const title = !sortieReady
+                ? missingSortieChoiceNotice()
+                : nameError ?? offsetExportHold ?? undefined
               return (
                 <SortieFileButton
                   key={number}
@@ -767,14 +1096,17 @@ export function OffsetRoutePanel(props: {
                 />
               )
             })}
-        {!built && rows.length > 0 && (
+        {!singleAircrew && !built && rows.length > 0 && (
           <span className="text-xs text-cap-yellow">{downloadBlockReason(rows)}</span>
+        )}
+        {!teamPlanDownload && offsetExportHold && (
+          <span className="text-xs text-cap-yellow">{offsetExportHold}</span>
         )}
       </div>
 
-      {built && built.flags.length > 0 && (
+      {built && visibleOffsetFlags(built.flags, singleAircrew, points).length > 0 && (
         <ul className="text-xs text-cap-yellow list-disc pl-5 space-y-1">
-          {built.flags.map((flag) => (
+          {visibleOffsetFlags(built.flags, singleAircrew, points).map((flag) => (
             <li key={`${flag.side}-${flag.index}-${flag.reason}`}>{flag.message}</li>
           ))}
         </ul>

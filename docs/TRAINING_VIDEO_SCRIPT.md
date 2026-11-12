@@ -21,6 +21,18 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 - **NARRATION** — read as voiceover (edit wording to your Wing’s SOP). Body beats live in `ch0N-beats.json`.
 - **ON-SCREEN** — what the viewer should see; align your cursor and pauses here.
 - **PAUSE** — hold 2–3 seconds for editors or live narration breathing room.
+- **VIEW TRANSITION** — production timing only. Do not speak this rule. Order of priority for a view change:
+  1. Keep the current working view visible throughout all narration that gives directions for its controls, including the final Create or Update instruction.
+  2. After that complete instruction beat ends, hold the same view for 2.000 seconds.
+  3. Only then click the control that navigates.
+  4. Once the destination is ready, begin the narration that explains the destination.
+  - Apply this to view changes, not typing, highlighting, or other actions within the same view. A view transition replaces the main working screen: form-to-detail, detail-to-correction form, correction form-to-detail, detail-to-Map View, and Map View-to-detail. It is not scrolling, typing, highlighting, opening a lightbulb, a routine save within the same view, or showing a download notification. A modal alone is not a new view for this rule.
+  - The outgoing view stays up through the directions for that view, then holds for 2.000 seconds. The navigation click comes after that hold. Do not put the hold on the destination, and do not leave an outgoing instruction playing after the click.
+  - An italic cue never causes the navigation click and never inserts the two-second hold before its command word. The cue may point at or highlight the named control while the direction is spoken. Do not split a sentence to put the hold before the command word.
+  - Narration that explains the destination starts after the destination is ready. Where a beat mixes an outgoing instruction and an incoming explanation, divide only at a clean sentence boundary and keep every word in order.
+  - One intentional two-second hold per qualifying transition. A load or save wait is separate. It is not a substitute for the hold, and it is not inserted inside a spoken word or sentence.
+  - Do not add a two-second hold before every ON-SCREEN block. Same-view actions keep their existing spoken cues and timing.
+- **BUTTON OUTLINE** — production only. Do not speak this rule. Outline the relevant button while the narration explains pressing it. Keep the outline until the press or the next cue, then clear it. The outline must not cover text or shift layout, and it adds no pauses and no audio changes.
 
 **Suggested total runtime** — 26–38 minutes main program (aircrew chapters); +7–10 minutes for Appendix A (coordinator); +3–5 minutes for Appendix B (admin).  
 **Optional split** — record **Appendix A** as a standalone *Wing coordinator* clip if the primary audience is aircrew only. Main-program chapter numbers are **0–7** (aircrew), plus the appendices.
@@ -63,15 +75,15 @@ On-screen: **Chapter 1.** / Orientation and sidebar
 
 **[RE-RECORD]**  
 **NARRATION**  
-“With the Workflow Guide, every function can be branched to in the left sidebar. **Workflow Guide** is your checklist. Under **Mission Planning** you’ll use **Flight Plans** — and from there, pilots will create the flight plan for the sortie. If two or three teams are required, wing coordinators open **Team Dispatch** from the same sidebar section. The page heading on that screen also reads Team Dispatch. Coordinators load the published MTR, assign aircraft and Mission Pilots when they are available, then email each sortie **.fpl** to that aircraft’s Mission Pilot. A weather re-fly is a solo Flight Plan; those offset files come from Map View. **Mission Execution** is **Tower Data Analysis** and **Map View**. **Map View** is where you compare the planned route with ForeFlight, and later confirm each saved tower marker sits on the structure. Under **Reporting** you’ll use the **Air Force Report Form** and **Export Reported Data**. Content-pack close-out after the flight lives on **Export Reported Data**, not a separate sidebar item.”
+“With the Workflow Guide, every function can be branched to in the left sidebar. **Workflow Guide** is your checklist. Under **Mission Planning** *you’ll use* **Flight Plans** — and from there, pilots will create the flight plan for the sortie. If two or three teams are required, wing coordinators *open* **Team Dispatch** from the same sidebar section. The page heading on that screen also reads Team Dispatch. Coordinators load the published MTR, assign aircraft and Mission Pilots when they are available, then email each sortie **.fpl** to that aircraft’s Mission Pilot. A weather re-fly is a solo Flight Plan; those offset files come from Map View. **Mission Execution** *is* **Tower Data Analysis** *and* **Map View**. **Map View** is where you compare the planned route with ForeFlight, and later confirm each saved tower marker sits on the structure. Under **Reporting** you’ll use* the* **Air Force Report Form** *and* **Export Reported Data**. Content-pack close-out after the flight lives on **Export Reported Data**, not a separate sidebar item.”
 
 **ON-SCREEN** — Spotlight each sidebar item as it is named, once: **Workflow Guide**, **Flight Plans**, **Team Dispatch** (hold through the coordinator staffing line; the page heading also reads Team Dispatch), **Tower Data Analysis**, **Map View**, **Air Force Report Form**, **Export Reported Data**. Use a light highlight so the label stays readable. Then spotlight **Clear All Data** at the bottom (do not click it). Do not return to Team Dispatch.
 
 **NARRATION**  
-“At the bottom of the sidebar, **Clear All Data** removes saved flight plans, towers, and missions from this browser. Use it only when you want a clean training or demo start. It cannot be undone.”
+“At the bottom of the *sidebar*, **Clear All Data** removes saved flight plans, towers, and missions from this browser. Use it only when you want a clean training or demo start. It cannot be undone.”
 
 **NARRATION**  
-“You can collapse the sidebar for more section space; expand it when you need to move between sections.”
+“You can *collapse* the sidebar for more section space; *expand* it when you need to move between sections.”
 
 **ON-SCREEN** — Briefly collapse and expand sidebar using the arrow control.
 
@@ -87,7 +99,7 @@ On-screen: **Chapter 2.** / Flight planning and G1000 export
 
 Demo route: **SR213** with **Waypoint sequence** (the more detailed of the two load methods). Use **KABQ** departure and **KAEG** destination. **SR213 Hotel** is usually missing from the public waypoint source, so the detail page will ask for coordinates.
 
-**ON-SCREEN** — **Flight Plans** → **New Flight Plan**. Work top to bottom on this form. Do not skip fields. Numbered lightbulb tips **1–4** stay visible on this page (Name, airports, waypoint loading, Create).
+**ON-SCREEN** — **Flight Plans** → **New Flight Plan**. Work top to bottom on this form. Do not skip fields. Numbered lightbulb tips **1–4** stay visible on this page (Name, airports, waypoint loading, Create). No two-second hold: no narration precedes this opening navigation.
 
 **NARRATION**  
 “We start with a flight plan that matches what you will fly in ForeFlight and program in the G1000. This chapter uses Waypoint sequence, the more detailed of the two load methods, on route Sierra Romeo 213. Work from the top of this page to the bottom.”
@@ -110,38 +122,48 @@ Demo route: **SR213** with **Waypoint sequence** (the more detailed of the two l
 **ON-SCREEN** — Select **Waypoint sequence**. Route identifier: `SR213`. Waypoint sequence (intentional miss at the start): `A, B, C, D, E, F, G, H`. Fetch.
 
 **NARRATION**  
-“Choose Waypoint sequence. Put the route identifier once, then list the suffixes from your ForeFlight expanded plan. Fetch confirms which points the database already knows. For this demo we enter only the Sierra Romeo 213 suffixes, and leave off the blend-in at the start. Sierra Romeo 213 Hotel is often missing from the public source, so you will add those coordinates on the next page.”
+“*Choose* Waypoint sequence. Put the route identifier once, then list the suffixes from your ForeFlight expanded plan. Fetch confirms which points the database already knows. For this demo we enter only the Sierra Romeo 213 suffixes, and leave off the blend-in at the start. Sierra Romeo 213 Hotel, in this example is missing from the public source.”
 
-**ON-SCREEN** — Scroll to **Create Flight Plan** and click it.
+**VIEW TRANSITION** — Keep this New Flight Plan form visible through the entire Create instruction, including “Otherwise you will have to start again.” At *You*, highlight **Create Flight Plan** and do not click. After that beat ends, hold this form for 2.000 seconds, then click **Create Flight Plan**. Boundary: the outgoing beat ends at that sentence. “*The* next page lists…” starts only after the detail page is ready.
+
+**ON-SCREEN** — At *You*, scroll to **Create Flight Plan** and highlight it. Leave this form up through the rest of the beat. Click only after the beat and the two-second hold.
 
 **NARRATION**  
-“You must press Create Flight Plan to save before you leave this page. Otherwise you will have to start again.”
+“*You* must press Create Flight Plan to save before you leave this page. Otherwise you will have to start again.”
 
 **ON-SCREEN** — Flight plan detail: ForeFlight vs G1000 columns. Open numbered lightbulb **5** next to **Waypoints**. The list starts at Alpha; Hotel is pending. Point out that ForeFlight actually begins with Golf, SR214H, Golf.
 
 **NARRATION**  
-“The next page lists ForeFlight-style names beside G1000 names so you can cross-check the chart and the navigator. If the ForeFlight plan starts with Golf, Sierra Romeo 214 Hotel, Golf, those points are missing here. Do not delete the plan and start over. Use Correct waypoint sequence.”
+“*The* next page lists ForeFlight-style names beside G1000 names so you can cross-check the chart and the navigator. If the ForeFlight plan starts with Golf, Sierra Romeo 214 Hotel, Golf, those points are missing here. Do not delete the plan and start over. Use Correct waypoint sequence.”
 
-**ON-SCREEN** — Click **Correct waypoint sequence**. Form returns with the saved entries. Change the sequence to `G, SR214H, G, A, B, C, D, E, F, G, H`. Fetch. Click **Update Flight Plan**.
+**VIEW TRANSITION** — Finish “Do not delete the plan and start over. Use Correct waypoint sequence.” on this detail page. Hold that detail view for 2.000 seconds, then click **Correct waypoint sequence**. Do not add another hold before lightbulb 5. Boundary: “*The* form comes back…” belongs on the correction form and starts after that form is ready.
+
+**ON-SCREEN** — After the detail-page hold, click **Correct waypoint sequence**. On the correction form, change the sequence to `G, SR214H, G, A, B, C, D, E, F, G, H` and Fetch while that instruction is spoken. At *press*, highlight **Update Flight Plan** and do not click yet.
+
+**VIEW TRANSITION** — Keep the correction form visible through the entire Update instruction, including “You return to this same plan to finish.” At *press*, highlight **Update Flight Plan** and do not click. After that beat ends, hold this form for 2.000 seconds, then click **Update Flight Plan**. Boundary: the outgoing beat ends at that sentence. The coordinate narration starts only after the updated detail page is ready.
 
 **NARRATION**  
-“The form comes back with your entries. Add Golf, Sierra Romeo 214 Hotel, and Golf at the beginning of the sequence, then press Update Flight Plan. You return to this same plan to finish.”
+“*The* form comes back with your entries. Add Golf, Sierra Romeo 214 Hotel, and Golf at the beginning of the sequence, then *press* Update Flight Plan. You return to this same plan to finish.”
 
-**ON-SCREEN** — Detail again: blend-in points converted; H still pending with degree and minute fields. Do not open ForeFlight on camera; fill example coordinates from the AP/1B or ForeFlight popup and click **Supply Coordinates**. Example: 34 degrees 49.30 minutes North, 106 degrees 58.60 minutes West.
+**ON-SCREEN** — In the SR213 Hotel pending row, enter latitude 34° 49.30' N and longitude 106° 58.60' W using the degree and decimal-minute fields. Select N and W as applicable. Type the complete values at a readable pace. Click Supply Coordinates. Show the resolved Hotel waypoint and the updated route detail; do not leave Hotel pending. The degree/minute figures are real entered values in this beat, not empty-field placeholders.
 
 **NARRATION**  
-“Hotel still needs coordinates. In ForeFlight, tap that waypoint in your flight plan and copy latitude and longitude from the popup, in degrees and minutes. You can also take them from the AP/1B. Enter them here, then press Supply Coordinates.”
+“For this training plan, enter the Sierra Romeo 213 Hotel coordinates from your ForeFlight route: thirty-four degrees, forty-nine decimal three zero minutes north; one hundred six degrees, fifty-eight decimal six zero minutes west. Select north and west, then press Supply Coordinates. The Hotel point is added to the route.”
 
-**ON-SCREEN** — Sidebar **Map View**. Select **SR213 Training Demo** if it is not already selected. Open numbered lightbulb **1** next to **Map View** (compare with ForeFlight). Hold on the route line. Dismiss the hint, then point at **Return to Flight Plan** without using it for a second correction.
+**VIEW TRANSITION** — Finish the coordinate directions on the detail page, including “The Hotel point is added to the route.” Hold that detail view for 2.000 seconds, then open **Map View**. Supply Coordinates is not a view change. Boundary: “Before you export, open Map View…” explains Map View and starts after Map View is ready. Do not hold that Map View narration on the detail page.
+
+**ON-SCREEN** — Sidebar **Map View**. Select **SR213 Training Demo** if it is not already selected. The route now includes the resolved Sierra Romeo 213 Hotel point, and that point is drawn. Sierra Romeo 214 Hotel remains the published point. Open numbered lightbulb **1** next to **Map View** (compare with ForeFlight). Hold on the complete route line. Dismiss the hint, then point at **Return to Flight Plan** without using it for a second correction.
 
 **NARRATION**  
 “Before you export, open Map View and compare this graphical flight plan with your ForeFlight map. If the two pictures match, you have a visual confirmation that the waypoint list is right. If you see a mistake, press Return to Flight Plan and use Correct waypoint sequence on that page, otherwise press Return to Flight Plan in order to load the SD card.”
 
-**ON-SCREEN** — Click **Return to Flight Plan**. Open numbered lightbulb **6** next to **Export full route (.fpl)** (hint body is the SD-card paragraph only). Then **Export full route (.fpl)** → Export. Show the download if the browser shows it.
+**VIEW TRANSITION** — Finish the Map View directions on Map View, including “otherwise press Return to Flight Plan in order to load the SD card.” Highlight **Return to Flight Plan** while those sentences play, and do not click yet. Hold Map View for 2.000 seconds, then click **Return to Flight Plan**. Boundary: “*Export* full route…” explains the detail page and starts after that page is ready. *Export* is not the navigation click. The export dialog is not a new view.
+
+**ON-SCREEN** — Return is already done, after the Map View hold. Open numbered lightbulb **6** next to **Export full route (.fpl)** (hint body is the SD-card paragraph only). Then **Export full route (.fpl)** → Export. Show the download if the browser shows it. The export dialog is a modal, not a new view.
 
 **[RE-RECORD]**  
 **NARRATION**  
-“Export full route downloads the complete FPL, every waypoint in the plan. Follow the G1000 Pilot's Guide for importing user flight plans from the SD card. Eject the card before you remove it from the reader, so the file is not corrupted. Not a concern: per the Director of Operations, user waypoints and the flight plans that created them are erased after each mission. Confirm no leftover user waypoints before loading, because short names repeat between routes. Offset sortie files for a solo plan are downloaded from Map View. Team files are issued from **Team Dispatch**.”
+“*Export* full route downloads the complete FPL, every waypoint in the plan. Follow the G1000 Pilot's Guide for importing user flight plans from the SD card. Eject the card before you remove it from the reader, so the file is not corrupted. Not a concern: per the Director of Operations, user waypoints and the flight plans that created them are erased after each mission. Confirm no leftover user waypoints before loading, because short names repeat between routes. Offset sortie files for a solo plan are downloaded from Map View. Team files are issued from **Team Dispatch**.”
 
 **PAUSE**
 
@@ -206,7 +228,7 @@ On-screen: **Chapter 4.** / Tower Data Analysis
 **ON-SCREEN** — Select a tower photo , using the "Select Image" button on-screen, from the files you loaded on to the computer you're using for the report; show **Look for Tower on Map** and placing the marker. If demoing estimated placement, check **Tower not visible on map** before **Record Location**.
 
 **NARRATION**  
-“Use **Look for Tower on Map** to identify the vicinity of the tower base on the satellite image, so that finding the actual location can start with what you recorded on the fly over. A useful techinque during the flight, is to fly over the tower you're going to take a picture of, and when the pilot indicates the aircraft is crossing over the tower, the aircreww member in the right seat presses in the range knob on the G1000 Multi Function Display; this will capture the coordinates for the flyover location when the button was pressed. These coordinates can be written down, or the aircrew member can take a picture of the panel for use when the Tower Data Analysis is done for the tower. These coordinates are what's used to populate the "Lat and Lon" text under the map segment. This feature provides a small, movable section of the aerial map that's used for the tower base location to be identified with the cross inside the blue circle; since the map segment is moveable, the user can zoom and move the map until the tower base is right under the cross. This location is recorded for use in the Tower Data Analysis.  If the structure isn’t visible on the map imagery, check **Tower not visible on map** before you record — you can still place a best-effort position nearby by moving the map until the estimated spot is covered by the cross in the blue circle, based on terrain comparison with the map and the photo; press "Record Location", then you can run the height sliders.”
+“Use **Look for Tower on Map** to identify the vicinity of the tower base on the satellite image, so that finding the actual location can start with what you recorded on the fly over. A useful technique during the flight, is to fly over the tower you're going to take a picture of, and when the pilot indicates the aircraft is crossing over the tower, the aircrew member in the right seat presses in the range knob on the G1000 Multi Function Display; this will capture the coordinates for the flyover location when the button was pressed. These coordinates can be written down, or the aircrew member can take a picture of the panel for use when the Tower Data Analysis is done for the tower. These coordinates are what's used to populate the "Lat and Lon" text under the map segment. This feature provides a small, movable section of the aerial map that's used for the tower base location to be identified with the cross inside the blue circle; since the map segment is movable, the user can zoom and move the map until the tower base is right under the cross. This location is recorded for use in the Tower Data Analysis.  If the structure isn’t visible on the map imagery, check **Tower not visible on map** before you record — you can still place a best-effort position nearby by moving the map until the estimated spot is covered by the cross in the blue circle, based on terrain comparison with the map and the photo; press "Record Location", then you can run the height sliders.”
 
 **ON-SCREEN** — After **Record Location**, animate red then blue onto the locked pose (tip / pad-and-shadow) and hold. Then play the height VO over that still; **Save Tower**.
 

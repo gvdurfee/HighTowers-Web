@@ -80,6 +80,8 @@ export type SerpentineLabel = {
   lat: number
   role: 'entry' | 'exit' | null
   bearing: number
+  /** Screen direction, degrees from north, pointing away from the centerline. */
+  awayBearing?: number
 }
 
 export type LaneCaption = {
@@ -184,7 +186,7 @@ type LatLon = { lat: number; lon: number }
 type DisplayPass = {
   number: 1 | 2
   coordinates: LonLat[]
-  waypoints: Array<{ lat: number; lon: number; name: string }>
+  waypoints: Array<{ lat: number; lon: number; name: string; surveySide?: 'left' | 'right' }>
   laneIndex?: number
   laneGroup?: number
   offsetNm?: number
@@ -669,6 +671,9 @@ export function buildSerpentineDisplay(
         lat: point.lat,
         role,
         bearing: labelBearing(pass.waypoints, index),
+        awayBearing: (point.surveySide ?? pass.surveySide)
+          ? trackAwayBearing(pass.waypoints, index, (point.surveySide ?? pass.surveySide)!)
+          : undefined,
       })
     })
     if (pass.offsetNm != null && pass.surveySide && pass.waypoints.length >= 2) {
@@ -724,6 +729,64 @@ export function buildSerpentineDisplay(
 export function labelPixelOffset(bearing: number): [number, number] {
   const rad = ((bearing + 90) * Math.PI) / 180
   return [Math.round(Math.sin(rad) * 18), Math.round(-Math.cos(rad) * 18)]
+}
+
+/** How far an offset-track name sits off its waypoint, in screen pixels, at every zoom. */
+export const OFFSET_MARKER_PX = 18
+
+function normBearing(deg: number): number {
+  return ((deg % 360) + 360) % 360
+}
+
+/** Direction of travel. At a corner this is the bisector; a reversal keeps the incoming leg. */
+export function travelHeading(
+  waypoints: Array<{ lat: number; lon: number }>,
+  index: number
+): number {
+  const current = waypoints[index]
+  const prev = waypoints[index - 1]
+  const next = waypoints[index + 1]
+  if (!current) return 0
+  if (prev && next) {
+    const inbound = bearingDeg(prev, current)
+    const outbound = bearingDeg(current, next)
+    const east = Math.sin((inbound * Math.PI) / 180) + Math.sin((outbound * Math.PI) / 180)
+    const north = Math.cos((inbound * Math.PI) / 180) + Math.cos((outbound * Math.PI) / 180)
+    if (Math.hypot(east, north) < 1e-6) return inbound
+    return normBearing((Math.atan2(east, north) * 180) / Math.PI)
+  }
+  if (next) return bearingDeg(current, next)
+  if (prev) return bearingDeg(prev, current)
+  return 0
+}
+
+/** Perpendicular to the track, on the side that faces away from the centerline. */
+export function trackAwayBearing(
+  waypoints: Array<{ lat: number; lon: number }>,
+  index: number,
+  side: 'left' | 'right'
+): number {
+  return normBearing(travelHeading(waypoints, index) + (side === 'right' ? 90 : -90))
+}
+
+/** The label grows further away from the centerline. The waypoint coordinate stays put. */
+export function markerPlacementAway(awayBearing: number): {
+  offset: [number, number]
+  anchor: 'left' | 'right' | 'top' | 'bottom'
+} {
+  const rad = (awayBearing * Math.PI) / 180
+  const x = Math.sin(rad)
+  const y = -Math.cos(rad)
+  if (Math.abs(x) >= Math.abs(y)) {
+    return {
+      offset: [Math.round(Math.sign(x || 1) * OFFSET_MARKER_PX), Math.round(y * 8)],
+      anchor: x >= 0 ? 'left' : 'right',
+    }
+  }
+  return {
+    offset: [Math.round(x * 8), Math.round(Math.sign(y || 1) * OFFSET_MARKER_PX)],
+    anchor: y >= 0 ? 'top' : 'bottom',
+  }
 }
 
 /** Place the name so it grows away from the flown line. */

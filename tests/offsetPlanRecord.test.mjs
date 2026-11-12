@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   assessSavedOffsetPlan,
+  blankTrackRecord,
+  freshnessForSavedPlan,
   memoryOffsetPlanStore,
+  OFFSET_PLAN_VERSION,
   offsetFormIsDirty,
+  offsetPlanFingerprint,
   offsetSequenceSignature,
+  SPUR_PROPOSAL_VERSION,
 } from '../src/services/offsetPlanRecord.ts'
 
 const waypoints = [
@@ -45,14 +50,51 @@ function samplePlan(signature) {
   }
 }
 
+function currentFor(plan, overrides = {}) {
+  return freshnessForSavedPlan({
+    waypoints,
+    saved: plan,
+    sortie1Side: 'inner',
+    departureIdent: 'KABQ',
+    destinationIdent: 'KAEG',
+    ...overrides,
+  })
+}
+
+function versioned(plan, overrides = {}) {
+  const freshness = {
+    waypoints,
+    widths: plan.widths,
+    trackOffsets: plan.widths.map(() => blankTrackRecord()),
+    sortie1Side: 'inner',
+    departureIdent: 'KABQ',
+    destinationIdent: 'KAEG',
+    spurDecision: 'unset',
+    spurProposalVersion: SPUR_PROPOSAL_VERSION,
+    ...overrides,
+  }
+  return {
+    ...plan,
+    ...overrides,
+    planVersion: OFFSET_PLAN_VERSION,
+    trackOffsets: freshness.trackOffsets,
+    sortie1Side: freshness.sortie1Side,
+    departureIdent: freshness.departureIdent,
+    destinationIdent: freshness.destinationIdent,
+    spurDecision: freshness.spurDecision,
+    spurProposalVersion: freshness.spurProposalVersion,
+    fingerprint: offsetPlanFingerprint(freshness),
+  }
+}
+
 describe('saved offset plans', () => {
-  it('restores widths and tracks after save, leave, and return', async () => {
+  it('restores a versioned plan after save, leave, and return', async () => {
     const signature = offsetSequenceSignature(waypoints)
     const store = memoryOffsetPlanStore()
-    const plan = samplePlan(signature)
+    const plan = versioned(samplePlan(signature))
     await store.put(plan)
 
-    const reloaded = assessSavedOffsetPlan(await store.get(plan.flightPlanId), signature)
+    const reloaded = assessSavedOffsetPlan(await store.get(plan.flightPlanId), currentFor(plan))
     expect(reloaded.status).toBe('match')
     if (reloaded.status !== 'match') return
     expect(reloaded.plan.widths).toEqual(plan.widths)
@@ -62,19 +104,53 @@ describe('saved offset plans', () => {
     expect(reloaded.plan.corridorRight).toEqual(plan.corridorRight)
   })
 
+  it('treats an unversioned payload as stale even when the waypoint sequence matches', async () => {
+    const signature = offsetSequenceSignature(waypoints)
+    const plan = samplePlan(signature)
+    const decision = assessSavedOffsetPlan(plan, currentFor(plan))
+    expect(decision.status).toBe('stale')
+    expect(decision.reason).toBe('legacy')
+  })
+
   it('does not reuse widths when the waypoint sequence changed', async () => {
     const signature = offsetSequenceSignature(waypoints)
     const store = memoryOffsetPlanStore()
-    await store.put(samplePlan(signature))
-    const changed = offsetSequenceSignature([
+    const plan = versioned(samplePlan(signature))
+    await store.put(plan)
+    const changed = [
       waypoints[0],
-      { originalName: 'IR112-D', lat: 34.5, lon: -105.4 },
+      { originalName: 'VR114-D', lat: 34.5, lon: -105.4 },
       waypoints[2],
-    ])
-    const reloaded = assessSavedOffsetPlan(await store.get('plan-ir112'), changed)
-    expect(reloaded.status).toBe('mismatch')
+    ]
+    const reloaded = assessSavedOffsetPlan(
+      await store.get('plan-ir112'),
+      currentFor(plan, { waypoints: changed })
+    )
+    expect(reloaded.status).toBe('stale')
+    expect(reloaded.reason).toBe('sequence')
     expect(reloaded.savedAt).toBe('2026-10-20T18:00:00.000Z')
     expect(reloaded.plan).toBeUndefined()
+  })
+
+  it('goes stale when only the track offset, width, or airport changes, and a side change does not', () => {
+    const plan = versioned(samplePlan(offsetSequenceSignature(waypoints)))
+    const base = currentFor(plan)
+    expect(assessSavedOffsetPlan(plan, base).status).toBe('match')
+    const offsetOnly = {
+      ...base,
+      trackOffsets: base.trackOffsets.map((track, index) =>
+        index === 0 ? { ...track, leftMode: 'explicit', leftNm: 2.5 } : track
+      ),
+    }
+    const widthOnly = {
+      ...base,
+      widths: base.widths.map((width, index) => (index === 0 ? { ...width, leftNm: width.leftNm + 1 } : width)),
+    }
+    expect(assessSavedOffsetPlan(plan, offsetOnly).reason).toBe('fingerprint')
+    expect(assessSavedOffsetPlan(plan, widthOnly).reason).toBe('fingerprint')
+    expect(assessSavedOffsetPlan(plan, { ...base, sortie1Side: 'outer' }).status).toBe('match')
+    expect(assessSavedOffsetPlan(plan, { ...base, sortie1Side: null }).status).toBe('match')
+    expect(assessSavedOffsetPlan(plan, { ...base, departureIdent: 'KFLG' }).reason).toBe('fingerprint')
   })
 
   it('treats an edited width row as unsaved', () => {

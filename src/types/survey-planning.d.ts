@@ -316,9 +316,15 @@ declare module '@survey-planning/offsetRoutePlan.js' {
   export type OffsetLegWidth = {
     leftNm: number
     rightNm: number
+    /** Flown distance. Omitted means half of leftNm. Not halved again. */
+    trackLeftNm?: number | null
+    /** Flown distance. Omitted means half of rightNm. Not halved again. */
+    trackRightNm?: number | null
     fromPt?: string
     toPt?: string
   }
+
+  export function trackDistanceNm(explicitNm: number | null | undefined, corridorNm: number): number
 
   export type OffsetFlag = {
     index: number
@@ -337,6 +343,12 @@ declare module '@survey-planning/offsetRoutePlan.js' {
     flags: OffsetFlag[]
     nameError?: string | null
   }
+
+  export function courseChangeDeg(
+    a: { lat: number; lon: number },
+    b: { lat: number; lon: number },
+    c: { lat: number; lon: number }
+  ): number
 
   export function crossTrackNm(
     point: { lat: number; lon: number },

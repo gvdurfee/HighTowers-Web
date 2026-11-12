@@ -1,0 +1,16 @@
+---
+description: Locked training-video tooling versions and narration settings
+alwaysApply: true
+---
+
+# Training video tooling
+
+Checked November 11, 2026. Node is 24.16.0.
+
+Playwright and `@playwright/test` are pinned at 1.65.0. The capture browser is Chrome for Testing 158.0.8127.18.
+
+Narration is the Python urllib client in the Aircrew-Training playwright scripts. No ElevenLabs SDK is installed. The locked model is `eleven_v4`. The locked voice is `HKFOb9iktHA85uKXydRT`. The locked request uses stability 0.55, similarity_boost 0.75, style 0.0, use_speaker_boost false, and output format `mp3_44100_128`.
+
+Do not change the ElevenLabs model, voice, or settings, and do not re-render approved chapters, without explicit approval.
+
+`eleven_v4_turbo` is a newer realtime model. Report it if asked, and do not switch to it.

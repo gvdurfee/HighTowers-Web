@@ -2326,6 +2326,7 @@ export function CoordinatorSurveyConsolePage() {
               </div>
               <CoordinatorOffsetPlans
                 key={planId}
+                flightPlanId={planId}
                 routeLabel={
                   routeMeta
                     ? `${routeMeta.routeType}${routeMeta.routeNumber}`
