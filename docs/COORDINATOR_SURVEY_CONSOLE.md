@@ -2,13 +2,19 @@
 
 The sidebar label and the page heading are both **Team Dispatch**. Address: `/coordinator/survey` (optional `?plan=<flightPlanId>`).
 
-This is the wing tool for staffing **one, two, or three teams** on a Low Level Route. **1 team** is one aircraft that flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own `.fpl` file.
+This is the wing tool for staffing **one, two, or three teams** on a Low Level Route. **1 team** is one aircraft that flies both sides; each sortie lists its own side. Sorties 2 and later are already in flying order; load the file and fly it as listed. Do not invert the flight plan on the G1000. Each sortie is its own `.fpl` file.
 
 **Shipped sortie files.** There is no G1000 Parallel Track. Every lane is user waypoints at the real offset coordinates. The G1000 flies leg to leg between those waypoints, by hand or on autopilot in GPS/NAV. A team file has no published centerline fixes. The download is the `.fpl`.
 
-**Inner and Outer.** Inner is the side toward the inside of the route’s overall curve. Outer is the other side. A nearly straight or S-shaped route has no clear inside; the app then uses Inner = left of the route flown from the entry point and says so on the Sortie 1 side picker. Pilots go by the side the picker shows.
+**Inner and Outer.** Inner is the inside of the piece the crew is assigned. Compass words come from the first lane leg in flying order. With two aircraft, each crew stays on the one side it picked. With one or three aircraft, each sortie lists its side. Pilots fly the side shown.
 
-**Names.** Solo: point letters + 3-digit route position + I or O (`A001I`, `A001O`). Sortie 2 is the other side, listed in reverse. Team lanes: point letters + lane number + I or O (`B1O`, `XM2I`). Lane 1 is closest to the centerline. Distances are the ones stated for that plan (often 3, 9, and 15 NM). At most 6 characters, A–Z and 0–9, unique in the file. A solo name drops a leading zero only to fit (`XYZ01I`). A repeated visit on one lane adds a digit (`B12I`).
+Team Dispatch is intended for wide-corridor MTRs (for example VR114). Narrow-corridor routes (for example IR111) use the single-aircrew map.
+
+**Rulings.** Miles include the lane-to-lane connectors and the corner extensions, so outer lanes meet at a bend. Save is blocked when any sortie is over the distance limit; the reason says to add a refuel airport or another aircraft. Compare plans uses the same sortie list as Save and shows that plan as a card. One saved sortie list feeds the preview, the review, the planning page, Map View, every `.fpl`, and every total.
+
+**VR114 reference** (A–M1, tracks 2.5 NM then every 5 NM, KLRU / KABQ / KSKX, refuel KTCC, 400 NM). Inner / Outer / Inner is 8 sorties and 2,633.7 NM: KSKX A–B 3 / 1,009.6, KABQ B–E 3 / 968.9, KLRU E–M1 2 / 655.2. The longest sortie is 380.6 NM. Outer / Inner / Outer is 8 sorties and 2,697.6 NM.
+
+**Names.** Team lanes use the crew’s home-field letter, the point, the lane number, and I or O (`QB1O`, `XB2I`). Lane 1 is 2.5 NM from centerline when that is the plan spacing, then every 5 NM. At most 6 characters, A–Z and 0–9. One name is one position across the plan’s files. When the same name would sit at a different place, a letter is inserted before the side letter (`B1AI`). That letter is not a lane number.
 
 **On-screen order** (the page is not a numbered stepper; parentheses are the headings):
 
@@ -19,7 +25,7 @@ This is the wing tool for staffing **one, two, or three teams** on a Low Level R
 5. Sortie 1 side (Inner / Outer radios)
 6. Results (download each `.fpl`)
 
-Neighboring teams are recommended on opposite sides. Recommended: each segment flies the opposite side from the segments next to it (e.g. segment 1 Inner, segment 2 Outer, segment 3 Inner). This is a recommendation, not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O).
+Each sortie lists its side; fly the side shown. With three aircraft, neighboring crews are warned when they pick the same side on Sortie 1. Later sorties may share a side because they are on different pieces. Announce entering and exiting each lane by waypoint name, for example “entering XB1O”.
 
 **Map View legend:** “Map: ultramarine centerline with point letters, white edges, yellow sortie tracks, blue arrows.” The drawn centerline is ultramarine `#3F00FF` so it reads on satellite imagery. Edges are white. Tracks are yellow `#FFD911`.
 
@@ -35,7 +41,7 @@ Neighboring teams are recommended on opposite sides. Recommended: each segment f
 
 ## 1. Problem
 
-Wide MTR corridors (for example **VR114**: 20 NM each side on A→B, then 10 NM left and 20 NM right of the centerline as flown on B→M1) need several offset lanes on a side. Wings often assign **two aircraft** from **different departure airports**. Neighboring teams are recommended on opposite sides. The serpentine flight test for these files is **VR-114 only**.
+Wide MTR corridors (for example **VR114**: 20 NM each side on A→B, then 10 NM left and 20 NM right of the centerline as flown on B→M1) need several offset lanes on a side. Wings often assign **two aircraft** from **different departure airports**. With two aircraft, each crew keeps the one side it picked on every sortie. With three aircraft, a later sortie may fly the other side of that crew's piece. Pilots resume a suspended search themselves; the app does not add a resume step. The serpentine flight test for these files is **VR-114 only**.
 
 Coordinators need a **numeric** answer for management:
 
@@ -99,9 +105,9 @@ Coordinator selects per scenario:
 
 | Model | Use |
 |-------|-----|
-| **Opposite sides** | Two teams, recommended for neighbors: one team Inner, the other Outer. The screen label is “2 teams (opposite sides)”. |
-| **Geographic split** | Three teams, each assigned a segment. Each team flies both sides of its segment. Recommended: each segment flies the opposite side from the segments next to it (e.g. segment 1 Inner, segment 2 Outer, segment 3 Inner). The app does not assign those sides; the coordinator chooses Sortie 1 side for each crew. |
-| **1 team** | One aircraft flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. The screen label starts “1 team — one aircraft flies both sides in sequence”. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own `.fpl` file. |
+| **Two aircraft** | Each crew stays on the one side it picked for every sortie. |
+| **Geographic split** | Three teams, each assigned a segment. Each sortie lists its side. The coordinator chooses Sortie 1 side for each crew. |
+| **1 team** | One aircraft flies both sides. Each sortie lists its side. Sorties after the first are already in flying order. |
 
 Entry waypoint per team: **closest** in the coordinator’s sequence to that team’s departure (not user-picked).
 

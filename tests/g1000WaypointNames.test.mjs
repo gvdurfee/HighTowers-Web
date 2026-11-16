@@ -64,7 +64,7 @@ describe('G1000 waypoint names', () => {
   it('names a team lane with the point, the lane number, and I or O', () => {
     expect(laneWaypointName('VR114-B', 'outer', 1)).toEqual({ name: 'B1O', error: null })
     expect(laneWaypointName('VR114-XM', 'inner', 2)).toEqual({ name: 'XM2I', error: null })
-    expect(laneWaypointName('VR114-M1', 'inner', 1)).toEqual({ name: 'M11I', error: null })
+    expect(laneWaypointName('VR114-M1', 'inner', 1)).toEqual({ name: 'M1N1I', error: null })
     expect(laneWaypointName('VR114-B', 'outer', 3).name).toBe('B3O')
   })
 
@@ -164,7 +164,7 @@ describe('two-sortie offset plans', () => {
 
   it('requires a saved sortie side and explains the return', () => {
     expect(sortie2Explanation('KABQ')).toBe(
-      'Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own .fpl file.'
+      'A later sortie is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Each sortie is its own .fpl file.'
     )
     expect(sortie2Explanation('')).toMatch(/its own \.fpl file\.$/)
     expect(missingSortieChoiceNotice()).toMatch(/Flight Plans/)

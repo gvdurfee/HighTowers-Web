@@ -29,7 +29,7 @@ The picker labels are **Inner (inside the route’s curve)** and **Outer (outsid
 
 ## Waypoint names
 
-**Solo Flight Plans.** Point letters, a 3-digit route position, then I or O. Examples: `A001I`, `A001O`. Sortie 1 flies the chosen side. Sortie 2 flies the other side, and those waypoints are listed in reverse order in the `.fpl`.
+**Solo Flight Plans.** Point letters, the lane number, then I or O. Examples: `A1I`, `A1O`. Each sortie lists its side; fly the side shown. The file is already in flying order.
 
 **Team Dispatch.** Point letters, the lane number, then I or O. Examples: `B1O`, `XM2I`.
 
@@ -53,7 +53,7 @@ Follow the G1000 Pilot's Guide for importing user flight plans from the SD card.
 
 ## How dispatchers staff a route
 
-Team Dispatch staffs **one, two, or three teams**. **1 team** is one aircraft that flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own `.fpl` file.
+Team Dispatch staffs **one, two, or three teams**. **1 team** is one aircraft. Each sortie lists its side; fly the side shown. A later sortie is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Each sortie is its own `.fpl` file.
 
 The screen is one page, not a numbered wizard. Work it in this order. The words in parentheses are the headings on the screen today:
 
@@ -64,9 +64,9 @@ The screen is one page, not a numbered wizard. Work it in this order. The words 
 5. **Sortie 1 side** (the Inner / Outer radios).
 6. **Results** (download each sortie `.fpl` and email it to that aircraft’s Mission Pilot).
 
-Neighboring teams are recommended on opposite sides. Recommended: each segment flies the opposite side from the segments next to it (e.g. segment 1 Inner, segment 2 Outer, segment 3 Inner). This is a recommendation, not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O). Keep radio contact and stagger takeoff times.
+With two aircraft, each crew keeps the one side it picked on every sortie. With three aircraft, a later sortie may fly the other side of that crew's piece. This is not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O). Keep radio contact and stagger takeoff times. Pilots resume a suspended search themselves.
 
-The aircraft-count choice **1 team** is one aircraft flying both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own `.fpl` file.
+The aircraft-count choice **1 team** is one aircraft. Each sortie lists its side; fly the side shown. A later sortie is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Each sortie is its own `.fpl` file. With two aircraft, each crew keeps one side on every sortie. With three aircraft, a later sortie may fly the other side of that crew's piece. Pilots resume a suspended search themselves.
 
 ---
 

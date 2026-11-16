@@ -6,6 +6,7 @@ import {
   validateSpanTrackPlan,
 } from '../shared/survey-planning/corridorTrackPlan.js'
 import { buildLegWidthSummaries, planSurveyScenario } from '../shared/survey-planning/surveySortiePlanner.js'
+import { spanTrackFitWarnings } from '../src/utils/coordinatorSpanTrackPlan.ts'
 
 const VR114_WIDTH = [
   '20 NM EITHER SIDE OF CENTERLINE FROM A TO B;',
@@ -123,5 +124,21 @@ describe('corridorTrackPlan', () => {
     expect(ab?.leftOffsets).toEqual([3, 9, 15])
     expect(ab?.rightOffsets).toEqual([3, 9, 15])
     expect(ab?.leftNote).toMatch(/past the corridor edge/)
+  })
+
+  it('warns when no track fits inside a narrow span', () => {
+    const warnings = spanTrackFitWarnings({
+      fromPt: 'A',
+      toPt: 'B',
+      leftNm: '2.5',
+      rightNm: '10',
+      leftOffsetsText: '3',
+      rightOffsetsText: '3, 9',
+      displayText: 'A→B',
+    })
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatch(/Left/)
+    expect(warnings[0]).toMatch(/2\.5 NM/)
+    expect(warnings[0]).toMatch(/first track is 3 NM/)
   })
 })

@@ -8,6 +8,8 @@ import {
   type SortieFplPilotBrief,
 } from '@/services/sortieFplExport'
 import { buildNamedOffsetSortieFile } from '@/services/teamPlanSortieDownload'
+import { crewWaypointPrefix, uniqueSortieFilename } from '@/services/teamPlanRecord'
+import { segmentCurveSide } from '@survey-planning/offsetRoutePlan.js'
 import type { SortieSide } from '@/services/offsetRouteFpl'
 import {
   defaultSortieOffsetsForFragment,
@@ -34,6 +36,8 @@ type Props = {
   legWidths: Array<{ leftNm: number; rightNm: number } | null> | null
   departureMissingMessage: string
   onPilotBrief: (brief: SortieFplPilotBrief) => void
+  trackPolicy?: { firstOffsetNm?: number; stepNm?: number }
+  distanceLimitNm?: number
 }
 
 /**
@@ -48,6 +52,8 @@ export function SortieFragmentExportCard({
   legWidths,
   departureMissingMessage,
   onPilotBrief,
+  trackPolicy,
+  distanceLimitNm = 400,
 }: Props) {
   const { isSeen, markSeen } = useHintsSeen()
   const [showSortieExport, setShowSortieExport] = useState(false)
@@ -59,6 +65,7 @@ export function SortieFragmentExportCard({
   const [sortieOffsetsHint, setSortieOffsetsHint] = useState<string | null>(null)
   const sortieOffsetsUserEditedRef = useRef(false)
   const [sortieExportErr, setSortieExportErr] = useState<string | null>(null)
+  const exportNames = useRef(new Map<string, number>())
 
   const waypointPtIdents = useMemo(
     () => waypoints.map((w) => waypointPtIdent(w.originalName)),
@@ -104,8 +111,9 @@ export function SortieFragmentExportCard({
             waypoints: surveyWaypoints,
             fromPt: sortieFromPt,
             toPt: sortieToPt,
+            policy: trackPolicy,
           })
-        : defaultSortieOffsetsLabelFromWidthTexts(widthTexts)
+        : defaultSortieOffsetsLabelFromWidthTexts(widthTexts, trackPolicy)
 
     setSortieOffsets(label)
     setSortieOffsetsHint(
@@ -113,7 +121,7 @@ export function SortieFragmentExportCard({
         ? `From NASR corridor width for this route (${label} NM). A pass past the corridor edge is not included.`
         : 'No published width for this side.'
     )
-  }, [widthTexts, irVrMeta, surveyWaypoints, sortieFromPt, sortieToPt])
+  }, [widthTexts, irVrMeta, surveyWaypoints, sortieFromPt, sortieToPt, trackPolicy])
 
   const sortieEndpointOptions = (() => {
     if (!sortieFromPt || !sortieToPt) return [] as string[]
@@ -124,6 +132,37 @@ export function SortieFragmentExportCard({
     const b = waypointPtIdents[Math.max(lo, hi)]
     return [a, b]
   })()
+
+  const sortieDistance = useMemo(() => {
+    if (!teamDeparture || !legWidths || !sortieFromPt || !sortieToPt) return null
+    try {
+      const offsets = parseOffsetsInput(sortieOffsets)
+      if (offsets.length === 0) return null
+      return buildNamedOffsetSortieFile({
+        points: waypoints.map((waypoint) => ({
+          ptIdent: waypointPtIdent(waypoint.originalName),
+          originalName: waypoint.originalName,
+          lat: waypoint.latitude,
+          lon: waypoint.longitude,
+          g1000Name: waypoint.g1000Name,
+        })),
+        legWidths,
+        fromPt: sortieFromPt,
+        toPt: sortieToPt,
+        side: sortieSide,
+        departure: teamDeparture,
+        landing: teamDeparture,
+        routeLabel,
+        sortieNumber: 1,
+        offsets,
+        policy: trackPolicy,
+        startAt: sortieStartAt,
+        namePrefix: crewWaypointPrefix(teamDeparture.identifier, [teamDeparture.identifier]),
+      })
+    } catch {
+      return null
+    }
+  }, [teamDeparture, legWidths, sortieFromPt, sortieToPt, sortieOffsets, sortieSide, waypoints, routeLabel, trackPolicy, sortieStartAt])
 
   const handleSortieExport = () => {
     if (!teamDeparture) {
@@ -163,8 +202,23 @@ export function SortieFragmentExportCard({
         routeLabel,
         sortieNumber: 1,
         offsets,
+        policy: trackPolicy,
+        startAt: sortie.startAt,
+        namePrefix: crewWaypointPrefix(teamDeparture.identifier, [teamDeparture.identifier]),
       })
-      downloadSortieFpl(file.xml, file.filename)
+      const filename = uniqueSortieFilename(file.filename, exportNames.current)
+      downloadSortieFpl(file.xml, filename)
+      const userBlock = file.xml.split('<waypoint>').find((part) => part.includes('USER WAYPOINT'))
+      const laneExample = userBlock?.match(/<identifier>([^<]+)/)?.[1]
+      const curve = segmentCurveSide(
+        waypoints.map((waypoint) => ({
+          ptIdent: waypointPtIdent(waypoint.originalName),
+          lat: waypoint.latitude,
+          lon: waypoint.longitude,
+        })),
+        sortie.waypointFrom,
+        sortie.waypointTo
+      )
       onPilotBrief({
         teamLabel: teamDeparture.identifier,
         side: sortieSide,
@@ -176,7 +230,10 @@ export function SortieFragmentExportCard({
         ferryOutLabel: teamDeparture.identifier,
         warnRoutePointLimit: false,
         routePointCount: (file.xml.match(/<waypoint-type>USER WAYPOINT<\/waypoint-type>/g) ?? []).length,
-        filename: file.filename,
+        filename,
+        turnDeg: file.maxTurnDeg,
+        laneExample,
+        sideNote: curve.note ?? undefined,
       })
       setShowSortieExport(false)
     } catch (e) {
@@ -205,10 +262,10 @@ export function SortieFragmentExportCard({
           className="flex-1 min-w-0 text-left"
           aria-expanded={showSortieExport}
         >
-          <span className="font-semibold text-gray-900 block">Export sortie fragment (.fpl)</span>
+          <span className="font-semibold text-gray-900 block">Solo / manual export (.fpl)</span>
           {!showSortieExport && (
             <span className="text-gray-500 text-sm font-normal mt-0.5 block">
-              One sortie&apos;s serpentine legs — not the full plan
+              That sortie&apos;s lanes, from departure to landing.
             </span>
           )}
         </button>
@@ -345,6 +402,11 @@ export function SortieFragmentExportCard({
             Plan detail. After running the planner, each results row can export that assignment. Email
             each sortie file to that aircraft&apos;s Mission Pilot.
           </p>
+          {sortieDistance && sortieDistance.distanceNm > distanceLimitNm && (
+            <p className="text-sm text-amber-900 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2" role="alert">
+              Over the distance limit: this sortie is {sortieDistance.distanceNm} NM and the limit is {distanceLimitNm} NM.
+            </p>
+          )}
           <button
             type="button"
             onClick={handleSortieExport}

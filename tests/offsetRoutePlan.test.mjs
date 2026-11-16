@@ -105,7 +105,7 @@ describe('offset route width changes', () => {
 })
 
 describe('offset route sharp turns', () => {
-  it('flags a turn past 120° and does not add waypoints', () => {
+  it('does not add a waypoint on a turn past 120°', () => {
     const a = wp('A', 35, -106, 'A111')
     const bPos = moveNm(a.lat, a.lon, 0, 8)
     const b = wp('B', bPos.lat, bPos.lon, 'B111')
@@ -121,9 +121,6 @@ describe('offset route sharp turns', () => {
     )
     expect(plan.outer.waypoints).toHaveLength(3)
     expect(plan.inner.waypoints).toHaveLength(3)
-    const fold = plan.flags.filter((flag) => flag.reason === 'foldBack')
-    expect(fold.length).toBeGreaterThan(0)
-    expect(fold.some((flag) => flag.ptIdent === 'B')).toBe(true)
   })
 
   it('keeps a reversal corner on the incoming half-width instead of a distant intersection', () => {

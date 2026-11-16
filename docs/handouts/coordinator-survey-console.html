@@ -112,7 +112,7 @@
   <p><strong>Inner</strong> is the side toward the inside of the route’s overall curve, as seen on the map. <strong>Outer</strong> is the other side. A nearly straight or S-shaped route has no clear inside. The app then uses Inner = left of the route as flown from the entry point, and it says so on the Sortie 1 side picker. Pilots go by the side shown on the picker. The labels are <strong>Inner (inside the route’s curve)</strong> and <strong>Outer (outside the route’s curve)</strong>.</p>
 
   <h2>Waypoint names</h2>
-  <p><strong>Solo Flight Plans:</strong> point letters, a 3-digit route position, then I or O (<span class="mono">A001I</span>, <span class="mono">A001O</span>). Sortie 1 flies the chosen side. Sortie 2 flies the other side, listed in reverse order. A name drops the leading zero only to stay within 6 characters (<span class="mono">XYZ01I</span>).</p>
+  <p><strong>Solo Flight Plans:</strong> point letters, the lane number, then I or O (<span class="mono">A1I</span>, <span class="mono">A1O</span>). Each sortie lists its side; fly the side shown. The file is already in flying order. A repeated place inserts a letter before the side letter (<span class="mono">B1AI</span>), which is not a lane number. Names stay within 6 characters.</p>
   <p><strong>Team Dispatch:</strong> point letters, the lane number, then I or O (<span class="mono">B1O</span>, <span class="mono">XM2I</span>). Think of the first one or two letters as the MTR point the waypoint is offset from. The 1, 2, or 3 is the offset lane of the serpentine route the G1000 flies to cover the corridor, counted outward from the centerline. The last letter says Inner or Outer. A rare repeat on the same lane adds a digit (<span class="mono">B12I</span>). Lane 1 is closest to the centerline. A team file has no published centerline fixes.</p>
 
   <h2>Before the SD card</h2>
@@ -120,7 +120,7 @@
   <p>Follow the G1000 Pilot's Guide for importing user flight plans from the SD card.</p>
 
   <h2>How dispatchers staff a route</h2>
-  <p>Team Dispatch staffs <strong>one, two, or three teams</strong>. <strong>1 team</strong> is one aircraft that flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own .fpl file. The screen is one page. Words in parentheses are the headings on the screen:</p>
+  <p>Team Dispatch staffs <strong>one, two, or three teams</strong>. <strong>1 team</strong> is one aircraft. Each sortie lists its side; fly the side shown. A later sortie is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Each sortie is its own .fpl file. With two aircraft, each crew keeps one side on every sortie. With three aircraft, a later sortie may fly the other side of that crew's piece. Pilots resume a suspended search themselves. The screen is one page. Words in parentheses are the headings on the screen:</p>
   <ol>
     <li><strong>Crews and aircraft</strong> (Teams &amp; parameters).</li>
     <li><strong>Route</strong> (Load the published route).</li>
@@ -129,7 +129,7 @@
     <li><strong>Sortie 1 side</strong> (the Inner / Outer radios).</li>
     <li><strong>Results</strong> (download each sortie .fpl and email it to the Mission Pilot for that aircraft).</li>
   </ol>
-  <p>Neighboring teams are recommended on opposite sides. Recommended: each segment flies the opposite side from the segments next to it (e.g. segment 1 Inner, segment 2 Outer, segment 3 Inner). This is a recommendation, not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O). The 1-team choice is one aircraft flying both sides in sequence, used to finish a partial route fragment left incomplete because of weather or limited resources.</p>
+  <p>With two aircraft, each crew keeps the one side it picked on every sortie. With three aircraft, a later sortie may fly the other side of that crew's piece. This is not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O). The 1-team choice is one aircraft. Each sortie lists its side; fly the side shown. Pilots resume a suspended search themselves.</p>
 
   <h2>Map View</h2>
   <p>The map legend reads: “Map: ultramarine centerline with point letters, white edges, yellow sortie tracks, blue arrows.” The centerline color is #3F00FF. The centerline is the published route, labeled with the published point letters only.</p>

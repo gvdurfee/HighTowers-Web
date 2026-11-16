@@ -1,11 +1,15 @@
 import { buildSortieOffsetFpl } from '@/services/offsetRouteFpl'
 import { routeCurveSide } from '@survey-planning/offsetRoutePlan.js'
+import { nauticalMilesBetween } from '@survey-planning/surveyGeometry.js'
 import {
+  buildTeamSortieFile,
   NO_SEGMENT_NOTE,
   NO_SEGMENT_WIDTH_NOTE,
   NO_SORTIE_SIDE_NOTE,
   ONE_SORTIE_TOOLTIP,
+  maxCourseChangeDeg,
   offsetSortieWaypoints,
+  packedSortieFilename,
   sliceTeamSegment,
   sortie1Side,
   teamSortieOffsetRoute,
@@ -25,11 +29,26 @@ export function teamSortieFilename(routeLabel: string, airportIdent: string, sor
 }
 
 export function teamSortieDownloadOffer(
-  team: { sorties: Array<{ number: number; side?: string | null }>; segmentFrom?: string | null; segmentTo?: string | null; departure?: unknown } | null,
-  sortieNumber: 1 | 2,
+  team: {
+    sorties: Array<{ number: number; side?: string | null }>
+    packedSorties?: Array<{ number: number; side?: string | null; offsetsNm?: number[]; returnHomeOnly?: boolean; fromPt?: string; toPt?: string }>
+    segmentFrom?: string | null
+    segmentTo?: string | null
+    departure?: unknown
+  } | null,
+  sortieNumber: number,
   widthsReady = true
 ): { enabled: boolean; title?: string } {
   if (!team) return { enabled: false, title: 'Choose Sortie 1 side in Flight Plans before downloading offset routes.' }
+  const packed = team.packedSorties?.find((item) => item.number === sortieNumber)
+  if (packed) {
+    if (!team.departure) return { enabled: false, title: 'No departure airport set.' }
+    if (packed.returnHomeOnly || (packed.offsetsNm?.length ?? 0) === 0) return { enabled: true }
+    if (!packed.side) return { enabled: false, title: NO_SORTIE_SIDE_NOTE }
+    if (!packed.fromPt || !packed.toPt) return { enabled: false, title: NO_SEGMENT_NOTE }
+    if (!widthsReady) return { enabled: false, title: NO_SEGMENT_WIDTH_NOTE }
+    return { enabled: true }
+  }
   const sortie = team.sorties.find((item) => item.number === sortieNumber)
   if (!sortie) return { enabled: false, title: ONE_SORTIE_TOOLTIP }
   if (!sortie.side) return { enabled: false, title: NO_SORTIE_SIDE_NOTE }
@@ -44,9 +63,22 @@ export function publishedSortieWidthReady(
   team: TeamPlanTeam,
   points: TeamRoutePoint[],
   legWidths: Array<{ leftNm: number; rightNm: number } | null> | null,
-  sortieNumber: 1 | 2
+  sortieNumber: number
 ): boolean {
   if (!legWidths) return false
+  const packed = team.packedSorties?.find((sortie) => sortie.number === sortieNumber)
+  if (packed) {
+    if (packed.returnHomeOnly || packed.offsetsNm.length === 0) return true
+    const slice = sliceTeamSegment(points, legWidths, {
+      ...team,
+      segmentFrom: packed.fromPt,
+      segmentTo: packed.toPt,
+    })
+    if ('error' in slice) return false
+    const curve = routeCurveSide(points)
+    const geo = packed.side === 'inner' ? curve.innerSide : curve.outerSide
+    return slice.widths.some((leg) => (geo === 'left' ? leg.leftNm : leg.rightNm) > 0)
+  }
   const slice = sliceTeamSegment(points, legWidths, team)
   if ('error' in slice) return false
   const first = sortie1Side(team)
@@ -59,7 +91,7 @@ export function publishedSortieWidthReady(
 
 function offsetFile(opts: {
   routeLabel: string
-  sortieNumber: 1 | 2
+  sortieNumber: number
   side: SortieSide
   waypoints: Array<{ g1000Name: string; lat: number; lon: number }>
   departure: TeamPlanAirport
@@ -90,11 +122,14 @@ export function buildNamedOffsetSortieFile(opts: {
   departure: TeamPlanAirport
   landing: TeamPlanAirport
   routeLabel: string
-  sortieNumber: 1 | 2
+  sortieNumber: number
   homeIdent?: string
   policy?: { firstOffsetNm?: number; stepNm?: number }
   offsets?: number[]
-}): { xml: string; filename: string } {
+  startAt?: string | null
+  namePrefix?: string
+}): { xml: string; filename: string; distanceNm: number; maxTurnDeg: number } {
+  const home = opts.homeIdent ?? opts.departure.identifier
   const named = offsetSortieWaypoints({
     points: opts.points,
     legWidths: opts.legWidths,
@@ -106,17 +141,31 @@ export function buildNamedOffsetSortieFile(opts: {
     firstOffsetNm: opts.policy?.firstOffsetNm,
     stepNm: opts.policy?.stepNm,
     offsets: opts.offsets,
+    startAt: opts.startAt,
+    namePrefix: opts.namePrefix,
   })
   if ('error' in named) throw new Error(named.error)
-  return offsetFile({
+  const file = offsetFile({
     routeLabel: opts.routeLabel,
     sortieNumber: opts.sortieNumber,
     side: opts.side,
     waypoints: named.waypoints,
     departure: opts.departure,
     landing: opts.landing,
-    homeIdent: opts.homeIdent ?? opts.departure.identifier,
+    homeIdent: home,
   })
+  const path = [opts.departure, ...named.waypoints, opts.landing].map((point) => ({
+    lat: 'lat' in point ? point.lat : point.latitude,
+    lon: 'lon' in point ? point.lon : point.longitude,
+  }))
+  let distance = 0
+  for (let index = 1; index < path.length; index += 1) distance += nauticalMilesBetween(path[index - 1], path[index])
+  return {
+    xml: file.xml,
+    filename: packedSortieFilename(opts.routeLabel, home, opts.fromPt, opts.toPt, opts.sortieNumber),
+    distanceNm: Math.round(distance * 10) / 10,
+    maxTurnDeg: maxCourseChangeDeg(path),
+  }
 }
 
 /** The Map View download. Each lane is its own user waypoints at the offset coordinates. */
@@ -127,29 +176,43 @@ export function buildTeamPlanSortieFile(opts: {
   waypoints?: unknown
   routeLabel: string
   policy?: { firstOffsetNm?: number; stepNm?: number }
-  sortieNumber: 1 | 2
+  sortieNumber: number
   created?: Date
 }): { xml: string; filename: string } {
   void opts.waypoints
   void opts.created
   const home = opts.team.departure
   if (!home) throw new Error('No departure airport set.')
-  const route = teamSortieOffsetRoute({
+  if (!opts.team.packedSorties?.length) {
+    const route = teamSortieOffsetRoute({
+      team: opts.team,
+      points: opts.points,
+      legWidths: opts.legWidths,
+      sortieNumber: opts.sortieNumber,
+      firstOffsetNm: opts.policy?.firstOffsetNm,
+      stepNm: opts.policy?.stepNm,
+    })
+    if ('error' in route) throw new Error(route.error)
+    return offsetFile({
+      routeLabel: opts.routeLabel,
+      sortieNumber: opts.sortieNumber,
+      side: route.side,
+      waypoints: route.waypoints,
+      departure: route.departure,
+      landing: route.landing,
+      homeIdent: home.identifier,
+    })
+  }
+  const file = buildTeamSortieFile({
     team: opts.team,
+    routeLabel: opts.routeLabel,
     points: opts.points,
     legWidths: opts.legWidths,
     sortieNumber: opts.sortieNumber,
     firstOffsetNm: opts.policy?.firstOffsetNm,
     stepNm: opts.policy?.stepNm,
   })
-  if ('error' in route) throw new Error(route.error)
-  return offsetFile({
-    routeLabel: opts.routeLabel,
-    sortieNumber: opts.sortieNumber,
-    side: route.side,
-    waypoints: route.waypoints,
-    departure: route.departure,
-    landing: route.landing,
-    homeIdent: home.identifier,
-  })
+  if ('error' in file) throw new Error(file.error)
+  if ('ferryOnly' in file) throw new Error('Ferry only, no survey file')
+  return { xml: file.xml, filename: file.filename }
 }

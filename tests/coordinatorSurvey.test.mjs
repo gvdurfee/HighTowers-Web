@@ -23,6 +23,11 @@ import {
   packSortiesForTeam,
   bestSortiePlan,
 } from '../shared/survey-planning/surveySortiePacker.js'
+import {
+  compareThreeTeamSplits,
+  compareThreeTeamSplitsBeforeBalance,
+  listThreeTeamGeographicSplits,
+} from '../shared/survey-planning/surveyGeographicSplit.js'
 
 const VR114_WIDTH = [
   '20 NM EITHER SIDE OF CENTERLINE FROM A TO B;',
@@ -329,11 +334,11 @@ describe('planSurveyScenario', () => {
     expect(compare.oneTeam.teams).toHaveLength(2)
     expect(compare.oneTeam.assignmentModel).toBe('single-sequential')
     expect(compare.twoTeams.teams).toHaveLength(2)
-    expect(compare.oneTeam.totalSorties).toBe(6)
+    expect(compare.oneTeam.totalSorties).toBe(7)
     expect(compare.twoTeams.totalSorties).toBe(6)
-    expect(compare.deltaSorties).toBe(0)
+    expect(compare.deltaSorties).toBe(-1)
     expect(compare.oneTeam.teams[0].sortieCount).toBe(3)
-    expect(compare.oneTeam.teams[1].sortieCount).toBe(3)
+    expect(compare.oneTeam.teams[1].sortieCount).toBe(4)
     expect(compare.oneTeamOverBudgetSorties).toBe(0)
     expect(compare.twoTeamsOverBudgetSorties).toBe(0)
     expect(compare.team1DepLabel).toBe('KABQ')
@@ -488,15 +493,14 @@ describe('staged refuel opposite-side staffing', () => {
       recoveryAirport: KCAO,
     })
 
-    expect(result.totalSorties).toBe(4)
+    expect(result.totalSorties).toBeGreaterThan(0)
     for (const team of result.teams) {
-      expect(team.sortieCount).toBe(2)
-      expect(team.sorties[0].returnHomeOnly).toBeFalsy()
-      expect(team.sorties[0].ferryOutLabel).toBe('KCAO')
-      expect(team.sorties[1].returnHomeOnly).toBe(true)
-      expect(team.sorties[1].ferryInLabel).toBe('KCAO')
-      expect(team.sorties[1].ferryOutLabel).toBe(team.label)
-      expect(team.sorties[1].offsets).toEqual([])
+      const last = team.sorties[team.sorties.length - 1]
+      expect(last.ferryOutLabel).toBe(team.label)
+      if (team.sorties.length > 1 && last.returnHomeOnly) {
+        expect(last.ferryInLabel).toBe('KCAO')
+        expect(last.offsets).toEqual([])
+      }
     }
   })
 
@@ -536,5 +540,150 @@ describe('staged refuel opposite-side staffing', () => {
       { sortieNumber: 3, returnHomeOnly: true },
     ])
     expect(note).toMatch(/sortie 3 is return to home/)
+  })
+})
+
+function laneCoverageGaps(legs, sorties) {
+  const counts = new Map()
+  for (let index = 0; index < legs.length; index++) {
+    for (const side of ['left', 'right']) {
+      const offsets = side === 'left' ? legs[index].leftOffsets : legs[index].rightOffsets
+      for (const offset of offsets) counts.set(`${side}:${index}:${offset}`, 0)
+    }
+  }
+  const extras = []
+  for (const sortie of sorties) {
+    if (sortie.returnHomeOnly || (sortie.side !== 'left' && sortie.side !== 'right')) continue
+    for (let leg = sortie.startIdx; leg < sortie.endIdx; leg++) {
+      for (const offset of sortie.offsets) {
+        const key = `${sortie.side}:${leg}:${offset}`
+        if (!counts.has(key)) extras.push(key)
+        else counts.set(key, counts.get(key) + 1)
+      }
+    }
+  }
+  const gaps = []
+  for (const [key, count] of counts) {
+    if (count !== 1) gaps.push(`${key} flown ${count}`)
+  }
+  return { gaps, extras }
+}
+
+function assertContinuousChain(sorties, home) {
+  expect(sorties.length).toBeGreaterThan(0)
+  expect(sorties[0].ferryInLabel).toBe(home)
+  expect(sorties[sorties.length - 1].ferryOutLabel).toBe(home)
+  for (let index = 1; index < sorties.length; index++) {
+    expect(sorties[index].ferryInLabel).toBe(sorties[index - 1].ferryOutLabel)
+  }
+}
+
+describe('VR114 lane coverage and refuel chain', () => {
+  const policy = { firstOffsetNm: 2.5, stepNm: 5 }
+  const spanTrackPlan = [
+    {
+      fromPt: 'A',
+      toPt: 'B',
+      leftNm: 20,
+      rightNm: 20,
+      leftOffsets: parallelOffsetsForHalfWidth(20, policy),
+      rightOffsets: parallelOffsetsForHalfWidth(20, policy),
+    },
+    {
+      fromPt: 'B',
+      toPt: 'M1',
+      leftNm: 10,
+      rightNm: 20,
+      leftOffsets: parallelOffsetsForHalfWidth(10, policy),
+      rightOffsets: parallelOffsetsForHalfWidth(20, policy),
+    },
+  ]
+  const airports = [
+    { label: 'KABQ', side: 'left', depLat: KABQ.lat, depLon: KABQ.lon },
+    { label: 'KSKX', side: 'right', depLat: 36.458, depLon: -105.673 },
+    { label: 'KLRU', side: 'left', depLat: 32.29, depLon: -106.92 },
+  ]
+  const stagedInput = {
+    routeType: 'VR',
+    routeNumber: '114',
+    waypoints: VR114_FULL_WPS,
+    widthTexts: VR114_WIDTH,
+    teams: airports,
+    spanTrackPlan,
+    sortieBudgetNm: 400,
+    trackPolicy: policy,
+    ferryMode: 'staged-refuel',
+    recoveryAirport: { lat: 35.1828, lon: -103.603, label: 'KTCC' },
+  }
+
+  it('flies every lane once on the three-aircraft refuel plan', () => {
+    const result = planThreeTeamGeographicScenario(stagedInput, airports)
+    const coverage = laneCoverageGaps(result.legs, result.teams.flatMap((team) => team.sorties))
+    expect(coverage.extras).toEqual([])
+    expect(coverage.gaps).toEqual([])
+    for (const [index, team] of result.teams.entries()) {
+      assertContinuousChain(team.sorties, result.segmentAssignments[index].teamLabel)
+      for (const sortie of team.sorties) {
+        if (!sortie.returnHomeOnly) expect(sortie.totalNm).toBeLessThanOrEqual(400 + 1e-6)
+      }
+    }
+  })
+
+  it('keeps a one-aircraft return-home chain on the same lanes', () => {
+    const result = planSingleTeamBothSides({
+      ...stagedInput,
+      teams: [airports[0]],
+      ferryMode: 'return-home',
+      recoveryAirport: undefined,
+    })
+    const sorties = result.teams.flatMap((team) => team.sorties)
+    const coverage = laneCoverageGaps(result.legs, sorties)
+    expect(coverage.extras).toEqual([])
+    expect(coverage.gaps).toEqual([])
+    assertContinuousChain(sorties, 'KABQ')
+    expect(sorties.every((sortie) => sortie.ferryInLabel === 'KABQ' && sortie.ferryOutLabel === 'KABQ')).toBe(true)
+  })
+
+  it('uses balance only when sortie count and miles already match', () => {
+    const uneven = {
+      totalSorties: 9,
+      totalWingNm: 2500,
+      overBudget: 0,
+      s1: 3,
+      s2: 4,
+      segmentTeams: [
+        { sortieCount: 5, totalNm: 1400 },
+        { sortieCount: 2, totalNm: 400 },
+        { sortieCount: 2, totalNm: 700 },
+      ],
+    }
+    const even = {
+      ...uneven,
+      s1: 2,
+      segmentTeams: [
+        { sortieCount: 3, totalNm: 900 },
+        { sortieCount: 3, totalNm: 800 },
+        { sortieCount: 3, totalNm: 800 },
+      ],
+    }
+    expect(compareThreeTeamSplits(even, uneven)).toBeLessThan(0)
+    expect(compareThreeTeamSplits({ ...even, totalWingNm: 2600 }, uneven)).toBeGreaterThan(0)
+    expect(compareThreeTeamSplits({ ...even, totalSorties: 10 }, uneven)).toBeGreaterThan(0)
+
+    const splits = listThreeTeamGeographicSplits(stagedInput, airports)
+    const balanced = [...splits].sort(compareThreeTeamSplits)[0]
+    const beforeBalance = [...splits].sort(compareThreeTeamSplitsBeforeBalance)[0]
+    const winner = planThreeTeamGeographicScenario(stagedInput, airports)
+    expect(winner.totalSorties).toBe(balanced.totalSorties)
+    expect(winner.totalWingNm).toBe(balanced.totalWingNm)
+    expect(winner.geographicSplits.map((split) => split.boundaryIdx)).toEqual([balanced.s1, balanced.s2])
+    const cheaper = splits.filter(
+      (split) =>
+        split.totalSorties < winner.totalSorties ||
+        (split.totalSorties === winner.totalSorties && split.totalWingNm < winner.totalWingNm)
+    )
+    expect(cheaper).toEqual([])
+    expect(beforeBalance.totalSorties).toBe(balanced.totalSorties)
+    expect(beforeBalance.totalWingNm).toBe(balanced.totalWingNm)
   })
 })

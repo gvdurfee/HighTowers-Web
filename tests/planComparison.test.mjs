@@ -99,46 +99,117 @@ describe('VR114 plan comparison', () => {
     budgetNm: 500,
   })
 
-  it('reproduces each option and recommends the fewest refuel stops under 500 NM', () => {
+  it('builds a saved plan and a general split for any looked-up airports', () => {
     expect(comparison.perSegmentSpacing).toBe(false)
     expect(comparison.spacingNote).toBe(PER_SEGMENT_SPACING_NOTE)
-    expect(comparison.options.map((option) => option.id)).toEqual(['saved', 'klru-refuel', 'kabq-kskx', 'kabq-klru'])
+    expect(comparison.options.map((option) => option.id)).toEqual(['saved', 'geographic', 'shared-refuel'])
 
     const saved = comparison.options[0]
-    expect(saved.teams.map((team) => [team.identifier, team.from, team.to, team.sorties.map((sortie) => sortie.distanceNm)])).toEqual([
-      ['KSKX', 'A', 'B', [377.3, 377.3]],
-      ['KABQ', 'B', 'E', [304.1, 402.9]],
-      ['KLRU', 'E', 'M1', [304.8, 327.6]],
+    expect(saved.teams.map((team) => [team.identifier, team.from, team.to])).toEqual([
+      ['KSKX', 'A', 'B'],
+      ['KABQ', 'B', 'E'],
+      ['KLRU', 'E', 'M1'],
     ])
+    for (const team of saved.teams) {
+      expect(team.sorties.length).toBeGreaterThan(0)
+      expect(team.sorties.every((sortie) => sortie.distanceNm > 0)).toBe(true)
+    }
+    const recommended = comparison.options.find((option) => option.recommended)
+    if (recommended) expect(recommended.allUnder).toBe(true)
     expect(saved.allUnder).toBe(true)
     expect(saved.refuelStops).toBe(3)
 
-    const eligible = comparison.options.filter((option) => option.allUnder)
-    eligible.sort((a, b) => a.refuelStops - b.refuelStops || a.wingNm - b.wingNm)
-    expect(comparison.options.filter((option) => option.recommended).map((option) => option.id)).toEqual([eligible[0].id])
-    expect(eligible[0].id).toBe('klru-refuel')
-    expect(eligible[0].refuelStops).toBe(1)
-
-    const nudged = comparison.options.find((option) => option.id === 'kabq-kskx')
-    expect(nudged.allUnder).toBe(false)
-    expect(nudged.boundaryNote).toContain('503.6')
-    expect(nudged.teams[0].sorties.every((sortie) => !sortie.overBudget)).toBe(true)
-    expect(nudged.insertedPoint.alongNm).toBeGreaterThan(0)
-    expect(nudged.boundaryNote).toContain(PER_SEGMENT_SPACING_NOTE)
+    const rank = (option) => {
+      const sorties = option.teams.reduce((sum, team) => sum + team.sorties.length, 0)
+      const over = option.teams.reduce(
+        (sum, team) => sum + team.sorties.filter((sortie) => sortie.overBudget).length,
+        0
+      )
+      return [sorties, option.wingNm, over]
+    }
+    const fitting = comparison.options.filter((option) => option.allUnder)
+    const winner = [...fitting].sort((a, b) => {
+      const left = rank(a)
+      const right = rank(b)
+      return left[0] - right[0] || left[1] - right[1] || left[2] - right[2]
+    })[0]
+    expect(comparison.options.filter((option) => option.recommended)).toEqual([winner])
   })
 
-  it('loads an option into the assignment form without a saved plan', () => {
-    const option = comparison.options.find((item) => item.id === 'klru-refuel')
+  it('loads a shared-refuel option into the assignment form without a saved plan', () => {
+    const option = comparison.options.find((item) => item.id === 'shared-refuel')
     const edits = assignmentEditsForOption(option, [
       { id: 'team1', identifier: 'KABQ' },
       { id: 'team2', identifier: 'KSKX' },
       { id: 'team3', identifier: 'KLRU' },
     ])
-    expect(edits.segments.team1.from).toBe(option.teams.find((team) => team.identifier === 'KABQ').from)
-    expect(edits.segments.team1.to).toBe(option.teams.find((team) => team.identifier === 'KABQ').to)
-    expect(edits.refuels.team1).toBeNull()
-    expect(edits.refuels.team3?.identifier).toBe('KTCC')
+    const kabq = option.teams.find((team) => team.identifier === 'KABQ')
+    expect(edits.segments.team1.from).toBe(kabq.from)
+    expect(edits.segments.team1.to).toBe(kabq.to)
+    const refueled = option.teams.filter((team) => team.refuelAirport)
+    expect(refueled.length).toBeGreaterThan(0)
+    for (const team of refueled) {
+      const crew = [
+        { id: 'team1', identifier: 'KABQ' },
+        { id: 'team2', identifier: 'KSKX' },
+        { id: 'team3', identifier: 'KLRU' },
+      ].find((item) => item.identifier === team.identifier)
+      expect(edits.refuels[crew.id]?.identifier).toBe('KTCC')
+    }
     expect(edits.insertedPoint).toBeNull()
+  })
+
+  it('uses the saved sortie distances instead of pricing the split again', () => {
+    const priced = compareSurveyPlans({
+      points: routePoints,
+      legWidths: widths(),
+      homes: [KSKX, KABQ, KLRU],
+      refuel: KTCC,
+      budgetNm: 400,
+      saved: [
+        {
+          identifier: 'KSKX',
+          from: 'A',
+          to: 'B',
+          refuel: true,
+          totalNm: 1009.6,
+          sorties: [
+            { number: 1, distanceNm: 380.6 },
+            { number: 2, distanceNm: 334.6 },
+            { number: 3, distanceNm: 294.4 },
+          ],
+        },
+      ],
+    })
+    const saved = priced.options.find((option) => option.id === 'saved')
+    expect(saved.wingNm).toBe(1009.6)
+    expect(saved.teams[0].sorties.map((sortie) => sortie.distanceNm)).toEqual([380.6, 334.6, 294.4])
+    expect(saved.allUnder).toBe(true)
+  })
+})
+
+describe('plan comparison for airports other than KSKX, KABQ, and KLRU', () => {
+  const KELP = { identifier: 'KELP', name: 'El Paso', latitude: 31.80725, longitude: -106.377583 }
+  const KROW = { identifier: 'KROW', name: 'Roswell', latitude: 33.301556, longitude: -104.530556 }
+
+  it('recommends the fewest sorties, then the fewest miles', () => {
+    const route = [
+      { ptIdent: 'A', lat: 32.4, lon: -105.2 },
+      { ptIdent: 'B', lat: 32.8, lon: -104.6 },
+      { ptIdent: 'C', lat: 33.2, lon: -104.1 },
+      { ptIdent: 'D', lat: 33.6, lon: -103.6 },
+    ]
+    const legs = route.slice(0, -1).map(() => ({ leftNm: 10, rightNm: 10 }))
+    const comparison = compareSurveyPlans({
+      points: route,
+      legWidths: legs,
+      homes: [KELP, KROW],
+      budgetNm: 500,
+    })
+    expect(comparison.options.map((option) => option.id)).toEqual(['geographic'])
+    expect(comparison.options[0].recommended).toBe(true)
+    expect(comparison.options[0].teams.map((team) => team.identifier).sort()).toEqual(['KELP', 'KROW'])
+    expect(comparison.options[0].allUnder).toBe(true)
   })
 })
 

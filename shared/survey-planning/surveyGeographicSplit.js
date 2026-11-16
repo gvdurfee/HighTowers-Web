@@ -95,9 +95,10 @@ function mergeBothSidesForSegment(
   }))
 
   if (finalizeOpts) {
-    const { wps, team, stagedRefuel, budget } = finalizeOpts
+    const { wps, team, stagedRefuel, budget, neighbors } = finalizeOpts
     sorties = finalizeStagedRefuelTeamSorties(wps, team, sorties, stagedRefuel, budget, {
       appendReturnHomeIfNeeded: true,
+      neighbors,
     }).sorties
   }
 
@@ -145,9 +146,9 @@ function mergeBothSidesForSegment(
  * @param {SurveyWaypoint[]} chunkWps
  * @param {string[]} fullRoutePtIdents
  */
-function planChunkBothSides(input, team, chunkWps, fullRoutePtIdents) {
+function planChunkBothSides(input, team, chunkWps, fullRoutePtIdents, neighbors = null) {
   if (chunkWps.length < 2) return null
-  const chunkInput = { ...input, waypoints: chunkWps, fullRoutePtIdents }
+  const chunkInput = { ...input, waypoints: chunkWps, fullRoutePtIdents, offsetNeighbors: neighbors }
   const { leftSorties, rightSorties } = packBothSidesForTeam(chunkInput, team)
 
   const entryIdx =
@@ -202,12 +203,17 @@ function evaluateThreeWaySplit(input, teams, s1, s2, teamOrder) {
   let overBudget = 0
 
   const chunkStarts = [0, s1, s2]
+  const chunkEnds = [s1, s2, wps.length - 1]
   for (let i = 0; i < 3; i++) {
     const chunkResult = planChunkBothSides(
       input,
       teams[teamOrder[i]],
       chunks[i],
-      fullRoutePtIdents
+      fullRoutePtIdents,
+      {
+        before: chunkStarts[i] > 0 ? wps[chunkStarts[i] - 1] : null,
+        after: chunkEnds[i] + 1 < wps.length ? wps[chunkEnds[i] + 1] : null,
+      }
     )
     if (!chunkResult) return null
 
@@ -224,6 +230,10 @@ function evaluateThreeWaySplit(input, teams, s1, s2, teamOrder) {
             team,
             stagedRefuel: stagedRefuelContextForSide(input, team, 'single-side', false),
             budget: input.sortieBudgetNm ?? 500,
+            neighbors: {
+              before: chunkStarts[i] > 0 ? wps[chunkStarts[i] - 1] : null,
+              after: chunkEnds[i] + 1 < wps.length ? wps[chunkEnds[i] + 1] : null,
+            },
           }
         : null
 
@@ -256,9 +266,73 @@ function evaluateThreeWaySplit(input, teams, s1, s2, teamOrder) {
   }
 }
 
+function crewLoad(evalResult) {
+  let maxSorties = 0
+  let maxNm = 0
+  for (const team of evalResult.segmentTeams) {
+    maxSorties = Math.max(maxSorties, team.sortieCount ?? 0)
+    maxNm = Math.max(maxNm, team.totalNm ?? 0)
+  }
+  return { maxSorties, maxNm }
+}
+
+/** Fewest sorties, then fewest miles, then fewest over-budget sorties, then the smaller boundary. */
+export function compareThreeTeamSplitsBeforeBalance(a, b) {
+  if (a.totalSorties !== b.totalSorties) return a.totalSorties - b.totalSorties
+  if (a.totalWingNm !== b.totalWingNm) return a.totalWingNm - b.totalWingNm
+  if (a.overBudget !== b.overBudget) return a.overBudget - b.overBudget
+  if (a.s1 !== b.s1) return a.s1 - b.s1
+  if (a.s2 !== b.s2) return a.s2 - b.s2
+  return 0
+}
+
 /**
- * Optimize a three-team geographic split: contiguous segments, both sides each,
- * with team-to-segment assignment chosen to minimize wing sorties (tie-break NM).
+ * Same primary rule, then the most even crew load: smallest maximum sortie count,
+ * then smallest maximum crew miles. A plan with more sorties or more miles never wins on balance.
+ */
+export function compareThreeTeamSplits(a, b) {
+  if (a.totalSorties !== b.totalSorties) return a.totalSorties - b.totalSorties
+  if (a.totalWingNm !== b.totalWingNm) return a.totalWingNm - b.totalWingNm
+  if (a.overBudget !== b.overBudget) return a.overBudget - b.overBudget
+  const aLoad = crewLoad(a)
+  const bLoad = crewLoad(b)
+  if (aLoad.maxSorties !== bLoad.maxSorties) return aLoad.maxSorties - bLoad.maxSorties
+  if (aLoad.maxNm !== bLoad.maxNm) return aLoad.maxNm - bLoad.maxNm
+  if (a.s1 !== b.s1) return a.s1 - b.s1
+  if (a.s2 !== b.s2) return a.s2 - b.s2
+  return 0
+}
+
+function collectThreeTeamSplits(input, teams) {
+  const wps = input.waypoints ?? []
+  const lastIdx = wps.length - 1
+  /** @type {NonNullable<ReturnType<typeof evaluateThreeWaySplit>>[]} */
+  const found = []
+  for (let s1 = 1; s1 <= lastIdx - 2; s1++) {
+    for (let s2 = s1 + 1; s2 <= lastIdx - 1; s2++) {
+      for (const teamOrder of TEAM_PERMUTATIONS) {
+        const evalResult = evaluateThreeWaySplit(input, teams, s1, s2, teamOrder)
+        if (!evalResult) continue
+        const load = crewLoad(evalResult)
+        found.push({ ...evalResult, maxCrewSorties: load.maxSorties, maxCrewNm: load.maxNm })
+      }
+    }
+  }
+  return found
+}
+
+/** Every whole-waypoint split and team assignment, unsorted. */
+export function listThreeTeamGeographicSplits(input, teams) {
+  if (!teams || teams.length !== 3) {
+    throw new Error('listThreeTeamGeographicSplits requires exactly three teams')
+  }
+  return collectThreeTeamSplits(input, teams)
+}
+
+/**
+ * Optimize a three-team geographic split: contiguous segments, both sides each.
+ * Fewest sorties, then fewest miles, then fewest over-budget sorties,
+ * then the most even crew load, then the earlier boundary.
  * @param {SurveyPlannerInput} input
  * @param {SurveyTeamInput[]} teams - three teams
  * @returns {GeographicScenarioResult}
@@ -297,30 +371,8 @@ export function planThreeTeamGeographicScenario(input, teams) {
       disclaimer,
     }
   }
-  let best = null
-
-  for (let s1 = 1; s1 <= lastIdx - 2; s1++) {
-    for (let s2 = s1 + 1; s2 <= lastIdx - 1; s2++) {
-      for (const teamOrder of TEAM_PERMUTATIONS) {
-        const evalResult = evaluateThreeWaySplit(input, teams, s1, s2, teamOrder)
-        if (!evalResult) continue
-
-        if (
-          !best ||
-          evalResult.totalSorties < best.totalSorties ||
-          (evalResult.totalSorties === best.totalSorties &&
-            evalResult.totalWingNm < best.totalWingNm) ||
-          (evalResult.totalSorties === best.totalSorties &&
-            evalResult.totalWingNm === best.totalWingNm &&
-            (evalResult.overBudget < best.overBudget ||
-              (evalResult.overBudget === best.overBudget &&
-                (s1 < best.s1 || (s1 === best.s1 && s2 < best.s2)))))
-        ) {
-          best = evalResult
-        }
-      }
-    }
-  }
+  const ranked = collectThreeTeamSplits(input, teams).sort(compareThreeTeamSplits)
+  const best = ranked[0] ?? null
 
   if (!best) {
     throw new Error('No valid three-team geographic split for this route')

@@ -35,7 +35,7 @@ export function orderSortieTrack(opts: {
   inner: OffsetRoutePoint[]
   outer: OffsetRoutePoint[]
   sortie1Side: SortieSide
-  sortieNumber: 1 | 2
+  sortieNumber: number
 }): { side: SortieSide; waypoints: OffsetRoutePoint[] } {
   const side = opts.sortieNumber === 1 ? opts.sortie1Side : otherSortieSide(opts.sortie1Side)
   const track = side === 'inner' ? opts.inner : opts.outer
@@ -44,7 +44,7 @@ export function orderSortieTrack(opts: {
 }
 
 export function sortie2Explanation(_departureIdent: string | null | undefined): string {
-  return 'Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own .fpl file.'
+  return 'A later sortie is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Each sortie is its own .fpl file.'
 }
 
 export function missingSortieChoiceNotice(): string {
@@ -54,11 +54,12 @@ export function missingSortieChoiceNotice(): string {
 /** Inner or outer halfway track as one G1000 sortie. Waypoints are already in flight order. */
 export function buildSortieOffsetFpl(opts: {
   routeLabel: string
-  sortieNumber: 1 | 2
+  sortieNumber: number
   side: SortieSide
   waypoints: OffsetWaypoint[]
   departure?: AirportLike | null
   destination?: AirportLike | null
+  routeName?: string
 }): { xml: string; filename: string; routeName: string } {
   const toAirport = (airport: AirportLike) => ({
     identifier: airport.identifier,
@@ -67,7 +68,10 @@ export function buildSortieOffsetFpl(opts: {
     longitude: airport.longitude,
     elevation: airport.elevation,
   })
-  const routeName = sortieRouteName(opts.routeLabel, opts.sortieNumber, opts.side)
+  const routeName = (opts.routeName ?? sortieRouteName(opts.routeLabel, opts.sortieNumber, opts.side)).slice(
+    0,
+    G1000_ROUTE_NAME_MAX_LEN
+  )
   const sideLabel = opts.side
 
   const xml = G1000Service.generateFlightPlan({

@@ -5,10 +5,12 @@ import { describe, expect, it } from 'vitest'
 import { MapViewCrewControls } from '../src/components/MapViewCrewControls.tsx'
 import {
   isSingleAircrewPlan,
+  mapEmptyPathNotice,
   showFullFlightPlanSection,
   singleAircrewSortieButtonLabel,
   singleAircrewSortieHint,
 } from '../src/services/singleAircrewMap.ts'
+import { missingSortieChoiceNotice } from '../src/services/offsetRouteFpl.ts'
 
 const ASSIGNING =
   'For assigning more than one team to this route. Each team shows Sortie 1 first; switch to Sortie 2 for the next day.'
@@ -67,6 +69,36 @@ function renderControls(props) {
 }
 
 describe('single-aircrew map classification', () => {
+  it('keeps team wording off a single-aircrew plan that has no sortie side', () => {
+    const notice = mapEmptyPathNotice({
+      singleAircrew: true,
+      teamPlanKnown: true,
+      teamDraws: false,
+      overlayId: 'team1',
+      overlayLabel: 'Sortie 1',
+      sortie1Side: null,
+      passCount: 0,
+    })
+    expect(notice).toBeNull()
+    const prompt = missingSortieChoiceNotice()
+    expect(prompt).toBe('Choose Sortie 1 side in Flight Plans before downloading offset routes.')
+    expect(prompt).not.toMatch(/Team/)
+  })
+
+  it('still shows the team notice for a team plan with no sortie side', () => {
+    expect(
+      mapEmptyPathNotice({
+        singleAircrew: false,
+        teamPlanKnown: true,
+        teamDraws: false,
+        overlayId: 'team1',
+        overlayLabel: 'Team 1',
+        sortie1Side: null,
+        passCount: 0,
+      })
+    ).toBe('Team 1 has no airport or Sortie 1 side on this flight plan, so no path is drawn.')
+  })
+
   it('treats a plan with no team plan as single-aircrew unless it is a coordinator survey', () => {
     expect(isSingleAircrewPlan({ creationLoadMethod: 'sequence' }, null)).toBe(true)
     expect(isSingleAircrewPlan({ creationLoadMethod: undefined }, null)).toBe(true)

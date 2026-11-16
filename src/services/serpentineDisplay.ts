@@ -66,7 +66,7 @@ export type FlybyTurn = {
 }
 
 export type SerpentineArrow = {
-  pass: 1 | 2
+  pass: number
   lon: number
   lat: number
   bearing: number
@@ -74,7 +74,7 @@ export type SerpentineArrow = {
 }
 
 export type SerpentineLabel = {
-  pass: 1 | 2
+  pass: number
   name: string
   lon: number
   lat: number
@@ -124,7 +124,7 @@ export const NO_LANDING_AIRPORT_NOTE = 'No landing airport set.'
 /** Map View opens on Sortie 1. The page remembers a later choice until it closes. */
 export const DEFAULT_MAP_SORTIE = 1 as const
 
-export type MapSortieNumber = 1 | 2
+export type MapSortieNumber = number
 
 /**
  * The sortie to draw. A crew with one sortie keeps that sortie.
@@ -184,7 +184,7 @@ export type SerpentineDisplay = {
 type LatLon = { lat: number; lon: number }
 
 type DisplayPass = {
-  number: 1 | 2
+  number: number
   coordinates: LonLat[]
   waypoints: Array<{ lat: number; lon: number; name: string; surveySide?: 'left' | 'right' }>
   laneIndex?: number
@@ -422,7 +422,7 @@ function labelBearing(
 }
 
 function arrowOnLeg(
-  pass: 1 | 2,
+  pass: number,
   from: { lat: number; lon: number; name: string },
   to: { lat: number; lon: number } | undefined,
   capNm: number

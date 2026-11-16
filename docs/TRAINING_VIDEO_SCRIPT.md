@@ -35,7 +35,7 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 - **BUTTON OUTLINE** — production only. Do not speak this rule. Outline the relevant button while the narration explains pressing it. Keep the outline until the press or the next cue, then clear it. The outline must not cover text or shift layout, and it adds no pauses and no audio changes.
 
 **Suggested total runtime** — 26–38 minutes main program (aircrew chapters); +7–10 minutes for Appendix A (coordinator); +3–5 minutes for Appendix B (admin).  
-**Optional split** — record **Appendix A** as a standalone *Wing coordinator* clip if the primary audience is aircrew only. Main-program chapter numbers are **0–7** (aircrew), plus the appendices.
+**Optional split** — record **Appendix A** as a standalone *Wing coordinator* clip if the primary audience is aircrew only. Main-program chapter numbers are **1–7** (aircrew), plus the appendices. Chapter 0 is Retired.
 
 **Demo routes (suggested)**
 
@@ -49,17 +49,19 @@ Audience (appendix): **Wing administrator** for content-pack lifecycle only.
 
 ---
 
-## Chapter 0 — Introduction (optional, 30–45 s)
+## Chapter 0 — Introduction — Retired
+
+Retired on Nov 12. This chapter repeats Chapter 1, and its purpose sentence moved to Chapter 1. It is not part of the training video. The section is kept as a record.
 
 **TITLE CARD NARRATION**  
 “Chapter zero. Introduction.”  
 On-screen: **Chapter 0.** / Introduction
 
-**ON-SCREEN** — Workflow Guide; slow pan down the numbered steps. Point at the coordinator sentence under the title if it is visible.
+**ON-SCREEN** — Workflow Guide; slow pan down the numbered steps. During the last sentence, outline **Team Dispatch** in the sidebar. Do not open it.
 
 **[RE-RECORD]**  
 **NARRATION**  
-“This application walks a Civil Air Patrol crew through an Air Force route survey: flight planning that converts a ForeFlight flight plan to a format the G1000 can use, starting with the Air Force report form so that any new towers discovered can be added to the form automatically, measuring them in Tower Data Analysis so coordinates and heights can be added, providing a Map View for the pilot to check against the ForeFlight map, and to zoom to points for map tower marker checks after analysis is complete, to exporting the customer report in PDF form for emailing, and refreshing ForeFlight content packs for the next season, to include any new tower discovery coordinates. There is an extra survey planning section for coordinators — **Team Dispatch** in the sidebar — for the member who will staff two or three teams on routes with wide corridors. Each lane is already in the sortie file as real offset waypoints.”
+“This application walks a Civil Air Patrol crew through an Air Force route survey. Flight planning that converts a ForeFlight flight plan to a format the G1000 can use. Starting with the Air Force report form so that any new towers discovered can be added to the form automatically. Measuring them in Tower Data Analysis so coordinates and heights can be added. Providing a Map View for the pilot to check against the ForeFlight map, and to zoom to points for map tower marker checks after analysis is complete. Then exporting the customer report in PDF form for emailing, and refreshing ForeFlight content packs for the next season, to include any new tower discovery coordinates. Missions that need more than one aircrew are planned in Team Dispatch, in the sidebar. That has its own training video.”
 
 **PAUSE**
 
@@ -71,13 +73,13 @@ On-screen: **Chapter 0.** / Introduction
 “Chapter 1. Orientation and sidebar.”  
 On-screen: **Chapter 1.** / Orientation and sidebar
 
-**ON-SCREEN** — Left sidebar fully expanded; point at **Getting Started** → **Workflow Guide**.
+**ON-SCREEN** — The chapter opens on the Workflow Guide page. No clicks during the purpose sentence. Left sidebar fully expanded; then point at **Getting Started** → **Workflow Guide**.
 
 **[RE-RECORD]**  
 **NARRATION**  
-“With the Workflow Guide, every function can be branched to in the left sidebar. **Workflow Guide** is your checklist. Under **Mission Planning** *you’ll use* **Flight Plans** — and from there, pilots will create the flight plan for the sortie. If two or three teams are required, wing coordinators *open* **Team Dispatch** from the same sidebar section. The page heading on that screen also reads Team Dispatch. Coordinators load the published MTR, assign aircraft and Mission Pilots when they are available, then email each sortie **.fpl** to that aircraft’s Mission Pilot. A weather re-fly is a solo Flight Plan; those offset files come from Map View. **Mission Execution** *is* **Tower Data Analysis** *and* **Map View**. **Map View** is where you compare the planned route with ForeFlight, and later confirm each saved tower marker sits on the structure. Under **Reporting** you’ll use* the* **Air Force Report Form** *and* **Export Reported Data**. Content-pack close-out after the flight lives on **Export Reported Data**, not a separate sidebar item.”
+“This application walks a Civil Air Patrol crew through an Air Force Military Training Route survey, from flight planning to the customer report. With the Workflow Guide, every function can be branched to in the left sidebar. Workflow Guide is your checklist. Under Mission Planning you will use Flight Plans, and from there, pilots will create the flight plan for the sortie. When a mission needs more than one aircrew, the wing coordinator plans it in Team Dispatch, from the same sidebar section. Team Dispatch is covered in its own training video. A weather re-fly is a solo flight plan; its sortie files download from the flight-plan page. Mission Execution is Tower Data Analysis. And Map View. Map View is where you compare the planned route with ForeFlight, and later confirm each saved tower marker sits on the structure. Under Reporting you will use the Air Force Report Form. And Export Reported Data. Content-pack close-out after the flight lives on Export Reported Data, not a separate sidebar item.”
 
-**ON-SCREEN** — Spotlight each sidebar item as it is named, once: **Workflow Guide**, **Flight Plans**, **Team Dispatch** (hold through the coordinator staffing line; the page heading also reads Team Dispatch), **Tower Data Analysis**, **Map View**, **Air Force Report Form**, **Export Reported Data**. Use a light highlight so the label stays readable. Then spotlight **Clear All Data** at the bottom (do not click it). Do not return to Team Dispatch.
+**ON-SCREEN** — Spotlight each sidebar item as it is named, once: **Workflow Guide**, **Flight Plans**, **Team Dispatch** (during the two Team Dispatch sentences only; do not open the page), **Tower Data Analysis**, **Map View**, **Air Force Report Form**, **Export Reported Data**. Use a light highlight so the label stays readable. Then spotlight **Clear All Data** at the bottom (do not click it). Do not open Team Dispatch.
 
 **NARRATION**  
 “At the bottom of the *sidebar*, **Clear All Data** removes saved flight plans, towers, and missions from this browser. Use it only when you want a clean training or demo start. It cannot be undone.”
@@ -157,13 +159,12 @@ Demo route: **SR213** with **Waypoint sequence** (the more detailed of the two l
 **NARRATION**  
 “Before you export, open Map View and compare this graphical flight plan with your ForeFlight map. If the two pictures match, you have a visual confirmation that the waypoint list is right. If you see a mistake, press Return to Flight Plan and use Correct waypoint sequence on that page, otherwise press Return to Flight Plan in order to load the SD card.”
 
-**VIEW TRANSITION** — Finish the Map View directions on Map View, including “otherwise press Return to Flight Plan in order to load the SD card.” Highlight **Return to Flight Plan** while those sentences play, and do not click yet. Hold Map View for 2.000 seconds, then click **Return to Flight Plan**. Boundary: “*Export* full route…” explains the detail page and starts after that page is ready. *Export* is not the navigation click. The export dialog is not a new view.
+**VIEW TRANSITION** — Finish the Map View directions on Map View, including “otherwise press Return to Flight Plan in order to load the SD card.” Highlight **Return to Flight Plan** while those sentences play, and do not click yet. Hold Map View for 2.000 seconds, then click **Return to Flight Plan**. Boundary: “Choose the side flown first…” explains the detail page and starts after that page is ready.
 
-**ON-SCREEN** — Return is already done, after the Map View hold. Open numbered lightbulb **6** next to **Export full route (.fpl)** (hint body is the SD-card paragraph only). Then **Export full route (.fpl)** → Export. Show the download if the browser shows it. The export dialog is a modal, not a new view.
+**ON-SCREEN** — Return is already done, after the Map View hold. Inner is already selected. Outline that side selection and do not change it. Outline **Download Sortie 1** and press it at “download Sortie 1”, then outline and press **Download Sortie 2** at “Sortie 2”. Show the spur hint. Hold on the detail page. Do not open Spur review.
 
-**[RE-RECORD]**  
 **NARRATION**  
-“*Export* full route downloads the complete FPL, every waypoint in the plan. Follow the G1000 Pilot's Guide for importing user flight plans from the SD card. Eject the card before you remove it from the reader, so the file is not corrupted. Not a concern: per the Director of Operations, user waypoints and the flight plans that created them are erased after each mission. Confirm no leftover user waypoints before loading, because short names repeat between routes. Offset sortie files for a solo plan are downloaded from Map View. Team files are issued from **Team Dispatch**.”
+“Choose the side flown first. On this route, Inner is the left of the direction of flight and Outer is the right. Sortie 2 is flown on the opposite side. Under Offset sortie files, download Sortie 1 and Sortie 2 from this page after Map View has saved the offset plan. If the plan hasn't been saved, the downloads stay off, and the page links you to Map View. Each sortie is its own file, already in flying order. Do not invert Sortie 2 on the G1000. On this route, Sortie 1 also flies both sides of the Hotel spur, so Sortie 2 skips it. Copy both files to the root of a FAT32 SD card, then eject the card before you remove it from the reader, so the files are not corrupted. Insert the card in the top slot of the MFD before you power up the MFD. Otherwise the panel may say there is no flight plan to import. That's everything a single aircrew needs: two sortie files, one for each side of the route. Missions with more than one aircrew are planned in Team Dispatch.”
 
 **PAUSE**
 
@@ -178,7 +179,7 @@ On-screen: **Chapter 3.** / Air Force Report Form
 **ON-SCREEN** — Sidebar → **Air Force Report Form**. Leave Date, Point of Contact, and Mission Information empty at first so **Save Mission Changes** is disabled. Numbered lightbulbs on this form match the same rules if you want a reminder.
 
 **NARRATION**  
-“This form is the living record for the Air Force customer: mission identification, tower observations, bearings and distances, and anything that belongs in **Additional Notes** at the bottom. Data you add here flows into the export PDF later. But it also frees the user from having to enter the report data manually; this form collects almost everything needed automatically as you move through the functions needed to complete the report.”
+“This form is the living record for the Air Force customer: mission identification, tower observations, bearings and distances, and anything that belongs in Additional Notes at the bottom. Data you add here flows into the export PDF later. But it also frees the user from having to enter the report data manually. This form collects almost everything needed automatically as you move through the functions needed to complete the report.”
 
 **ON-SCREEN** — Type **Date** `08/10/2026`. Point at **Save Mission Changes** — it stays disabled until the identifiers are in too.
 
@@ -198,17 +199,17 @@ On-screen: **Chapter 3.** / Air Force Report Form
 **ON-SCREEN** — Scroll to a tower row populated from Tower Data Analysis (coordinates and **See Notes** heights). Leave **Structure Type** and **Lighting** on Select until analysis is finished.
 
 **NARRATION**  
-“When a tower was **not found on the map** but you measured height from a nearby photo position, **Height AGL** and **Height MSL** show the estimated values with **See Notes** — for example `176 ft. - See the Notes for AGL` and `5561 ft. - See the Notes for MSL` — so the customer sees approximate heights without crowding the **Notes** field. **Notes** carry the explanation and true bearing and distance from the route waypoint.”
+“When a tower was not found on the map but you measured height from a nearby photo position, Height AGL and Height MSL show the estimated values with See Notes. For example, 176 feet. See the Notes for AGL, and 5561 feet. See the Notes for MSL. So the customer sees approximate heights without crowding the Notes field. Notes carry the explanation and true bearing and distance from the route waypoint.”
 
 **ON-SCREEN** — Set Tower 1 **Structure Type** to **Cell / Microwave** and **Lighting** to **Strobes**.
 
 **NARRATION**  
-“After Tower Data Analysis is finished, don't forget come back and set Structure Type and Lighting, since this only applies to towers being reported. Coordinates and heights fill from analysis; type and lighting do not.”
+“After Tower Data Analysis is finished, don't forget to come back and set Structure Type and Lighting, since this only applies to towers being reported. Coordinates and heights fill from analysis; type and lighting do not.”
 
 **ON-SCREEN** — Scroll to **Additional Notes**.
 
 **NARRATION**  
-“Additional Notes are repeated on the last appendix page of the exported survey PDF — useful for content-pack audit lines and other mission commentary.”
+“Additional Notes are repeated on the last appendix page of the exported survey PDF. Useful for content-pack audit lines and other mission commentary.”
 
 **PAUSE**
 
@@ -233,7 +234,7 @@ On-screen: **Chapter 4.** / Tower Data Analysis
 **ON-SCREEN** — After **Record Location**, animate red then blue onto the locked pose (tip / pad-and-shadow) and hold. Then play the height VO over that still; **Save Tower**.
 
 **NARRATION**  
-“Align the red line to the top and the blue line to the base. Complete the height measurement and save. On the **Air Force Report Form**, AGL and MSL appear as estimated feet followed by **See Notes** when the tower wasn’t on the map; **Notes** get the standard prefix plus bearing and distance from the route — not a repeat of the height numbers, so the Notes field doesn’t truncate on the PDF. Press the **Save Tower** button and note the acknowledgement when Tower Data Analysis clears for the next tower measurement.”
+“Align the red line to the top and the blue line to the base. Complete the height measurement. On the **Air Force Report Form**, AGL and MSL appear as estimated feet followed by **See Notes** when the tower wasn’t on the map; **Notes** get the standard prefix plus bearing and distance from the route — not a repeat of the height numbers, so the Notes field doesn’t truncate on the PDF. Press the **Save Tower** button and note the acknowledgement when Tower Data Analysis clears for the next tower measurement.”
 
 
 **PAUSE**
@@ -251,22 +252,27 @@ Demo continues **SR213** / mission **26-1-4224**. The PDF must show the same tow
 **ON-SCREEN** — Sidebar → **Map View**. Flight plan **SR213 Training Demo**. Mission **26-1-4224** so surveyed towers draw. Hold the full-route fit: red leader from the nearest waypoint to the tower.
 
 **NARRATION**  
-“If no new towers were discovered, check the box indicating this; the Airforce customer still needs a record of the survey results. The Air Force Report form is filled out with the note hat no new towers were found. Additionally, there is no need to modify the ForeFlight Content pack for the same reason But for missions that resulted with new towers found, the following is followed: After analysis, come back to **Map View** before you email anything. With the flight plan and this mission selected, each reported tower draws as a marker on a line from the nearest route waypoint. That is your check that the point you saved actually sits on the structure.”
+“After analysis, come back to Map View before you email anything. With the flight plan and this mission selected, each reported tower draws as a marker on a line from the nearest route waypoint. That is your check that the point you saved actually sits on the structure.”
 
 **ON-SCREEN** — Picture-first: zoom in on the one SR213 tower marker until the arrowhead locks on the base; hold that pose, then VO.
 
 **NARRATION**  
 “Zoom in on the marker. The line stays tied to the waypoint, the arrowhead locks onto the tower base, and the label slides back so you can see the tip pointing at the structure. If this were a multi-tower sortie you would repeat that for each one. When the picture is right, you are ready to build the customer PDF.”
 
+**ON-SCREEN** — Sidebar → **Export Reported Data**. Keep **No new towers found on this mission** and **No content pack update for this mission** visible and unchecked.
+
+**NARRATION**  
+“The No new towers and No content pack update boxes on this page are covered in Chapter 6.”
+
 **ON-SCREEN** — Sidebar → **Export Reported Data**. Select mission `26-1-4224` if it is not already selected. Hover **ForeFlight content pack (optional)** — next chapter. Do not check **No content pack update**.
 
 **NARRATION**  
-“**Export Reported Data** builds the Air Force Route Survey PDF from the mission you just checked. The same page has optional ForeFlight content-pack close-out; we cover that in the next chapter. Select the mission, then generate the PDF.”
+“Export Reported Data builds the Air Force Route Survey PDF from the mission you just checked. The same page has optional ForeFlight content-pack close-out. We cover that in the next chapter. Select the mission, then generate the PDF.”
 
 **ON-SCREEN** — Picture-first: **Generate & Download PDF**. Do not linger on an empty form. Land on **page 1 filled** from Chapters 3–4: mission `26-1-4224`, route **SR213**, POC **Durfee** / **NM-030**, Tower 1 coordinates `N34°28.88′` / `W104°51.72′`, heights `182 ft` and `5561 ft`, **Cell / Microwave**, **Strobes**. This tower was found on the map in Chapter 4, so the row must not say **Tower not found on Map** or **See Notes**. Hold, then VO.
 
 **NARRATION**  
-“Confirm page one before you send it. Mission number, MTR Route, point of contact, and the tower table should match what you entered on the Air Force Report Form and measured in Tower Data Analysis — coordinates, estimated heights, structure type, and lighting.”
+“Confirm page one before you send it. Mission number, MTR Route, point of contact, and the tower table should match what you entered on the Air Force Report Form and measured in Tower Data Analysis. Coordinates, estimated heights, structure type, and lighting.”
 
 **ON-SCREEN** — Flip to the **tower photo** appendix page. The CAP-yellow overlay shows latitude, longitude, Height AGL, and Height MSL. Hold, then VO.
 
@@ -276,7 +282,7 @@ Demo continues **SR213** / mission **26-1-4224**. The PDF must show the same tow
 **ON-SCREEN** — Flip to the **mission map** appendix: the full **SR213** route and a marker for the one reported tower. Additional Notes from the form appear on this last page. Hold, then VO.
 
 **NARRATION**  
-“The last appendix is a flat map of the whole route with a marker for each reported tower — here, the one SR213 structure. **Additional Notes** from the report form print again on this page. The whole package is limited to 5 megabytes, large enough for detailed images, small enough to email. So, with your report review complete, you're ready to download the report, and email to the Air Force customer.”
+“The last appendix is a flat map of the whole route with a marker for each reported tower. Here, the one SR213 structure. Additional Notes from the report form print again on this page. The whole package is limited to 5 megabytes, large enough for detailed images, small enough to email. So, with your report review complete, you're ready to download the report, and email to the Air Force customer.”
 
 **PAUSE**
 
@@ -291,17 +297,20 @@ On-screen: **Chapter 6.** / ForeFlight content pack close-out
 **ON-SCREEN** — Stay on **Export Reported Data**. Select a **mission** that has tower work. Scroll to **ForeFlight content pack (optional)**.
 
 **NARRATION**  
-“It's not unusual for our ForeFlight Content Packs to show multiple markers for a single previosuly reported tower. Since HighTowers-Web provides a more accurate location than a location using a sectional map, the report should reflect these revised coordinates. After the flight, our Airforce Customer will use these reported locations to replace what's been previously reported on past surveys. If this mission added towers or improved coordinates versus the pack you imported in ForeFlight, stay on **Export Reported Data**. There is no separate sidebar item for packs.”
+“It's not unusual for our ForeFlight Content Packs to show multiple markers for a single previously reported tower. Since HighTowers-Web provides a more accurate location than a location using a sectional map, the report should reflect these revised coordinates. After the flight, our Air Force customer will use these reported locations to replace what's been previously reported on past surveys. If this mission added towers or improved coordinates versus the pack you imported in ForeFlight, stay on Export Reported Data. There is no separate sidebar item for packs.”
 
 **ON-SCREEN** — Leave **No content pack update** unchecked. Upload the ForeFlight content-pack ZIP the crew flew with. Click **Preview** (or the equivalent preview control).
 
 **NARRATION**  
-“Upload the ZIP you actually flew with. Preview shows how many rows would refine, append, or stay unchanged after four-decimal rounding. Work stays in this browser — the ZIP is not uploaded to a server. Read any status line that updates **Additional Notes** on the Air Force Report Form so the audit trail stays in sync.”
+“Upload the ZIP you actually flew with. Preview shows how many rows would refine, append, or stay unchanged after four-decimal rounding. Work stays in this browser. The ZIP is not uploaded to a server. Read any status line that updates Additional Notes on the Air Force Report Form so the audit trail stays in sync.”
 
 **ON-SCREEN** — Download the updated ZIP. Stay on **Export Reported Data**. Do not open the Wing Administrator console.
 
 **NARRATION**  
-“Download the updated ZIP and email it to your Wing maintainer for next season’s folder. If this mission did not add or move towers, check **No content pack update** and you only need the PDF.”
+“Download the updated ZIP and email it to your Wing maintainer for next season's folder. If this mission did not add or move towers, check No content pack update and you only need the PDF.”
+
+**NARRATION**  
+“If your mission found no new towers, check No new towers found on this mission, and No content pack update for this mission is checked for you, so there is nothing to upload.”
 
 **PAUSE**
 
@@ -312,7 +321,7 @@ On-screen: **Chapter 6.** / ForeFlight content pack close-out
 **TITLE CARD NARRATION**  
 “Chapter 7. Wrap-up and recurring operations.”  
 On-screen: **Chapter 7.** / Wrap-up and recurring operations  
-*(Not yet in `generate-chapters-00-02.py`; chapters 0–6 are the current TTS set.)*
+*(Not yet in `generate-chapters-00-02.py`; chapters 1–6 are the current TTS set. Chapter 0 is Retired.)*
 
 **ON-SCREEN** — Return to **Workflow Guide**; highlight crew steps; optionally flash **Team Dispatch** in the sidebar.
 

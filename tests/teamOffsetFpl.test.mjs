@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { crossTrackNm, routeCurveSide } from '../shared/survey-planning/offsetRoutePlan.js'
-import { draftTeamPlan, offsetSortieWaypoints, teamSortieOffsetRoute } from '../src/services/teamPlanRecord.ts'
+import { draftTeamPlan, offsetSortieWaypoints, teamSortieOffsetRoute, uniqueSortieFilename } from '../src/services/teamPlanRecord.ts'
 import { buildNamedOffsetSortieFile, buildTeamPlanSortieFile } from '../src/services/teamPlanSortieDownload.ts'
 
 const VR114 = ['A', 'B', 'C', 'D', 'E', 'F', 'M1']
@@ -159,7 +159,9 @@ describe('team sortie files use offset coordinates', () => {
         const body = (xml) => xml.replace(/<created>[^<]*<\/created>/, '')
         expect(body(shared.xml)).toBe(body(file.xml))
         expect(body(explicit.xml)).toBe(body(file.xml))
-        expect(shared.filename).toBe(file.filename)
+        expect(shared.filename).toBe(
+          `VR114_${team.departure.identifier}_${team.segmentFrom}${team.segmentTo}_S${number}.fpl`
+        )
       }
     }
     const outer = plan.teams[0]
@@ -192,7 +194,37 @@ describe('team sortie files use offset coordinates', () => {
     })
     expect('error' in named).toBe(false)
     if ('error' in named) return
-    expect(named.waypoints[0].g1000Name).toBe('A1O')
+    expect(named.waypoints[0].g1000Name).toBe('B1O')
     expect(crossTrackNm(named.waypoints[0], square[0], square[1])).toBeLessThan(0)
+  })
+
+  it('starts the same lanes at the other end when startAt is the far point', () => {
+    const shared = {
+      points,
+      legWidths: widths(),
+      fromPt: 'A',
+      toPt: 'B',
+      side: 'inner',
+      departure: KSKX,
+      landing: KSKX,
+      routeLabel: 'VR114',
+      sortieNumber: 1,
+      homeIdent: 'KLRU',
+      offsets: [2.5],
+      namePrefix: 'U',
+    }
+    const fromA = buildNamedOffsetSortieFile(shared)
+    const fromB = buildNamedOffsetSortieFile({ ...shared, startAt: 'B' })
+    const place = (file) =>
+      userTable(file.xml)
+        .map((row) => `${row.lat.toFixed(4)},${row.lon.toFixed(4)}`)
+        .sort()
+    expect(routeUsers(fromA.xml)).not.toEqual(routeUsers(fromB.xml))
+    expect(place(fromA)).toEqual(place(fromB))
+    expect(fromA.filename).toBe('VR114_KLRU_AB_S1.fpl')
+    const used = new Map()
+    expect(uniqueSortieFilename(fromA.filename, used)).toBe('VR114_KLRU_AB_S1.fpl')
+    expect(uniqueSortieFilename(fromA.filename, used)).toBe('VR114_KLRU_AB_S1_2.fpl')
+    expect(fromA.xml).toContain('>UA')
   })
 })

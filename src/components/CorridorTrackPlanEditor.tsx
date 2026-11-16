@@ -2,6 +2,7 @@ import { GuidedHint } from '@/components/GuidedHint'
 import {
   formatSpanLabel,
   resetRowOffsetsToDefault,
+  spanTrackFitWarnings,
   type SpanTrackRowState,
 } from '@/utils/coordinatorSpanTrackPlan'
 
@@ -24,6 +25,8 @@ type CorridorTrackPlanEditorProps = {
   spanTrackErr: string | null
   isSeen: (id: string) => boolean
   markSeen: (id: string) => void
+  widthLabels?: { left: string; right: string }
+  widthHelp?: string
   legPreview?: {
     fromPt: string
     toPt: string
@@ -35,6 +38,8 @@ type CorridorTrackPlanEditorProps = {
     rightNote?: string | null
     chainNm: number
   }[]
+  /** Widths and tracks are separate review sections. Omit to show both together. */
+  part?: 'widths' | 'tracks'
 }
 
 export function CorridorTrackPlanEditor({
@@ -49,8 +54,13 @@ export function CorridorTrackPlanEditor({
   spanTrackErr,
   isSeen,
   markSeen,
+  widthLabels = { left: 'Left NM', right: 'Right NM' },
+  widthHelp,
   legPreview,
+  part,
 }: CorridorTrackPlanEditorProps) {
+  const showWidths = part !== 'tracks'
+  const showTracks = part !== 'widths'
   const updateRow = (index: number, patch: Partial<SpanTrackRowState>) => {
     onSpanTrackRowsChange(
       spanTrackRows.map((row, i) => (i === index ? { ...row, ...patch } : row))
@@ -66,15 +76,19 @@ export function CorridorTrackPlanEditor({
   }
 
   return (
-    <div className="mt-5 border-t border-gray-200 pt-5">
+    <div className={part ? '' : 'mt-5 border-t border-gray-200 pt-5'}>
       <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">Corridor and lane spacing</h3>
-          <p className="text-sm text-gray-600 mt-1 max-w-2xl">
-            NASR width defines each span. Lane spacing is nautical miles, inner then outer. The sortie
-            file places a waypoint on each lane. Adjust the list and re-run the planner to compare sortie impact.
+          {!part && <h3 className="text-base font-semibold text-gray-900">Corridor and lane spacing</h3>}
+          <p className="text-sm text-gray-700 mt-1 max-w-2xl">
+            {showWidths && !showTracks
+              ? 'Published width for each span, in nautical miles, left and right of centerline as flown.'
+              : showTracks && !showWidths
+                ? 'Lane spacing is nautical miles, inner then outer. A pass past the published edge is left out.'
+                : 'NASR width defines each span. Lane spacing is nautical miles, inner then outer. The sortie file places a waypoint on each lane. Adjust the list and re-run the planner to compare sortie impact.'}
           </p>
         </div>
+        {showWidths && (
         <GuidedHint
           hintId={HINT_COORD_CORRIDOR_TRACKS}
           stepNumber={3}
@@ -99,10 +113,11 @@ export function CorridorTrackPlanEditor({
           onDismiss={markSeen}
           surface="light"
         />
+        )}
       </div>
 
       {widthBusy && <p className="text-sm text-gray-500">Loading NASR width text…</p>}
-      {widthErr && (
+      {showWidths && widthErr && (
         <p className="text-sm text-cap-pimento" role="alert">
           {widthErr}
         </p>
@@ -114,6 +129,7 @@ export function CorridorTrackPlanEditor({
 
       {!widthBusy && spanTrackRows.length > 0 && (
         <div className="space-y-4">
+          {showTracks && (
           <div className="flex flex-wrap gap-4 text-sm">
             <label className="block">
               <span className="text-xs text-gray-600">First offset (NM)</span>
@@ -150,6 +166,8 @@ export function CorridorTrackPlanEditor({
               edge is left out.
             </p>
           </div>
+          )}
+          {showWidths && widthHelp && <p className="mb-3 text-sm text-gray-700">{widthHelp}</p>}
           {spanTrackRows.map((row, index) => (
             <div
               key={`${row.fromPt}-${row.toPt}-${index}`}
@@ -160,8 +178,10 @@ export function CorridorTrackPlanEditor({
                 Span: <span className="font-medium text-gray-700">{formatSpanLabel(row.fromPt, row.toPt)}</span>
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
+                {showWidths && (
+                <>
                 <label className="block">
-                  <span className="text-xs text-gray-600">Left NM</span>
+                  <span className="text-xs text-gray-600">{widthLabels.left}</span>
                   <input
                     type="number"
                     min={1}
@@ -169,11 +189,11 @@ export function CorridorTrackPlanEditor({
                     value={row.leftNm}
                     onChange={(e) => updateRow(index, { leftNm: e.target.value })}
                     className={`${NM_INPUT_CLASS} mt-1`}
-                    aria-label={`Left half-width NM for ${formatSpanLabel(row.fromPt, row.toPt)}`}
+                    aria-label={`${widthLabels.left} for ${formatSpanLabel(row.fromPt, row.toPt)}`}
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs text-gray-600">Right NM</span>
+                  <span className="text-xs text-gray-600">{widthLabels.right}</span>
                   <input
                     type="number"
                     min={1}
@@ -181,9 +201,13 @@ export function CorridorTrackPlanEditor({
                     value={row.rightNm}
                     onChange={(e) => updateRow(index, { rightNm: e.target.value })}
                     className={`${NM_INPUT_CLASS} mt-1`}
-                    aria-label={`Right half-width NM for ${formatSpanLabel(row.fromPt, row.toPt)}`}
+                    aria-label={`${widthLabels.right} for ${formatSpanLabel(row.fromPt, row.toPt)}`}
                   />
                 </label>
+                </>
+                )}
+                {showTracks && (
+                <>
                 <label className="block sm:col-span-2 xl:col-span-1">
                   <span className="text-xs text-gray-600">Left offsets (NM)</span>
                   <input
@@ -206,7 +230,11 @@ export function CorridorTrackPlanEditor({
                     aria-label={`Right lane spacing for ${formatSpanLabel(row.fromPt, row.toPt)}`}
                   />
                 </label>
+                </>
+                )}
               </div>
+              {showTracks && (
+              <>
               <button
                 type="button"
                 onClick={() => resetRowDefaults(index)}
@@ -214,16 +242,23 @@ export function CorridorTrackPlanEditor({
               >
                 Reset offsets to wing default for this span
               </button>
+              {spanTrackFitWarnings(row).map((warning) => (
+                <p key={warning} className="mt-2 text-sm text-cap-pimento" role="alert">
+                  {warning}
+                </p>
+              ))}
+              </>
+              )}
             </div>
           ))}
 
-          {spanTrackErr && (
+          {showTracks && spanTrackErr && (
             <p className="text-sm text-cap-pimento" role="alert">
               {spanTrackErr}
             </p>
           )}
 
-          {legPreview && legPreview.length > 0 && (
+          {showTracks && legPreview && legPreview.length > 0 && (
             <div>
               <h4 className="text-sm font-semibold text-gray-900 mb-2">Leg preview (from track plan)</h4>
               <div className="overflow-x-auto">
@@ -231,7 +266,7 @@ export function CorridorTrackPlanEditor({
                   <thead>
                     <tr className="border-b border-gray-200 text-left text-gray-600">
                       <th className="py-2 pr-3">Leg</th>
-                      <th className="py-2 pr-3">Left / Right NM</th>
+                      <th className="py-2 pr-3">{widthLabels.left} / {widthLabels.right}</th>
                       <th className="py-2 pr-3">Offsets left</th>
                       <th className="py-2 pr-3">Offsets right</th>
                       <th className="py-2">Chain NM</th>

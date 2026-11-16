@@ -110,7 +110,11 @@ export function planSideLanes(opts) {
         fragment,
         widthSlice.map(() => offsetNm),
         widthSlice.map((width) => (side === 'left' ? width.leftNm : width.rightNm)),
-        side
+        side,
+        {
+          before: seg.startIdx > 0 ? wps[seg.startIdx - 1] : null,
+          after: seg.endIdx + 1 < wps.length ? wps[seg.endIdx + 1] : null,
+        }
       )
       const fromStart = k % 2 === 0
       const forward = forwardFirst ? fromStart : !fromStart

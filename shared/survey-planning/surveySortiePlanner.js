@@ -174,19 +174,22 @@ function packBothSidesForTeam(input, team) {
   const leftCtx = stagedRefuelContextForSide(input, team, 'left', true)
   const rightCtx = stagedRefuelContextForSide(input, team, 'right', false)
 
+  const neighbors = input.offsetNeighbors ?? null
   const leftSorties = packSortiesForTeam(
     wps,
     legs,
     { ...team, side: 'left' },
     budget,
-    leftCtx
+    leftCtx,
+    neighbors
   )
   const rightSorties = packSortiesForTeam(
     wps,
     legs,
     { ...team, side: 'right' },
     budget,
-    rightCtx
+    rightCtx,
+    neighbors
   ).map((s, i) => ({ ...s, sortieNumber: leftSorties.length + i + 1 }))
 
   return { leftSorties, rightSorties }
@@ -245,9 +248,35 @@ export function buildStagedRefuelTeamNote(sorties) {
   return null
 }
 
+function replanSortieFerry(wps, team, sortie, depart, land, budgetNm, neighbors = null) {
+  const replanned = bestSortiePlan(
+    wps,
+    { ...team, side: sortie.side === 'right' || sortie.side === 'left' ? sortie.side : team.side },
+    sortie.startIdx,
+    sortie.endIdx,
+    sortie.offsets,
+    {
+    ferryInPt: depart,
+    ferryOutPt: land,
+    ferryInLabel: depart.label,
+    ferryOutLabel: land.label,
+  },
+    neighbors
+  )
+  return {
+    ...sortie,
+    ...replanned,
+    side: sortie.side,
+    offsetsPerSide: sortie.offsetsPerSide,
+    overBudget: replanned.totalNm > budgetNm + 1e-6,
+  }
+}
+
 /**
- * When staged refuel applies: try merging return-home NM into the last survey sortie if it fits the budget
- * (never into sortie 1 — crews refuel after the first sortie). Otherwise append a ferry-only return sortie.
+ * When staged refuel applies, sort the sorties into flying order first (left side, then right side).
+ * Sortie 1 departs home. Every later sortie departs where the previous one landed.
+ * Only the team's last sortie lands home, and only when that still fits the budget.
+ * Otherwise the last survey sortie stays at the refuel airport and a ferry-only return is appended.
  * @param {SurveyWaypoint[]} wps
  * @param {SurveyTeamInput} team
  * @param {ReturnType<typeof buildReturnToHomeSortie>[]} sorties
@@ -256,58 +285,134 @@ export function buildStagedRefuelTeamNote(sorties) {
  * @param {{ appendReturnHomeIfNeeded?: boolean }} [options]
  */
 export function finalizeStagedRefuelTeamSorties(wps, team, sorties, stagedRefuel, budgetNm, options = {}) {
-  const { appendReturnHomeIfNeeded = false } = options
+  const { appendReturnHomeIfNeeded = false, preferredSide = null, neighbors = null } = options
   if (!stagedRefuel || sorties.length === 0) {
     return { sorties, merged: false, appendedReturn: false }
   }
 
   const { home, recovery } = stagedRefuel
-  const recoveryLabel = recovery.label ?? 'RECOVERY'
-  const homeLabel = home.label ?? team.label
-  /** @type {ReturnType<typeof buildReturnToHomeSortie>[]} */
-  let result = sorties.map((s) => ({ ...s }))
-  let merged = false
-
-  if (result.length >= 2) {
-    const lastIdx = result.length - 1
-    const last = result[lastIdx]
-    if (!last.returnHomeOnly && last.ferryOutLabel === recoveryLabel) {
-      const replanned = bestSortiePlan(wps, team, last.startIdx, last.endIdx, last.offsets, {
-        ferryInPt: recovery,
-        ferryOutPt: home,
-        ferryInLabel: recoveryLabel,
-        ferryOutLabel: homeLabel,
-      })
-      if (replanned.totalNm <= budgetNm + 1e-6) {
-        result[lastIdx] = { ...replanned, sortieNumber: last.sortieNumber }
-        merged = true
-      }
-    }
+  const homePoint = { lat: home.lat, lon: home.lon, label: home.label ?? team.label }
+  const recoveryPoint = { lat: recovery.lat, lon: recovery.lon, label: recovery.label ?? 'RECOVERY' }
+  const survey = sorties
+    .map((sortie, index) => ({ sortie, index }))
+    .filter((item) => !item.sortie.returnHomeOnly && item.sortie.startIdx >= 0 && item.sortie.endIdx >= item.sortie.startIdx)
+    .sort((a, b) => {
+      const firstSide = preferredSide === 'right' || preferredSide === 'left' ? preferredSide : 'left'
+      const sideOrder = (sortie) => (sortie.side === firstSide ? 0 : 1)
+      const sideDelta = sideOrder(a.sortie) - sideOrder(b.sortie)
+      if (sideDelta !== 0) return sideDelta
+      if (a.sortie.startIdx !== b.sortie.startIdx) return a.sortie.startIdx - b.sortie.startIdx
+      if (a.sortie.endIdx !== b.sortie.endIdx) return a.sortie.endIdx - b.sortie.endIdx
+      return a.index - b.index
+    })
+    .map((item) => item.sortie)
+  if (survey.length === 0) {
+    return { sorties: sorties.map((sortie, index) => ({ ...sortie, sortieNumber: index + 1 })), merged: false, appendedReturn: false }
   }
 
-  let appendedReturn = false
-  const last = result[result.length - 1]
-  const needsReturn =
-    appendReturnHomeIfNeeded &&
-    !merged &&
-    last &&
-    !last.returnHomeOnly &&
-    last.ferryOutLabel === recoveryLabel
-
-  if (needsReturn) {
-    result.push(
-      buildReturnToHomeSortie(
-        { lat: recovery.lat, lon: recovery.lon, label: recovery.label },
-        team,
-        result.length + 1,
-        budgetNm
-      )
+  const lastIndex = survey.length - 1
+  const departs = (index) => (index === 0 ? homePoint : recoveryPoint)
+  const trialLast = replanSortieFerry(wps, team, survey[lastIndex], departs(lastIndex), homePoint, budgetNm, neighbors)
+  const foldHome = trialLast.totalNm <= budgetNm + 1e-6
+  const result = survey.map((sortie, index) =>
+    replanSortieFerry(
+      wps,
+      team,
+      sortie,
+      departs(index),
+      index === lastIndex && foldHome ? homePoint : recoveryPoint,
+      budgetNm,
+      neighbors
     )
+  )
+
+  let appendedReturn = false
+  if (!foldHome && appendReturnHomeIfNeeded) {
+    result.push(buildReturnToHomeSortie(recoveryPoint, { ...team, label: homePoint.label }, result.length + 1, budgetNm))
     appendedReturn = true
   }
 
-  result = result.map((s, i) => ({ ...s, sortieNumber: i + 1 }))
-  return { sorties: result, merged, appendedReturn }
+  return {
+    sorties: result.map((sortie, index) => ({ ...sortie, sortieNumber: index + 1 })),
+    merged: foldHome && survey.length >= 2,
+    appendedReturn,
+  }
+}
+
+/**
+ * Put the crew's chosen side first and rebuild the refuel chain.
+ * The geographic search still packs left then right. This runs only on the plan that is shown and saved.
+ */
+function splitSortieToBudget(wps, team, sortie, depart, land, budgetNm) {
+  const side = sortie.side === 'right' ? 'right' : 'left'
+  const crew = { ...team, side }
+  const fromIdx = wps.findIndex((point) => point.ptIdent === sortie.waypointFrom)
+  const toIdx = wps.findIndex((point) => point.ptIdent === sortie.waypointTo)
+  const startIdx = fromIdx >= 0 ? fromIdx : sortie.startIdx
+  const endIdx = toIdx >= 0 ? toIdx : sortie.endIdx
+  const ferry = {
+    ferryInPt: depart,
+    ferryOutPt: land,
+    ferryInLabel: depart.label,
+    ferryOutLabel: land.label,
+  }
+  const measure = (offsets) => ({
+    ...sortie,
+    ...bestSortiePlan(wps, crew, startIdx, endIdx, offsets, ferry),
+    side: sortie.side,
+    offsets,
+    startIdx,
+    endIdx,
+    waypointFrom: wps[startIdx]?.ptIdent ?? sortie.waypointFrom,
+    waypointTo: wps[endIdx]?.ptIdent ?? sortie.waypointTo,
+  })
+  let keep = sortie.offsets?.length ?? 0
+  if (keep === 0) return [sortie]
+  let head = measure(sortie.offsets.slice(0, keep))
+  while (keep > 1 && head.totalNm > budgetNm + 1e-6) {
+    keep -= 1
+    head = measure(sortie.offsets.slice(0, keep))
+  }
+  if (keep >= sortie.offsets.length) return [head]
+  const rest = { ...sortie, offsets: sortie.offsets.slice(keep), startIdx, endIdx }
+  return [head, ...splitSortieToBudget(wps, team, rest, land, land, budgetNm)]
+}
+
+export function orderSortiesPreferredSide(wps, team, sorties, preferredSide, stagedRefuel, budgetNm) {
+  if (preferredSide !== 'left' && preferredSide !== 'right') return sorties
+  const first = (sorties ?? []).find((sortie) => sortie.side === 'left' || sortie.side === 'right')
+  if (!first || first.side === preferredSide) return sorties
+  const survey = sorties.filter((sortie) => !sortie.returnHomeOnly)
+  const preferred = survey.filter((sortie) => sortie.side === preferredSide)
+  const other = survey.filter((sortie) => sortie.side !== preferredSide)
+  const grouped = (list) => {
+    const groups = []
+    for (const sortie of list) {
+      const key = `${sortie.waypointFrom}|${sortie.waypointTo}`
+      const found = groups.find((group) => group.key === key)
+      if (found) found.offsets.push(...(sortie.offsets ?? []))
+      else groups.push({ key, sortie, offsets: [...(sortie.offsets ?? [])] })
+    }
+    return groups
+  }
+  if (!stagedRefuel) {
+    return [...preferred, ...other].map((sortie, index) => ({ ...sortie, sortieNumber: index + 1 }))
+  }
+  const home = { lat: team.depLat, lon: team.depLon, label: team.label }
+  const recovery = stagedRefuel.recovery
+  const fitted = []
+  const packGroup = (group, depart) =>
+    splitSortieToBudget(wps, team, { ...group.sortie, offsets: group.offsets }, depart, recovery, budgetNm)
+  grouped(preferred).forEach((group, index) => {
+    fitted.push(...packGroup(group, index === 0 && fitted.length === 0 ? home : recovery))
+  })
+  grouped(other).forEach((group) => {
+    fitted.push(...packGroup(group, recovery))
+  })
+  return finalizeStagedRefuelTeamSorties(wps, team, fitted, stagedRefuel, budgetNm, {
+    appendReturnHomeIfNeeded: true,
+    preferredSide,
+  }).sorties
 }
 
 /**
@@ -437,7 +542,31 @@ export function planSingleTeamBothSides(input) {
   const legs = buildLegWidthSummaries(input)
   const budget = input.sortieBudgetNm ?? 500
   const policy = input.trackPolicy ?? DEFAULT_PARALLEL_TRACK_POLICY
-  const { leftSorties, rightSorties } = packBothSidesForTeam(input, team1)
+  const packed = packBothSidesForTeam(input, team1)
+  let leftSorties = packed.leftSorties
+  let rightSorties = packed.rightSorties
+  if (input.ferryMode === 'staged-refuel' && input.recoveryAirport) {
+    const chained = finalizeStagedRefuelTeamSorties(
+      wps,
+      team1,
+      [...leftSorties, ...rightSorties],
+      stagedRefuelContextForSide(input, team1, 'single-side', false),
+      budget,
+      { appendReturnHomeIfNeeded: true }
+    ).sorties
+    const rightHasSurvey = chained.some((sortie) => sortie.side === 'right' && !sortie.returnHomeOnly)
+    leftSorties = []
+    rightSorties = []
+    for (const sortie of chained) {
+      if (sortie.returnHomeOnly) {
+        ;(rightHasSurvey ? rightSorties : leftSorties).push(sortie)
+      } else if (sortie.side === 'right') {
+        rightSorties.push(sortie)
+      } else {
+        leftSorties.push(sortie)
+      }
+    }
+  }
 
   const entryIdx =
     wps.length > 0 ? closestWaypointIndex({ lat: team1.depLat, lon: team1.depLon }, wps) : null
@@ -451,24 +580,7 @@ export function planSingleTeamBothSides(input) {
       : 0
 
   function teamFromSorties(label, side, sorties) {
-    let finalSorties = sorties
-    if (input.ferryMode === 'staged-refuel' && input.recoveryAirport) {
-      const sideRole = side === 'left' ? 'left' : 'right'
-      const ctx = stagedRefuelContextForSide(
-        input,
-        team1,
-        sideRole,
-        side === 'left'
-      )
-      finalSorties = finalizeStagedRefuelTeamSorties(
-        wps,
-        { ...team1, side },
-        sorties,
-        ctx,
-        budget,
-        { appendReturnHomeIfNeeded: side === 'right' }
-      ).sorties
-    }
+    const finalSorties = sorties
 
     const totalTeamNm = finalSorties.reduce((sum, s) => sum + s.totalNm, 0)
     const overBudgetCount = finalSorties.filter((s) => s.overBudget).length
@@ -497,7 +609,7 @@ export function planSingleTeamBothSides(input) {
   const rightTeam = teamFromSorties(`${team1.label} (right)`, 'right', rightSorties)
   const teams = [leftTeam, rightTeam]
 
-  const totalSorties = leftSorties.length + rightSorties.length
+  const totalSorties = (leftTeam.sortieCount ?? 0) + (rightTeam.sortieCount ?? 0)
   const totalWingNm =
     Math.round(((leftTeam.totalNm ?? 0) + (rightTeam.totalNm ?? 0)) * 10) / 10
   const totalChainNm = wps.length >= 2 ? chainLengthNm(wps, 0, wps.length - 1) : 0

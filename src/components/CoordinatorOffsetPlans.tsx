@@ -14,8 +14,7 @@ import {
   freshnessForSavedPlan,
   RESAVE_IN_MAP_VIEW,
 } from '@/services/offsetPlanRecord'
-import { downloadSortieFpl } from '@/services/sortieFplExport'
-import { otherSortieSide, sortie2Explanation, type SortieSide } from '@/services/offsetRouteFpl'
+import { sortie2Explanation, type SortieSide } from '@/services/offsetRouteFpl'
 import {
   buildOffsetRoutes,
   resolvePublishedLegWidths,
@@ -23,15 +22,13 @@ import {
   type OffsetLegWidth,
 } from '@survey-planning/offsetRoutePlan.js'
 import {
-  buildCoordinatorCrewOffsetFile,
   coordinatorMissingSideNotice,
   coordinatorOffsetDownloadBlock,
   offsetPointsFromWaypoints,
   SAVED_SIDE_CHANGED_NOTICE,
-  sortieButtonLabel,
   type CoordinatorOffsetCrew,
 } from '@/services/coordinatorOffsetExport'
-import { buildTeamSortieFile, sortie1Side, type TeamPlanTeam } from '@/services/teamPlanRecord'
+import { sortie1Side, type TeamPlanTeam } from '@/services/teamPlanRecord'
 
 const G1000_DELETE_NOTE =
   "Before loading: delete earlier flight plans and user waypoints from the G1000 (per DO policy). If the G1000 shows 'One or more user waypoints renamed', old waypoints are still stored. Delete them and reload."
@@ -73,11 +70,13 @@ export function CoordinatorOffsetPlans(props: {
   crews: CoordinatorOffsetCrew[]
   /** Saved team plan. When a crew is in it, the .fpl uses that crew's segment. */
   savedTeams?: TeamPlanTeam[]
+  /** Sides chosen on the page. When set, the radios show these and do not write an empty choice back. */
+  sides?: Record<string, SortieSide | null>
   onSidesChange?: (sides: Record<string, SortieSide | null>) => void
   /** When set, a stale solo offset plan holds these crew offset downloads. Lane files are separate. */
   flightPlanId?: string
 }) {
-  const { routeLabel, waypoints, widthTexts, widthBusy, widthError, routeKind, onReloadWidths, crews, savedTeams, onSidesChange, flightPlanId } = props
+  const { routeLabel, waypoints, widthTexts, widthBusy, widthError, routeKind, onReloadWidths, crews, savedTeams, sides: controlledSides, onSidesChange, flightPlanId } = props
   const points = useMemo(() => offsetPointsFromWaypoints(waypoints), [waypoints])
   const legCount = Math.max(0, points.length - 1)
   const [rows, setRows] = useState<PilotWidthRow[]>([])
@@ -86,22 +85,30 @@ export function CoordinatorOffsetPlans(props: {
   const [published, setPublished] = useState<OffsetLegWidth[] | null>(null)
   const [entryMessage, setEntryMessage] = useState<string | null>(null)
   const [faaNotes, setFaaNotes] = useState<string[]>([])
-  const [sides, setSides] = useState<Record<string, SortieSide | null>>({})
-  const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({})
+  const [localSides, setLocalSides] = useState<Record<string, SortieSide | null>>({})
+  const sides = controlledSides ?? localSides
+  const [downloadErrors] = useState<Record<string, string>>({})
   const rowsRef = useRef(rows)
   rowsRef.current = rows
   const signature = points.map((point) => point.originalName).join('|')
   const seededSides = useRef(false)
 
   useEffect(() => {
-    if (seededSides.current || !savedTeams?.length) return
+    if (controlledSides || seededSides.current || !savedTeams?.length) return
     seededSides.current = true
-    setSides(Object.fromEntries(savedTeams.map((team) => [team.id, sortie1Side(team)])))
-  }, [savedTeams])
+    setLocalSides(Object.fromEntries(savedTeams.map((team) => [team.id, sortie1Side(team)])))
+  }, [savedTeams, controlledSides])
 
   useEffect(() => {
+    if (controlledSides) return
     onSidesChange?.(sides)
-  }, [sides, onSidesChange])
+  }, [sides, onSidesChange, controlledSides])
+
+  const chooseSide = (crewId: string, side: SortieSide) => {
+    const next = { ...sides, [crewId]: side }
+    if (controlledSides) onSidesChange?.(next)
+    else setLocalSides(next)
+  }
 
   useEffect(() => {
     setTrackRows((current) =>
@@ -270,56 +277,14 @@ export function CoordinatorOffsetPlans(props: {
     ? published.map((leg) => ({ left: String(leg.leftNm), right: String(leg.rightNm) }))
     : rows
 
-  function download(crew: CoordinatorOffsetCrew, sortieNumber: 1 | 2) {
-    const pickerSide = sides[crew.id] ?? null
-    const saved = savedTeams?.find((team) => team.id === crew.id)
-    const savedSide = saved ? sortie1Side(saved) : null
-    const fileSide = saved ? savedSide : pickerSide
-    const sideChanged = Boolean(saved && pickerSide && pickerSide !== savedSide)
-    if (sideChanged || !activeWidths || !fileSide) return
-    if (coordinatorOffsetDownloadBlock({ rows: widthRows, sortie1Side: fileSide, nameError })) return
-    const file = saved
-      ? buildTeamSortieFile({
-          team: saved,
-          routeLabel,
-          points: points.map((point) => ({
-            ...point,
-            originalName: point.originalName ?? point.ptIdent,
-          })),
-          legWidths: activeWidths,
-          sortieNumber,
-        })
-      : buildCoordinatorCrewOffsetFile({
-          routeLabel,
-          points,
-          legWidths: activeWidths,
-          sortie1Side: fileSide,
-          sortieNumber,
-          departure: crew.departure,
-          destination: crew.destination,
-        })
-    if ('error' in file) {
-      setDownloadErrors((current) => ({ ...current, [crew.id]: file.error }))
-      return
-    }
-    setDownloadErrors((current) => {
-      const next = { ...current }
-      delete next[crew.id]
-      return next
-    })
-    downloadSortieFpl(file.xml, file.filename)
-  }
-
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Offset flight plans</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Sortie 1 side</h2>
         <p className="text-sm text-gray-700 mt-1">
-          Inner is halfway from the centerline to the inside of the route&apos;s curve. Outer is halfway to
-          the outside. Each crew chooses which side Sortie 1 flies. Sortie 2 is the other side, already
-          listed in flying order in its own .fpl file. A blank track offset keeps that halfway path. A
-          filled-in track offset is the flown distance and is not halved again. These files are separate
-          from the team lane files, which keep their own lane offset.
+          Inner is the inside of that piece of the route. Each crew chooses which side its first survey
+          sortie flies. With two aircraft, that crew stays on the chosen side of the centerline for every
+          sortie. Each sortie lists its side; fly the side shown.
         </p>
         {widthBusy && <p className="text-sm text-gray-600 mt-2">Loading FAA widths…</p>}
       </div>
@@ -342,34 +307,6 @@ export function CoordinatorOffsetPlans(props: {
           ))}
         </ul>
       )}
-
-      <div className="max-h-64 overflow-auto rounded border border-gray-200">
-        <table className="w-full text-xs">
-          <thead className="text-left text-gray-600 sticky top-0 bg-white">
-            <tr>
-              <th className="px-2 py-1">ForeFlight</th>
-              <th className="px-2 py-1">G1000</th>
-              <th className="px-2 py-1">Inner</th>
-              <th className="px-2 py-1">Outer</th>
-            </tr>
-          </thead>
-          <tbody>
-            {points.map((point, index) => {
-              const center = centerlineNamed.error ? null : centerlineNamed.names[index]
-              const inner = built?.inner.waypoints[index]
-              const outer = built?.outer.waypoints[index]
-              return (
-                <tr key={`${point.ptIdent}-${index}`} className="border-t border-gray-100 font-mono">
-                  <td className="px-2 py-1">{point.originalName || point.ptIdent}</td>
-                  <td className="px-2 py-1">{nameError ? '—' : center?.g1000Name}</td>
-                  <td className="px-2 py-1">{nameError || !built ? '—' : inner?.g1000Name}</td>
-                  <td className="px-2 py-1">{nameError || !built ? '—' : outer?.g1000Name}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
 
       {!widthBusy && showEntryTable && (
         <div className="max-h-72 overflow-auto border border-gray-200 rounded-lg">
@@ -486,14 +423,6 @@ export function CoordinatorOffsetPlans(props: {
             sortie1Side: fileSide,
             nameError,
           })
-          const sortie2Side = fileSide ? otherSortieSide(fileSide) : null
-          const canDownload = Boolean(built) && Boolean(fileSide) && !block && !sideChanged && !exportHold
-          const sortie1Label = fileSide
-            ? `Download ${sortieButtonLabel(1, fileSide, routeCurve)} .fpl`
-            : 'Download Sortie 1 .fpl'
-          const sortie2Label = sortie2Side
-            ? `Download ${sortieButtonLabel(2, sortie2Side, routeCurve)} .fpl`
-            : 'Download Sortie 2 .fpl'
           return (
             <div key={crew.id} className="rounded-lg border border-gray-200 p-3 space-y-2">
               <p className="font-medium text-gray-900">{crew.label}</p>
@@ -522,7 +451,7 @@ export function CoordinatorOffsetPlans(props: {
                       type="radio"
                       name={`offset-side-${crew.id}`}
                       checked={pickerSide === 'inner'}
-                      onChange={() => setSides((current) => ({ ...current, [crew.id]: 'inner' }))}
+                      onChange={() => chooseSide(crew.id, 'inner')}
                     />
                     Inner (inside the route&apos;s curve)
                   </label>
@@ -531,7 +460,7 @@ export function CoordinatorOffsetPlans(props: {
                       type="radio"
                       name={`offset-side-${crew.id}`}
                       checked={pickerSide === 'outer'}
-                      onChange={() => setSides((current) => ({ ...current, [crew.id]: 'outer' }))}
+                      onChange={() => chooseSide(crew.id, 'outer')}
                     />
                     Outer (outside the route&apos;s curve)
                   </label>
@@ -551,24 +480,6 @@ export function CoordinatorOffsetPlans(props: {
                   {block}
                 </p>
               )}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={!canDownload}
-                  onClick={() => download(crew, 1)}
-                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-cap-ultramarine text-white disabled:opacity-40"
-                >
-                  {sortie1Label}
-                </button>
-                <button
-                  type="button"
-                  disabled={!canDownload}
-                  onClick={() => download(crew, 2)}
-                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-cap-ultramarine text-white disabled:opacity-40"
-                >
-                  {sortie2Label}
-                </button>
-              </div>
               {downloadErrors[crew.id] && (
                 <p className="text-sm text-cap-pimento" role="alert">
                   {downloadErrors[crew.id]}

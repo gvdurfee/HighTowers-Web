@@ -124,3 +124,35 @@ body {
   border: 2px solid white;
   box-shadow: 0 0 2px rgba(0,0,0,0.3);
 }
+
+.map-bellows {
+  display: grid;
+  grid-template-rows: 1fr;
+  min-height: 0;
+  max-height: 50%;
+  overflow: hidden;
+  transition: grid-template-rows 300ms ease-in-out, max-height 300ms ease-in-out;
+}
+
+.map-bellows[data-open='false'] {
+  grid-template-rows: 0fr;
+  max-height: 0;
+}
+
+.map-bellows-inner {
+  overflow: auto;
+  min-height: 0;
+  transform-origin: top center;
+  transition: transform 300ms ease-in-out;
+}
+
+.map-bellows[data-open='false'] .map-bellows-inner {
+  transform: scaleY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-bellows,
+  .map-bellows-inner {
+    transition: none;
+  }
+}

@@ -49,6 +49,10 @@ function useClickOutside(
 
 export type GuidedHintSurface = 'dark' | 'light'
 
+/** Open-panel surface shared with the light hint chip: ultramarine tint, readable body text. */
+export const guidedHintPanelClassName =
+  'rounded-xl border border-cap-ultramarine/35 bg-cap-ultramarine/[0.08] text-gray-900'
+
 /** Shared pill styling for hint triggers (popover button or inline expand control). */
 export function guidedHintTriggerClassName(
   surface: GuidedHintSurface = 'dark',

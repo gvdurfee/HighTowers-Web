@@ -6,6 +6,7 @@ import { parseRouteInput } from '@/utils/mtrRouteInput'
 import {
   loadWaypointsFromFullRoute,
   loadWaypointsFromSequence,
+  routeLoadRequest,
 } from '@/utils/loadMtrWaypoints'
 import { apiService } from '@/services/api'
 
@@ -24,8 +25,8 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
   const [name, setName] = useState('')
   const [loadMethod, setLoadMethod] = useState<LoadMethod>('route')
   const [routeInput, setRouteInput] = useState('')
-  const [entryWaypoint, setEntryWaypoint] = useState('A')
-  const [exitWaypoint, setExitWaypoint] = useState('Q')
+  const [entryWaypoint, setEntryWaypoint] = useState('')
+  const [exitWaypoint, setExitWaypoint] = useState('')
   const [routeIdentifier, setRouteIdentifier] = useState('')
   const [waypointSequence, setWaypointSequence] = useState('')
   const [preview, setPreview] = useState<RoutePreview | null>(null)
@@ -51,23 +52,24 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
           setPreview({ error: 'Invalid route format. Use IR111, SR45, or VR108.' })
           return
         }
-        const entry = entryWaypoint.trim() || 'A'
-        const exit = exitWaypoint.trim() || 'Q'
+        const bounds = routeLoadRequest(entryWaypoint, exitWaypoint)
         const allWps = await apiService.fetchRouteData(
           parsed.routeType,
           parsed.routeNumber,
-          entry,
-          exit
+          bounds.entry,
+          bounds.exit
         )
-        const segment = apiService.extractRouteSegment(allWps, entry, exit)
+        const segment = apiService.extractRouteSegment(allWps, bounds.entry ?? '', bounds.exit ?? '')
         if (segment.length === 0) {
           setPreview({
-            error: `Entry "${entry}" to Exit "${exit}" produced no waypoints. Check the segment.`,
+            error: `Entry "${bounds.entry ?? 'start'}" to Exit "${bounds.exit ?? 'end'}" produced no waypoints. Check the segment.`,
           })
         } else {
+          const from = segment[0].originalName.split('-').pop() ?? bounds.entry ?? 'start'
+          const to = segment[segment.length - 1].originalName.split('-').pop() ?? bounds.exit ?? 'end'
           setPreview({
             count: segment.length,
-            label: `${routeInput.trim().toUpperCase()} (${entry}–${exit})`,
+            label: `${routeInput.trim().toUpperCase()} (${from}–${to})`,
           })
         }
       } else {
@@ -157,7 +159,7 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
   }
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-5 space-y-5">
+    <section className="rounded-xl border border-gray-200 bg-white p-5 space-y-5 text-gray-900">
       <div>
         <h2 className="text-lg font-semibold text-gray-900">Load the published route</h2>
         <p className="text-sm text-gray-600 mt-1">
@@ -173,7 +175,7 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
             <select
               value={openPlanId}
               onChange={(e) => setOpenPlanId(e.target.value)}
-              className="min-w-0 flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              className="min-w-0 flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm text-gray-900"
               aria-label="Saved survey route"
             >
               <option value="">Select…</option>
@@ -202,14 +204,14 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={suggestedName || 'e.g. VR114 survey'}
-          className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm text-gray-900"
         />
       </label>
 
       <fieldset>
         <legend className="text-sm font-medium text-gray-700 mb-2">Waypoint loading</legend>
         <div className="flex flex-col gap-2 text-sm">
-          <label className="inline-flex items-center gap-2 cursor-pointer">
+          <label className="inline-flex items-center gap-2 cursor-pointer text-gray-800">
             <input
               type="radio"
               checked={loadMethod === 'route'}
@@ -220,7 +222,7 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
             />
             Load full route
           </label>
-          <label className="inline-flex items-center gap-2 cursor-pointer">
+          <label className="inline-flex items-center gap-2 cursor-pointer text-gray-800">
             <input
               type="radio"
               checked={loadMethod === 'sequence'}
@@ -246,7 +248,7 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
                 setPreview(null)
               }}
               placeholder="e.g. VR114"
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase"
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm uppercase text-gray-900"
             />
           </label>
           <div className="grid grid-cols-2 gap-3">
@@ -259,7 +261,8 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
                   setEntryWaypoint(e.target.value.toUpperCase())
                   setPreview(null)
                 }}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase"
+                placeholder="Blank loads the start"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm uppercase text-gray-900"
               />
             </label>
             <label className="block">
@@ -271,10 +274,14 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
                   setExitWaypoint(e.target.value.toUpperCase())
                   setPreview(null)
                 }}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase"
+                placeholder="Blank loads the end"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm uppercase text-gray-900"
               />
             </label>
           </div>
+          <p className="text-sm text-gray-600">
+            Leave Entry and Exit blank to load the whole published route. Fill either one to load only that portion.
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -288,7 +295,7 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
                 setPreview(null)
               }}
               placeholder="e.g. SR213"
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase"
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm uppercase text-gray-900"
             />
           </label>
           <label className="block">
@@ -301,7 +308,7 @@ export function CoordinatorRouteLoadForm({ savedPlans, onLoaded }: Props) {
                 setPreview(null)
               }}
               placeholder="A, B, C, D or SR213A, SR214H"
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm text-gray-900"
             />
           </label>
         </div>

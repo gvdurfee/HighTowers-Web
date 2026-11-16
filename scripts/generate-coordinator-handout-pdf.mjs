@@ -213,11 +213,11 @@ async function main() {
   drawHeading(doc, 'Waypoint names')
   drawParagraph(
     doc,
-    'Solo Flight Plans: point letters, a 3-digit route position, then I or O (A001I, A001O). Sortie 1 flies the chosen side. Sortie 2 flies the other side, listed in reverse order in the file. A name drops the leading zero only to stay within 6 characters (XYZ01I).'
+    'Solo Flight Plans: point letters, the lane number, then I or O (A1I, A1O). Each sortie lists its side; fly the side shown. The file is already in flying order. A repeated place inserts a letter before the side letter (B1AI). That letter is not a lane number. Names stay within 6 characters.'
   )
   drawParagraph(
     doc,
-    'Team Dispatch: point letters, the lane number, then I or O (B1O, XM2I). Think of the first one or two letters as the MTR point the waypoint is offset from. The 1, 2, or 3 is the offset lane of the serpentine route the G1000 flies to cover the corridor, counted outward from the centerline. The last letter says Inner or Outer. A rare repeat on the same lane adds a digit (B12I). Names are at most 6 characters, A-Z and 0-9 only, unique in the file. Lane 1 is closest to the centerline. Distances are the ones stated for that plan (often 3, 9, and 15 NM). A team file has no published centerline fixes.'
+    'Team Dispatch: the crew home-field letter, the point, the lane number, then I or O (QB1O, XB2I). The lane number is counted outward from the centerline. The last letter says Inner or Outer. When the same name would sit at a different place, a letter is inserted before the side letter (B1AI). That letter is not a lane number. Names are at most 6 characters, A-Z and 0-9 only, unique in the file. Lane 1 is closest to the centerline. A team file has no published centerline fixes.'
   )
 
   drawHeading(doc, 'Before the SD card')
@@ -229,7 +229,7 @@ async function main() {
   drawHeading(doc, 'How dispatchers staff a route')
   drawParagraph(
     doc,
-    'Team Dispatch staffs one, two, or three teams. 1 team is one aircraft that flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2 is its own .fpl file. The screen is one page. Work it in this order. Words in parentheses are the headings on the screen:'
+    'Team Dispatch staffs one, two, or three teams. 1 team is one aircraft. Each sortie lists its side; fly the side shown. A later sortie is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Each sortie is its own .fpl file. With two aircraft, each crew keeps one side on every sortie. With three aircraft, a later sortie may fly the other side of that crew piece. Pilots resume a suspended search themselves. The screen is one page. Work it in this order. Words in parentheses are the headings on the screen:'
   )
   drawNumbered(doc, [
     'Crews and aircraft (Teams & parameters).',
@@ -241,7 +241,7 @@ async function main() {
   ])
   drawParagraph(
     doc,
-    'Neighboring teams are recommended on opposite sides. Recommended: each segment flies the opposite side from the segments next to it (for example segment 1 Inner, segment 2 Outer, segment 3 Inner). This is a recommendation, not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O). The 1-team choice is one aircraft flying both sides in sequence, used to finish a partial route fragment left incomplete because of weather or limited resources.'
+    'With two aircraft, each crew keeps the one side it picked on every sortie. With three aircraft, a later sortie may fly the other side of that crew piece. This is not guaranteed separation; pilots still deconflict. Announce when you enter and exit each lane, giving your position by waypoint name (for example, entering B1O). The 1-team choice is one aircraft. Each sortie lists its side; fly the side shown. Pilots resume a suspended search themselves.'
   )
 
   drawHeading(doc, 'Map View')

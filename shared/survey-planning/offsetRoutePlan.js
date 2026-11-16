@@ -3,8 +3,8 @@
  * The corridor edge is the full side width. The flown track defaults to halfway
  * from the centerline to that edge (6 NM side → 3 NM offset). An explicit
  * track offset on the leg replaces that halfway distance and is not halved again.
- * Corners are the intersection of the adjacent shifted legs. Sharp turns do not
- * gain extra waypoints; bad corners are flagged.
+ * Gentle corners meet by extending the lanes. A turn past 120°, or a miter longer
+ * than twice the lane offset, ends each lane at its leg and joins them with a connector.
  */
 
 import { halfWidthNmForLeg, legContainedInSpan, readMtrWidth } from './mtrWidthParser.js'
@@ -182,6 +182,23 @@ function offsetLegChord(a, b, offsetM, side) {
   }
 }
 
+/** Where two offset lines meet. Extends each leg past the published bend so the lanes join. */
+function offsetLineJoin(prevPoint, cornerPoint, nextPoint, prevOffsetM, nextOffsetM, side) {
+  const prev = offsetLegChord(prevPoint, cornerPoint, prevOffsetM, side)
+  const next = offsetLegChord(cornerPoint, nextPoint, nextOffsetM, side)
+  const lat0 = cornerPoint.lat
+  const lon0 = cornerPoint.lon
+  const A = toLocal(prev.start.lat, prev.start.lon, lat0, lon0)
+  const B = toLocal(prev.end.lat, prev.end.lon, lat0, lon0)
+  const C = toLocal(next.start.lat, next.start.lon, lat0, lon0)
+  const D = toLocal(next.end.lat, next.end.lon, lat0, lon0)
+  const hit = lineIntersect(A, sub(B, A), C, sub(D, C))
+  if (!hit) return null
+  const hitDistNm = hypot(hit) / M_PER_NM
+  if (!Number.isFinite(hitDistNm) || hitDistNm > 80) return null
+  return fromLocal(hit.e, hit.n, lat0, lon0)
+}
+
 /**
  * Heading change at `b`, in degrees, signed positive to the right, range (-180, 180].
  * @param {{ lat: number, lon: number }} a
@@ -205,8 +222,10 @@ export function courseChangeDeg(a, b, c) {
  * @param {number[]} offsetNmPerLeg - Halfway (or full-edge) distance for each leg
  * @param {number[]} corridorNmPerLeg - Full side width used for the outside-corridor check
  * @param {'left' | 'right'} side
+ * @param {{ before?: OffsetRoutePoint | null, after?: OffsetRoutePoint | null }} [neighbors]
+ *   The published points just outside this piece, so the first and last bends meet the next leg.
  */
-export function buildOffsetTrack(waypoints, offsetNmPerLeg, corridorNmPerLeg, side) {
+export function buildOffsetTrack(waypoints, offsetNmPerLeg, corridorNmPerLeg, side, neighbors) {
   if (waypoints.length < 2) {
     throw new Error('An offset route needs at least two waypoints.')
   }
@@ -233,8 +252,35 @@ export function buildOffsetTrack(waypoints, offsetNmPerLeg, corridorNmPerLeg, si
     })
   }
 
+  const legMeters = (a, b) => hypot(toLocal(b.lat, b.lon, a.lat, a.lon))
+  const minLegM = 0.05 * M_PER_NM
+  const realDirection = (index) => {
+    for (let i = index; i < waypoints.length - 1; i++) {
+      if (legMeters(waypoints[i], waypoints[i + 1]) >= minLegM) return [waypoints[i], waypoints[i + 1], offsetsM[i]]
+    }
+    for (let i = Math.min(index, waypoints.length - 2); i >= 0; i--) {
+      if (legMeters(waypoints[i], waypoints[i + 1]) >= minLegM) return [waypoints[i], waypoints[i + 1], offsetsM[i]]
+    }
+    const lastPoint = waypoints[waypoints.length - 1]
+    if (neighbors?.after && legMeters(lastPoint, neighbors.after) >= minLegM) {
+      return [lastPoint, neighbors.after, offsetsM[offsetsM.length - 1]]
+    }
+    if (neighbors?.before && legMeters(neighbors.before, waypoints[0]) >= minLegM) {
+      return [neighbors.before, waypoints[0], offsetsM[0]]
+    }
+    return null
+  }
+  const beside = (index, offsetM) => {
+    const dir = realDirection(index)
+    return dir ? offsetEndpoint(waypoints[index], dir[0], dir[1], offsetM, side) : null
+  }
+
   const first = offsetLegChord(waypoints[0], waypoints[1], offsetsM[0], side)
-  remember(0, first.start.lat, first.start.lon)
+  const joinedStart = neighbors?.before
+    ? offsetLineJoin(neighbors.before, waypoints[0], waypoints[1], offsetsM[0], offsetsM[0], side)
+    : null
+  const startBeside = legMeters(waypoints[0], waypoints[1]) < minLegM && !joinedStart ? beside(0, offsetsM[0]) : null
+  remember(0, startBeside?.lat ?? joinedStart?.lat ?? first.start.lat, startBeside?.lon ?? joinedStart?.lon ?? first.start.lon)
 
   for (let i = 1; i < waypoints.length - 1; i++) {
     const prevNm = offsetNmPerLeg[i - 1]
@@ -332,7 +378,14 @@ export function buildOffsetTrack(waypoints, offsetNmPerLeg, corridorNmPerLeg, si
     offsetsM[offsetsM.length - 1],
     side
   )
-  remember(last, endChord.end.lat, endChord.end.lon)
+  const joinedEnd = neighbors?.after
+    ? offsetLineJoin(waypoints[last - 1], waypoints[last], neighbors.after, offsetsM[offsetsM.length - 1], offsetsM[offsetsM.length - 1], side)
+    : null
+  const endBeside =
+    legMeters(waypoints[last - 1], waypoints[last]) < minLegM && !joinedEnd
+      ? beside(last, offsetsM[offsetsM.length - 1])
+      : null
+  remember(last, endBeside?.lat ?? joinedEnd?.lat ?? endChord.end.lat, endBeside?.lon ?? joinedEnd?.lon ?? endChord.end.lon)
 
   return { side, waypoints: corners, flags }
 }
@@ -354,6 +407,46 @@ function curveEntryLabel(waypoints) {
  * route keeps the inside on the left and says so.
  * @param {Array<{ lat: number, lon: number, ptIdent?: string, originalName?: string }>} waypoints
  */
+/** A piece whose heading changes sum to less than this has no inside. Anything else uses that net turn. */
+const PIECE_STRAIGHT_DEG = 5
+
+/**
+ * Inner and outer for one piece of the route.
+ * Inner is the side that piece turns toward: the signed sum of its heading changes,
+ * including the bend where it leaves the previous point and meets the next one.
+ * A truly straight piece keeps Inner on the left. The area test in routeCurveSide is not used here.
+ */
+export function segmentCurveSide(waypoints, fromIdent, toIdent) {
+  if (!waypoints || waypoints.length < 3) return routeCurveSide(waypoints)
+  const start = waypoints.findIndex((point) => point.ptIdent === fromIdent)
+  const end = waypoints.findIndex((point) => point.ptIdent === toIdent)
+  if (start < 0 || end <= start) return routeCurveSide(waypoints)
+  const piece = waypoints.slice(Math.max(0, start - 1), Math.min(waypoints.length, end + 2))
+  if (piece.length < 3) return routeCurveSide(piece)
+  let netTurnDeg = 0
+  for (let i = 1; i < piece.length - 1; i++) {
+    netTurnDeg += courseChangeDeg(piece[i - 1], piece[i], piece[i + 1])
+  }
+  const entry = curveEntryLabel(waypoints.slice(start, end + 1))
+  if (Math.abs(netTurnDeg) < PIECE_STRAIGHT_DEG) {
+    return {
+      innerSide: /** @type {'left'} */ ('left'),
+      outerSide: /** @type {'right'} */ ('right'),
+      sense: /** @type {'unclear'} */ ('unclear'),
+      netTurnDeg,
+      note: `This route has no clear inside; Inner = left of the route flown from ${entry}.`,
+    }
+  }
+  const clockwise = netTurnDeg > 0
+  return {
+    innerSide: clockwise ? 'right' : 'left',
+    outerSide: clockwise ? 'left' : 'right',
+    sense: clockwise ? 'clockwise' : 'counterclockwise',
+    netTurnDeg,
+    note: null,
+  }
+}
+
 export function routeCurveSide(waypoints) {
   const entry = curveEntryLabel(waypoints)
   const unclear = {

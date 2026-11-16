@@ -91,6 +91,7 @@ export function publishedWidthNote(
   legs: PublishedWidthLeg[],
   pilotEntered = false
 ): string | null {
+  void routeLabel
   const groups = new Map<number, WidthHit[]>()
   legs.forEach((leg, index) => {
     if (!Number.isFinite(leg.leftNm) || !Number.isFinite(leg.rightNm)) return
@@ -104,7 +105,8 @@ export function publishedWidthNote(
   if (groups.size === 0) return null
   const phrases = [...groups.entries()].map(([width, hits]) => phraseForWidth(width, hits))
   const pilot = pilotEntered ? ' Some widths entered by pilot.' : ''
-  return `Using published widths for ${routeLabel}. Offsets are flown halfway to each edge: ${phrases.join(', ')}.${pilot}`
+  void phrases
+  return `Tracks: first 2.5 NM, then every 5 NM, to the published edge.${pilot}`
 }
 
 export function rowComplete(row: { left: string; right: string }): boolean {

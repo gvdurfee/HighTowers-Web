@@ -23,6 +23,16 @@ export type LoadMtrWaypointsResult = {
   error?: string
 }
 
+/** Blank ends mean the whole published route. A filled Entry, Exit, or both means only that portion. */
+export function routeLoadRequest(entry: string, exit: string): { entry?: string; exit?: string } {
+  const start = entry.trim().toUpperCase()
+  const end = exit.trim().toUpperCase()
+  return {
+    ...(start ? { entry: start } : {}),
+    ...(end ? { exit: end } : {}),
+  }
+}
+
 export async function loadWaypointsFromFullRoute(opts: {
   routeInput: string
   entry: string
@@ -32,20 +42,19 @@ export async function loadWaypointsFromFullRoute(opts: {
   if (!parsed) {
     return { waypoints: [], pending: [], error: 'Invalid route. Use format IR111, SR45, or VR108.' }
   }
-  const entry = opts.entry.trim() || 'A'
-  const exit = opts.exit.trim() || 'Q'
+  const bounds = routeLoadRequest(opts.entry, opts.exit)
   const allRouteWps = await apiService.fetchRouteData(
     parsed.routeType,
     parsed.routeNumber,
-    entry,
-    exit
+    bounds.entry,
+    bounds.exit
   )
-  const segment = apiService.extractRouteSegment(allRouteWps, entry, exit)
+  const segment = apiService.extractRouteSegment(allRouteWps, bounds.entry ?? '', bounds.exit ?? '')
   if (segment.length === 0) {
     return {
       waypoints: [],
       pending: [],
-      error: `Entry "${entry}" to Exit "${exit}" produced no waypoints. Check the segment.`,
+      error: `Entry "${bounds.entry ?? 'start'}" to Exit "${bounds.exit ?? 'end'}" produced no waypoints. Check the segment.`,
     }
   }
   return {

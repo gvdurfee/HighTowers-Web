@@ -98,7 +98,7 @@ export function assignOffsetWaypointNames(inputs) {
  * @param {number} laneNumber
  * @returns {{ name: string, error: string | null }}
  */
-export function laneWaypointName(originalName, side, laneNumber) {
+export function laneWaypointName(originalName, side, laneNumber, prefix = '') {
   const point = g1000PointId(originalName)
   const letter = side === 'outer' ? 'O' : 'I'
   const lane = String(laneNumber)
@@ -106,7 +106,18 @@ export function laneWaypointName(originalName, side, laneNumber) {
   if (!/^[1-9]$/.test(lane)) {
     return { name: '', error: `Lane ${laneNumber} does not fit in one G1000 name character.` }
   }
-  const name = point + lane + letter
+  const mark = /^[A-Z0-9]$/.test(prefix) ? prefix : ''
+  let pointId = point
+  let separator = /\d$/.test(pointId) ? 'N' : ''
+  let name = `${mark}${pointId}${separator}${lane}${letter}`
+  while (name.length > G1000_USER_WAYPOINT_ID_MAX_LEN && pointId.length > 1) {
+    pointId = pointId.slice(0, -1)
+    separator = /\d$/.test(pointId) ? 'N' : ''
+    name = `${mark}${pointId}${separator}${lane}${letter}`
+  }
+  if (name.length > G1000_USER_WAYPOINT_ID_MAX_LEN && separator) {
+    name = `${mark}${pointId}${lane}${letter}`
+  }
   if (name.length <= G1000_USER_WAYPOINT_ID_MAX_LEN && /^[A-Z0-9]+$/.test(name)) {
     return { name, error: null }
   }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Map, MapRef, Source, Layer, Marker, NavigationControl } from 'react-map-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -13,13 +13,17 @@ import { GuidedHint } from '@/components/GuidedHint'
 import { MapViewCrewControls } from '@/components/MapViewCrewControls'
 import { OffsetRoutePanel, type OffsetMapGeometry } from '@/components/OffsetRoutePanel'
 import { confirmLeaveOffsetPlan } from '@/services/offsetPlanLeaveGuard'
+import { teamDispatchHasUnsaved, teamSortiesAreStale } from '@/services/teamDispatchUnsaved'
+import { planIdFromMapSearch, teamPlanAwaitingSave } from '@/services/teamDispatchReview'
 import type { OffsetLegWidth } from '@survey-planning/offsetRoutePlan.js'
 import { expandPlanningRoute } from '@survey-planning/planComparison.js'
-import { isSingleAircrewPlan, singleAircrewSortieHint } from '@/services/singleAircrewMap'
+import { isSingleAircrewPlan, mapEmptyPathNotice, singleAircrewSortieHint } from '@/services/singleAircrewMap'
 import {
   drawSavedTeam,
   formatSortieHeader,
+  legacySortieNote,
   mapSortieButtons,
+  NO_TEAM_PLAN_NOTE,
 } from '@/services/teamPlanRecord'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import {
@@ -171,6 +175,27 @@ function FlowArrow(props: {
   )
 }
 
+const MAP_DETAILS_KEY = 'htw.map.detailsOpen'
+const MAP_DETAILS_HINT_KEY = 'htw.map.detailsHintSeen'
+const MAP_DETAILS_HINT =
+  'Fold away the notes and corridor table to give the map more room. Click again to bring them back.'
+
+function readMapDetailsOpen(): boolean {
+  try {
+    return localStorage.getItem(MAP_DETAILS_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+function readMapDetailsHintSeen(): boolean {
+  try {
+    return localStorage.getItem(MAP_DETAILS_HINT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 function computeBounds(coords: [number, number][]): [[number, number], [number, number]] | null {
   if (coords.length === 0) return null
   const lngs = coords.map((c) => c[0])
@@ -185,7 +210,9 @@ function computeBounds(coords: [number, number][]): [[number, number], [number, 
 export function MissionMapPage() {
   const navigate = useNavigate()
   const mapRef = useRef<MapRef>(null)
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
+  const planFromUrl = planIdFromMapSearch(searchParams.toString())
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(planFromUrl)
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null)
   const [mapReady, setMapReady] = useState(false)
   const [offsetGeometry, setOffsetGeometry] = useState<OffsetMapGeometry | null>(null)
@@ -193,6 +220,11 @@ export function MissionMapPage() {
   const [selectedCrew, setSelectedCrew] = useState<CrewOverlayId>('team1')
   const [selectedSortie, setSelectedSortie] = useState<MapSortieNumber>(DEFAULT_MAP_SORTIE)
   const [mapZoom, setMapZoom] = useState(7)
+  const [detailsOpen, setDetailsOpen] = useState(readMapDetailsOpen)
+  const [detailsHintSeen, setDetailsHintSeen] = useState(readMapDetailsHintSeen)
+  const [unsavedSeen, setUnsavedSeen] = useState(0)
+  const bellowsLock = useRef(false)
+  const skipNextFit = useRef(false)
   const { isSeen, markSeen } = useHintsSeen()
 
   const plans = useLiveQuery(
@@ -372,6 +404,7 @@ export function MissionMapPage() {
         legWidths: legWidths ? planningRoute.widths : legWidths,
         firstOffsetNm: savedTeamPlan.firstOffsetNm,
         stepNm: savedTeamPlan.stepNm,
+        homes: savedTeamPlan.teams.map((item) => item.departure?.identifier ?? '').filter(Boolean),
       })
     )
   }, [savedTeamPlan, selectedPlanId, planningRoute, legWidths])
@@ -386,11 +419,12 @@ export function MissionMapPage() {
         originalName: wp.originalName,
         ptIdent: wp.g1000Name,
       }))
+    const crewLabel = singleAircrew ? 'Sortie 1' : 'Team 1'
     const team1 =
       offsetGeometry && planData?.plan.sortie1Side
         ? serpentineFromTracks({
             id: 'team1' as const,
-            label: 'Team 1',
+            label: crewLabel,
             sortie1Side: planData.plan.sortie1Side,
             inner: offsetGeometry.inner,
             outer: offsetGeometry.outer,
@@ -398,7 +432,7 @@ export function MissionMapPage() {
             destination: planData.destination,
             centerline,
           })
-        : { ...emptyCrewOverlay('team1', 'Team 1'), airport: planData?.departure?.identifier ?? null }
+        : { ...emptyCrewOverlay('team1', crewLabel), airport: planData?.departure?.identifier ?? null }
     if (singleAircrew && offsetGeometry && planData?.plan.sortie1Side && team1.passes.length > 0) {
       team1.passes = team1.passes.map((pass) => {
         const track = singleAircrewSortieTrack({
@@ -449,6 +483,7 @@ export function MissionMapPage() {
   const selectorSorties = useMemo(() => {
     if (savedTeamPlan && savedTeamPlan.flightPlanId === selectedPlanId) {
       const team = savedTeamPlan.teams.find((item) => item.id === selectedCrew)
+      if (team?.packedSorties && team.packedSorties.length > 0) return team.packedSorties
       if (team) return team.sorties
     }
     const passes = activeOverlay?.passes ?? []
@@ -471,6 +506,15 @@ export function MissionMapPage() {
   const activeSortie =
     teamDraws?.find((draw) => draw.overlay.id === selectedCrew)?.sorties.find((sortie) => sortie.number === shownSortie) ??
     null
+  const headerRefuelIdent = (() => {
+    const refuel = savedTeamPlan?.teams.find((team) => team.id === selectedCrew)?.refuelStop?.identifier
+    if (!refuel) return null
+    if (!activeSortie?.includesFerry) return refuel
+    const touches = [activeSortie.departureIdent, activeSortie.landingIdent].some(
+      (ident) => ident?.toUpperCase() === refuel.toUpperCase()
+    )
+    return touches ? refuel : null
+  })()
   const crewAirports = useMemo(() => {
     const toAirport = (airport: { identifier: string; latitude: number; longitude: number } | null): TransitAirport | null =>
       airport
@@ -491,14 +535,28 @@ export function MissionMapPage() {
     }
   }, [selectedCrew, planData, savedTeamPlan])
   const sortieAirports = useMemo(() => {
-    const ends = airportsForSortie(shownSortie, crewAirports)
-    const refuelIdent = savedTeamPlan?.teams.find((team) => team.id === selectedCrew)?.refuelStop?.identifier
+    const savedTeam = savedTeamPlan?.teams.find((team) => team.id === selectedCrew)
+    const refuelIdent = savedTeam?.refuelStop?.identifier
+    const byIdent = (ident: string | null | undefined): TransitAirport | null => {
+      if (!ident || !savedTeam) return null
+      const match = [savedTeam.departure, savedTeam.refuelStop, savedTeam.landing].find(
+        (airport) => airport && airport.identifier.toUpperCase() === ident.toUpperCase()
+      )
+      return match
+        ? { identifier: match.identifier, latitude: match.latitude, longitude: match.longitude }
+        : null
+    }
+    const packedEnds =
+      activeSortie?.departureIdent
+        ? { departure: byIdent(activeSortie.departureIdent), landing: byIdent(activeSortie.landingIdent) }
+        : null
+    const ends = packedEnds ?? airportsForSortie(shownSortie, crewAirports)
     const mark = (airport: TransitAirport | null): TransitAirport | null => {
       if (!airport || !refuelIdent || airport.identifier.toUpperCase() !== refuelIdent.toUpperCase()) return airport
       return { ...airport, caption: `${airport.identifier} — refuel` }
     }
     return { departure: mark(ends.departure), landing: mark(ends.landing) }
-  }, [shownSortie, crewAirports, savedTeamPlan, selectedCrew])
+  }, [shownSortie, crewAirports, savedTeamPlan, selectedCrew, activeSortie])
   const serpentine = useMemo(() => {
     if (shownPasses.length === 0) return null
     return buildSerpentineDisplay(
@@ -589,11 +647,58 @@ export function MissionMapPage() {
     }
     fit()
     const observer = new ResizeObserver(() => {
-      fit()
+      if (bellowsLock.current) return
+      map.resize()
+      if (skipNextFit.current) {
+        skipNextFit.current = false
+        return
+      }
+      map.fitBounds(bounds, {
+        padding: 24,
+        duration: 0,
+        maxZoom: 12,
+      })
     })
     observer.observe(map.getContainer())
     return () => observer.disconnect()
   }, [mapReady, bounds])
+
+  const dismissDetailsHint = () => {
+    setDetailsHintSeen(true)
+    try {
+      localStorage.setItem(MAP_DETAILS_HINT_KEY, '1')
+    } catch {
+      /* The tip stays dismissed for this visit when storage is unavailable. */
+    }
+  }
+
+  const toggleDetails = () => {
+    dismissDetailsHint()
+    const next = !detailsOpen
+    setDetailsOpen(next)
+    try {
+      localStorage.setItem(MAP_DETAILS_KEY, next ? '1' : '0')
+    } catch {
+      /* The map still toggles when storage is unavailable. */
+    }
+    bellowsLock.current = true
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    window.setTimeout(() => {
+      bellowsLock.current = false
+      skipNextFit.current = true
+      mapRef.current?.resize()
+    }, reduced ? 0 : 320)
+  }
+
+  useEffect(() => {
+    const refresh = () => setUnsavedSeen((value) => value + 1)
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [])
+
+  useEffect(() => {
+    if (planFromUrl) setSelectedPlanId(planFromUrl)
+  }, [planFromUrl])
 
   useEffect(() => {
     if (plans && plans.length > 0 && !selectedPlanId) {
@@ -629,6 +734,19 @@ export function MissionMapPage() {
       </div>
     )
   }
+
+  const emptyPathNotice =
+    planData && activeOverlay
+      ? mapEmptyPathNotice({
+          singleAircrew,
+          teamPlanKnown: savedTeamPlan !== undefined,
+          teamDraws: Boolean(teamDraws),
+          overlayId: activeOverlay.id,
+          overlayLabel: activeOverlay.label,
+          sortie1Side: planData.plan.sortie1Side,
+          passCount: activeOverlay.passes.length,
+        })
+      : null
 
   return (
     <div className="flex flex-col flex-1 min-h-0 h-full min-h-[320px]">
@@ -725,57 +843,113 @@ export function MissionMapPage() {
           </button>
         )}
         {planData && (
-          <MapViewCrewControls
-            singleAircrew={singleAircrew}
-            crews={crewOverlays}
-            selectedCrew={selectedCrew}
-            onSelectCrew={setSelectedCrew}
-            sorties={selectorSorties}
-            selectedSortie={drawnSortie}
-            onSelectSortie={setSelectedSortie}
-            departure={planData.departure?.identifier ?? null}
-            destination={planData.destination?.identifier ?? null}
-            sortie1Side={planData.plan.sortie1Side ?? null}
-            showNoTeamPlan={!savedTeamPlan}
-            hint={singleAircrew ? singleAircrewSortieHint() : null}
-          />
+          <div className="flex w-full items-center gap-2">
+            <MapViewCrewControls
+              singleAircrew={singleAircrew}
+              crews={crewOverlays}
+              selectedCrew={selectedCrew}
+              onSelectCrew={setSelectedCrew}
+              sorties={selectorSorties}
+              selectedSortie={drawnSortie}
+              onSelectSortie={setSelectedSortie}
+              departure={planData.departure?.identifier ?? null}
+              destination={planData.destination?.identifier ?? null}
+              sortie1Side={planData.plan.sortie1Side ?? null}
+              showNoTeamPlan={false}
+              hint={singleAircrew ? singleAircrewSortieHint() : null}
+            />
+            <div className="ml-auto flex items-center gap-2">
+              {!detailsHintSeen && (
+                <p className="max-w-[18rem] text-xs text-white">
+                  Tip: Hide details folds the notes and corridor table away so you can see more of the map.{' '}
+                  <button type="button" className="font-medium underline" onClick={dismissDetailsHint}>
+                    Got it
+                  </button>
+                </p>
+              )}
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 px-2 py-2 text-sm text-white rounded-lg border border-white/40 hover:bg-white/15"
+                aria-expanded={detailsOpen}
+                aria-controls="map-view-details"
+                aria-label={MAP_DETAILS_HINT}
+                title={MAP_DETAILS_HINT}
+                onClick={toggleDetails}
+              >
+                <span>{detailsOpen ? 'Hide details' : 'Show details'}</span>
+                <span aria-hidden="true" className={`inline-block transition-transform ${detailsOpen ? '' : 'rotate-180'}`}>
+                  ⌃
+                </span>
+              </button>
+            </div>
+          </div>
         )}
+        {!planData && <p className="text-sm text-white/80">Select a flight plan to view the route</p>}
+      </div>
+
+      {selectedPlanId && teamSortiesAreStale(selectedPlanId) && (
+        <p className="shrink-0 px-4 py-2 text-sm text-white bg-black/40 border-b border-white/15">
+          Saved sorties are out of date. Re-run and save in Team Dispatch to show every planned sortie.
+        </p>
+      )}
+
+      {selectedPlanId && teamDispatchHasUnsaved(selectedPlanId) && unsavedSeen >= 0 && (
+        <p className="shrink-0 px-4 py-2 text-sm text-white bg-black/40 border-b border-white/15">
+          Team Dispatch has unsaved changes for this plan. The map shows the last saved version.{' '}
+          <Link to={`/coordinator/survey?plan=${selectedPlanId}`} className="underline font-medium text-cap-yellow">
+            Open Team Dispatch
+          </Link>
+        </p>
+      )}
+
+      <div id="map-view-details" className="map-bellows" data-open={detailsOpen ? 'true' : 'false'}>
+        <div className="map-bellows-inner">
+        {!singleAircrew && savedTeamPlan === null && teamPlanAwaitingSave(selectedPlanId ?? '') && (
+          <p className="px-4 pt-2 text-sm text-white/80">
+            This team plan hasn&apos;t been saved yet.{' '}
+            <Link to={`/coordinator/survey?plan=${selectedPlanId}`} className="underline font-medium text-cap-yellow">
+              Save it in Team Dispatch
+            </Link>{' '}
+            to see it here.
+          </p>
+        )}
+        {!singleAircrew && savedTeamPlan === null && !teamPlanAwaitingSave(selectedPlanId ?? '') && (
+          <p className="px-4 pt-2 text-sm text-white/80">{NO_TEAM_PLAN_NOTE}</p>
+        )}
+        {!singleAircrew &&
+          savedTeamPlan &&
+          legacySortieNote(savedTeamPlan.teams.find((team) => team.id === selectedCrew)) && (
+            <p className="px-4 pt-2 text-sm text-white/80">
+              {legacySortieNote(savedTeamPlan.teams.find((team) => team.id === selectedCrew))}
+            </p>
+          )}
         {teamDraws
           ?.find((draw) => draw.overlay.id === selectedCrew)
           ?.notes.map((note) => (
-            <p key={note} className="text-sm text-white/80">
+            <p key={note} className="px-4 pt-2 text-sm text-white/80">
               {note}
             </p>
           ))}
         {airportNotes.map((note) => (
-          <p key={note} className="text-sm text-white/80">
+          <p key={note} className="px-4 pt-2 text-sm text-white/80">
             {note}
           </p>
         ))}
-        {planData &&
-          !teamDraws &&
-          activeOverlay &&
-          activeOverlay.passes.length === 0 &&
-          (activeOverlay.id !== 'team1' || !planData.plan.sortie1Side) && (
-            <p className="text-sm text-white/80">
-              {activeOverlay.label} has no airport or Sortie 1 side on this flight plan, so no path is drawn.
-            </p>
-          )}
-        {planData && activeSortie && activeSortie.lanes > 0 ? (
-          <p className="text-sm text-white/80">
-            {formatSortieHeader(
-              activeSortie,
-              savedTeamPlan?.teams.find((team) => team.id === selectedCrew)?.refuelStop?.identifier
-            )}
+        {emptyPathNotice && <p className="px-4 pt-2 text-sm text-white/80">{emptyPathNotice}</p>}
+        {planData && activeSortie && (activeSortie.lanes > 0 || activeSortie.includesFerry) ? (
+          <p className="px-4 py-2 text-sm text-white/80">
+            {formatSortieHeader(activeSortie, headerRefuelIdent)}
+            {savedTeamPlan ? (
+              <span className="block">
+                Lane numbers are fixed: lane 1 = 2.5 NM from centerline on every sortie. Expect turns up to about 155° at lane entry and exit; join the lane, don&apos;t cut the corner.
+              </span>
+            ) : null}
           </p>
         ) : planData && !teamDraws ? (
-          <p className="text-sm text-white/80">
+          <p className="px-4 py-2 text-sm text-white/80">
             {`${planData.waypoints.length} waypoints${planData.departure || planData.destination ? ' • Airports connected' : ''}${(towerOverlayData ?? []).length > 0 ? ` • ${(towerOverlayData ?? []).length} towers` : ''}`}
           </p>
-        ) : !planData ? (
-          <p className="text-sm text-white/80">Select a flight plan to view the route</p>
         ) : null}
-      </div>
 
       {planData && planData.waypoints.length >= 2 && (
         <OffsetRoutePanel
@@ -828,8 +1002,10 @@ export function MissionMapPage() {
           }
         />
       )}
+        </div>
+      </div>
 
-      <div className="flex-1 min-h-0 relative">
+      <div className="flex-1 min-h-[240px] relative">
         <Map
           ref={mapRef}
           mapboxAccessToken={token}

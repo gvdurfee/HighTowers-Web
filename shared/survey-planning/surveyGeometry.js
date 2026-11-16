@@ -164,6 +164,9 @@ export function closestWaypointIndex(departure, waypoints) {
  * @param {number} opts.offsetLegCount - number of directed legs (equals offsets.length)
  * @param {number} opts.ferryOutNm - last position → dep
  */
-export function estimateSortieNm({ ferryInNm, chainNm, offsetLegCount, ferryOutNm }) {
-  return ferryInNm + offsetLegCount * chainNm + ferryOutNm
+/** Turnaround between one lane and the next, measured along the file as the jump to the next offset. */
+export const LANE_TURNAROUND_NM = 5
+
+export function estimateSortieNm({ ferryInNm, chainNm, offsetLegCount, ferryOutNm, connectorNm = 0 }) {
+  return ferryInNm + offsetLegCount * chainNm + ferryOutNm + connectorNm
 }

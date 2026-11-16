@@ -9,7 +9,7 @@ import {
   publishedSortieWidthReady,
   teamSortieDownloadOffer,
 } from '@/services/teamPlanSortieDownload'
-import type { TeamPlanTeam, TeamRoutePoint } from '@/services/teamPlanRecord'
+import { packedDownloadLabel, type TeamPlanTeam, type TeamRoutePoint } from '@/services/teamPlanRecord'
 import {
   buildSortieOffsetFpl,
   missingSortieChoiceNotice,
@@ -41,6 +41,13 @@ import {
   type TrackOffsetRecord,
 } from '@/services/offsetPlanRecord'
 import { setOffsetPlanLeaveGuard } from '@/services/offsetPlanLeaveGuard'
+import {
+  FAA_WIDTH_FALLBACK_NOTE,
+  savedWidthsForPoints,
+  teamPlanOwnsCorridor,
+  teamPlanSpanWidths,
+  teamPlanTrackSpacing,
+} from '@/services/teamPlanCorridor'
 import {
   downloadBlockReason,
   legEntryReason,
@@ -242,8 +249,14 @@ export function OffsetRoutePanel(props: {
   const { flightPlanId, waypoints, departure, destination, sortie1Side, creationLoadMethod, savedTeamPlan, onGeometry, onLegWidths, teamPlanDownload } = props
   const singleAircrew =
     savedTeamPlan !== undefined && isSingleAircrewPlan({ creationLoadMethod }, savedTeamPlan)
+  const teamCorridor = teamPlanOwnsCorridor(savedTeamPlan)
+  const teamSpacing = teamPlanTrackSpacing(savedTeamPlan)
   const signature = offsetSequenceSignature(waypoints)
   const points = useMemo(() => pointsFrom(waypoints), [signature])
+  const lockedLegs = useMemo(() => {
+    const stored = teamPlanSpanWidths(savedTeamPlan)
+    return stored ? savedWidthsForPoints(points, stored) : null
+  }, [savedTeamPlan, points])
   const route = useMemo(() => routeOf(waypoints), [signature])
   const legCount = Math.max(0, points.length - 1)
   const [loading, setLoading] = useState(false)
@@ -263,6 +276,7 @@ export function OffsetRoutePanel(props: {
   const [legacySave, setLegacySave] = useState(false)
   const [saving, setSaving] = useState(false)
   const [faaNotes, setFaaNotes] = useState<string[]>([])
+  const [faaWidthFallback, setFaaWidthFallback] = useState(false)
   const [namesOpen, setNamesOpen] = useState(false)
   const ignoreSavedRef = useRef(false)
   const pilotKeepRef = useRef<WidthRow[] | null>(null)
@@ -289,9 +303,21 @@ export function OffsetRoutePanel(props: {
     setSavedAt(null)
     setBaseline(null)
     setFaaNotes([])
+    setFaaWidthFallback(false)
     onGeometryRef.current(null)
 
     if (points.length < 2) return
+
+    if (teamCorridor && lockedLegs && lockedLegs.length === legCount) {
+      const tracks = blankTracks(legCount)
+      setPublished(lockedLegs)
+      setManual(null)
+      setRows([])
+      setTrackRows(tracks)
+      setBaseline(formKey(lockedLegs, tracks))
+      return
+    }
+    if (teamCorridor) setFaaWidthFallback(true)
 
     const seedManual = (message: string, details: string[], seeded: WidthRow[]) => {
       const tracks = blankTracks(seeded.length)
@@ -310,7 +336,7 @@ export function OffsetRoutePanel(props: {
       const saved = await db.offsetPlans.get(flightPlanId)
       if (cancelled) return
       const sequenceMatches = Boolean(saved && saved.sequenceSignature === signature)
-      if (!ignoreSavedRef.current && saved && sequenceMatches) {
+      if (!teamCorridor && !ignoreSavedRef.current && saved && sequenceMatches) {
         applySavedPlan(saved, setPublished, setManual, setRows, setTrackRows)
         setSavedRecord(saved)
         setSavedAt(saved.savedAt)
@@ -411,7 +437,17 @@ export function OffsetRoutePanel(props: {
     return () => {
       cancelled = true
     }
-  }, [signature, legCount, points, route, flightPlanId, reloadNonce])
+  }, [signature, legCount, points, route, flightPlanId, reloadNonce, teamCorridor, lockedLegs])
+
+  const spacingFirst = teamSpacing?.firstOffsetNm ?? null
+  useEffect(() => {
+    if (spacingFirst == null || legCount === 0) return
+    const text = String(spacingFirst)
+    setTrackRows((current) => {
+      if (current.length === legCount && current.every((row) => row.left === text && row.right === text)) return current
+      return Array.from({ length: legCount }, () => ({ left: text, right: text }))
+    })
+  }, [spacingFirst, legCount, published, manual])
 
   const trackError = trackRows.some(
     (track) => parseTrackField(track.left) === 'invalid' || parseTrackField(track.right) === 'invalid'
@@ -468,27 +504,27 @@ export function OffsetRoutePanel(props: {
   const corridorKey = published
     ? published
     : rows.map((row) => ({ left: row.left, right: row.right }))
-  const dirty = baseline != null && offsetFormIsDirty(baseline, formKey(corridorKey, trackRows))
+  const dirty = !teamCorridor && baseline != null && offsetFormIsDirty(baseline, formKey(corridorKey, trackRows))
   const dirtyRef = useRef(dirty)
   dirtyRef.current = dirty
 
   useEffect(() => {
     setOffsetPlanLeaveGuard(() => {
-      if (!dirtyRef.current) return true
+      if (teamCorridor || !dirtyRef.current) return true
       return window.confirm('Unsaved changes. Leave without saving this offset plan?')
     })
     return () => setOffsetPlanLeaveGuard(null)
-  }, [])
+  }, [teamCorridor])
 
   useEffect(() => {
-    if (!dirty) return
+    if (!dirty || teamCorridor) return
     const onLeave = (event: BeforeUnloadEvent) => {
       event.preventDefault()
       event.returnValue = 'Unsaved changes'
     }
     window.addEventListener('beforeunload', onLeave)
     return () => window.removeEventListener('beforeunload', onLeave)
-  }, [dirty])
+  }, [dirty, teamCorridor])
 
   async function reloadFaaWidths() {
     pilotKeepRef.current = rows.map((row) => ({ ...row }))
@@ -655,6 +691,23 @@ export function OffsetRoutePanel(props: {
     <div className="shrink-0 px-4 py-3 border-b border-white/15 bg-black/40 text-white space-y-2">
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-sm font-semibold">Offset flight plans</p>
+        {teamCorridor && teamSpacing && (
+          <>
+            <p className="text-sm text-white/80">
+              Corridor widths and track offsets are read-only. First track {teamSpacing.firstOffsetNm} NM, then every{' '}
+              {teamSpacing.stepNm} NM. The saved team plan is used instead of a map offset record.
+            </p>
+            <Link
+              to={`/coordinator/survey?plan=${flightPlanId}`}
+              className="text-sm font-medium text-cap-yellow underline"
+            >
+              Edit in Team Dispatch
+            </Link>
+          </>
+        )}
+        {teamCorridor && faaWidthFallback && !loading && (
+          <p className="text-sm text-white/80">{FAA_WIDTH_FALLBACK_NOTE}</p>
+        )}
         <button
           type="button"
           aria-expanded={namesOpen}
@@ -682,7 +735,7 @@ export function OffsetRoutePanel(props: {
       )}
       {trackError && <p className="text-sm text-cap-yellow">{trackError}</p>}
 
-      {namesOpen && (
+      {namesOpen && !teamCorridor && (
         <div id="offset-flight-plan-names" className="space-y-2">
           <p className="text-xs text-white/75">
             Inner is the inside of the route&apos;s curve. Outer is the outside. A blank track offset flies
@@ -745,7 +798,7 @@ export function OffsetRoutePanel(props: {
       {nameError && <p className="text-sm text-cap-yellow">{nameError}</p>}
 
       {manual && (
-        <div className="space-y-2">
+        <fieldset disabled={teamCorridor} className="space-y-2 border-0 p-0 m-0 min-w-0">
           {!singleAircrew && <p className="text-sm text-cap-yellow">{manual.message}</p>}
           {!singleAircrew && manual.details.length > 0 && (
             <ul className="text-xs text-white/80 list-disc pl-5 space-y-1">
@@ -930,15 +983,15 @@ export function OffsetRoutePanel(props: {
               </tbody>
             </table>
           </div>
-        </div>
+        </fieldset>
       )}
 
       {published && (
-        <div className="space-y-2">
+        <fieldset disabled={teamCorridor} className="space-y-2 border-0 p-0 m-0 min-w-0">
           <p className="text-xs text-white/75">
             {singleAircrew
               ? SINGLE_AIRCREW_TRACK_LINE
-              : 'Corridor half-width comes from the published width. Track offset is the yellow flown path. Leave it blank to fly halfway to that edge. A track offset equal to the corridor width is allowed. Corners can still fall outside the corridor.'}
+              : 'Corridor half-width comes from the published width. Track offset is the yellow flown path. A track offset equal to the corridor width is allowed. Corners can still fall outside the corridor.'}
           </p>
           <div className="flex flex-wrap items-end gap-2">
             <label className="text-xs">
@@ -1016,7 +1069,7 @@ export function OffsetRoutePanel(props: {
               </tbody>
             </table>
           </div>
-        </div>
+        </fieldset>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -1025,7 +1078,7 @@ export function OffsetRoutePanel(props: {
             ? SINGLE_AIRCREW_MAP_LEGEND
             : 'Map: ultramarine centerline with point letters, white edges, yellow sortie tracks, blue arrows.'}
         </span>
-        {route.kind === 'irvr' && !singleAircrew && (
+        {route.kind === 'irvr' && !singleAircrew && !teamCorridor && (
           <button
             type="button"
             onClick={() => void reloadFaaWidths()}
@@ -1034,21 +1087,31 @@ export function OffsetRoutePanel(props: {
             Reload FAA widths
           </button>
         )}
-        <button
-          type="button"
-          disabled={!built || saving}
-          onClick={() => void saveOffsetPlan()}
-          className="px-3 py-1.5 text-sm font-medium rounded-lg bg-cap-yellow text-cap-ultramarine disabled:opacity-40"
-        >
-          Save
-        </button>
+        {!teamCorridor && (
+          <button
+            type="button"
+            disabled={!built || saving}
+            onClick={() => void saveOffsetPlan()}
+            className="px-3 py-1.5 text-sm font-medium rounded-lg bg-cap-yellow text-cap-ultramarine disabled:opacity-40"
+          >
+            Save
+          </button>
+        )}
         {dirty ? (
           <span className="text-xs text-cap-yellow">Unsaved changes</span>
         ) : (
           savedAt && <span className="text-xs text-white/80">Saved {formatOffsetSavedAt(savedAt)}</span>
         )}
         {teamPlanDownload && !singleAircrew
-          ? ([1, 2] as const).map((number) => {
+          ? (teamPlanDownload.team.packedSorties ?? []).map((sortie) => sortie.number).map((number) => {
+              const packed = teamPlanDownload.team.packedSorties?.find((sortie) => sortie.number === number)
+              if (packed && (packed.returnHomeOnly || packed.offsetsNm.length === 0)) {
+                return (
+                  <span key={number} className="text-sm text-gray-700">
+                    Ferry only, no survey file
+                  </span>
+                )
+              }
               const offer = teamSortieDownloadOffer(
                 teamPlanDownload.team,
                 number,
@@ -1062,7 +1125,15 @@ export function OffsetRoutePanel(props: {
               return (
                 <SortieFileButton
                   key={number}
-                  label={`Download sortie ${number} .fpl`}
+                  label={
+                    packed
+                      ? packedDownloadLabel(
+                          teamPlanDownload.team.departure?.identifier ?? 'crew',
+                          packed,
+                          teamPlanDownload.points
+                        )
+                      : `Download sortie ${number} .fpl`
+                  }
                   enabled={offer.enabled}
                   title={offer.title}
                   onClick={() => {

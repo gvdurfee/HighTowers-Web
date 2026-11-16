@@ -3,7 +3,9 @@
  * Lane spacing is one policy for the whole route, so a different step on one leg is not planned.
  */
 
-import { planTeamSegmentDay } from './segmentAssignment.js'
+import { parallelOffsetsForHalfWidth } from './surveyGeometry.js'
+import { packSortiesForTeam } from './surveySortiePacker.js'
+import { finalizeStagedRefuelTeamSorties } from './surveySortiePlanner.js'
 import { nauticalMilesBetween } from './surveyGeometry.js'
 
 export const PER_SEGMENT_SPACING_NOTE =
@@ -42,17 +44,44 @@ function airportCopy(place) {
 }
 
 function flyDay(opts, team, from, to, refuel) {
-  return planTeamSegmentDay({
-    points: opts.points,
-    legWidths: opts.legWidths,
-    fromPt: from,
-    toPt: to,
-    home: homeOf(team),
-    refuel: refuelOf(refuel),
-    sortie1Side: 'left',
-    policy: opts.policy,
-    budgetNm: opts.budgetNm ?? 500,
-  })
+  const points = opts.points ?? []
+  const start = points.findIndex((point) => point.ptIdent === from)
+  const end = points.findIndex((point) => point.ptIdent === to)
+  const budgetNm = opts.budgetNm ?? 500
+  const home = homeOf(team)
+  const recovery = refuelOf(refuel)
+  if (!home || start < 0 || end <= start) return { sorties: [], totalNm: 0 }
+  const slicePoints = points.slice(start, end + 1)
+  const sliceWidths = (opts.legWidths ?? []).slice(start, end)
+  const legs = sliceWidths.map((width, index) => ({
+    fromIdx: index,
+    toIdx: index + 1,
+    leftNm: width?.leftNm ?? null,
+    rightNm: width?.rightNm ?? null,
+    leftOffsets: width ? parallelOffsetsForHalfWidth(width.leftNm, opts.policy) : [],
+    rightOffsets: width ? parallelOffsetsForHalfWidth(width.rightNm, opts.policy) : [],
+  }))
+  const crew = { label: home.identifier, side: 'left', depLat: home.lat, depLon: home.lon }
+  const staged = recovery
+    ? {
+        home: { lat: home.lat, lon: home.lon, label: home.identifier },
+        recovery: { lat: recovery.lat, lon: recovery.lon, label: recovery.identifier },
+      }
+    : null
+  const packed = [
+    ...packSortiesForTeam(slicePoints, legs, { ...crew, side: 'left' }, budgetNm, staged),
+    ...packSortiesForTeam(slicePoints, legs, { ...crew, side: 'right' }, budgetNm, staged),
+  ]
+  const chained = staged
+    ? finalizeStagedRefuelTeamSorties(slicePoints, crew, packed, staged, budgetNm, { appendReturnHomeIfNeeded: true }).sorties
+    : packed
+  const sorties = chained.map((sortie, index) => ({
+    number: index + 1,
+    distanceNm: sortie.totalNm,
+    overBudget: Boolean(sortie.overBudget) || sortie.totalNm > budgetNm + 1e-6,
+  }))
+  const totalNm = Math.round(sorties.reduce((sum, sortie) => sum + sortie.distanceNm, 0) * 10) / 10
+  return { sorties, totalNm }
 }
 
 function teamRow(team, from, to, refuel, day) {
@@ -90,14 +119,27 @@ function summarize(id, title, teams, extra = {}) {
   }
 }
 
-function betterSplit(candidate, best) {
+function optionRank(option) {
+  const sorties = option.teams.reduce((sum, team) => sum + team.sorties.length, 0)
+  const over = option.teams.reduce(
+    (sum, team) => sum + team.sorties.filter((sortie) => sortie.overBudget).length,
+    0
+  )
+  const maxSorties = option.teams.reduce((max, team) => Math.max(max, team.sorties.length), 0)
+  const maxNm = option.teams.reduce((max, team) => Math.max(max, team.totalNm), 0)
+  return { sorties, wingNm: option.wingNm, over, maxSorties, maxNm }
+}
+
+/** Fewest sorties, then fewest miles, then fewest over-budget sorties. */
+function betterPlan(candidate, best) {
   if (!best) return true
-  const over = (option) =>
-    option.teams.reduce((sum, team) => sum + team.sorties.filter((sortie) => sortie.overBudget).length, 0)
-  const candidateOver = over(candidate)
-  const bestOver = over(best)
-  if (candidateOver !== bestOver) return candidateOver < bestOver
-  return candidate.wingNm < best.wingNm
+  const left = optionRank(candidate)
+  const right = optionRank(best)
+  if (left.sorties !== right.sorties) return left.sorties < right.sorties
+  if (left.wingNm !== right.wingNm) return left.wingNm < right.wingNm
+  if (left.over !== right.over) return left.over < right.over
+  if (left.maxSorties !== right.maxSorties) return left.maxSorties < right.maxSorties
+  return left.maxNm < right.maxNm
 }
 
 function placeAlong(a, b, fraction) {
@@ -135,7 +177,7 @@ function twoCrewOption(opts, id, title, first, second) {
       ]
       const teams = chunks.map((chunk) => teamRow(chunk.team, chunk.from, chunk.to, null, flyDay(opts, chunk.team, chunk.from, chunk.to, null)))
       const option = summarize(id, title, teams)
-      if (betterSplit(option, best)) best = option
+      if (betterPlan(option, best)) best = option
     }
   }
   return best
@@ -232,7 +274,7 @@ function onlyKlruRefuels(opts, homes, refuel) {
           return teamRow(team, chunks[chunkIndex][0], chunks[chunkIndex][1], stop, day)
         })
         const option = summarize('klru-refuel', 'Return home, only KLRU refuels at KTCC', teams)
-        if (betterSplit(option, best)) best = option
+        if (betterPlan(option, best)) best = option
       }
     }
   }
@@ -240,9 +282,27 @@ function onlyKlruRefuels(opts, homes, refuel) {
 }
 
 function savedOption(opts, homes, refuel) {
+  const budgetNm = opts.budgetNm ?? 500
   const teams = (opts.saved ?? []).map((row) => {
     const home = homes.find((team) => team.identifier === row.identifier)
     if (!home || !row.from || !row.to) return null
+    if (Array.isArray(row.sorties) && row.sorties.length > 0) {
+      const sorties = row.sorties.map((sortie) => ({
+        number: sortie.number,
+        distanceNm: sortie.distanceNm,
+        overBudget: sortie.distanceNm > budgetNm + 1e-6,
+      }))
+      return {
+        identifier: home.identifier,
+        from: row.from,
+        to: row.to,
+        home: home.identifier,
+        refuel: row.refuel ? refuel?.identifier ?? true : null,
+        refuelAirport: row.refuel ? airportCopy(refuel) : null,
+        sorties,
+        totalNm: typeof row.totalNm === 'number' ? row.totalNm : roundNm(sorties.reduce((sum, sortie) => sum + sortie.distanceNm, 0)),
+      }
+    }
     const stop = row.refuel ? refuel : null
     const day = flyDay(opts, home, row.from, row.to, stop)
     return teamRow(home, row.from, row.to, stop, day)
@@ -251,10 +311,71 @@ function savedOption(opts, homes, refuel) {
 }
 
 function markRecommended(options) {
-  const eligible = options.filter((option) => option.allUnder)
-  eligible.sort((a, b) => a.refuelStops - b.refuelStops || a.wingNm - b.wingNm)
-  const winner = eligible[0]?.id ?? null
-  return options.map((option) => ({ ...option, recommended: option.id === winner }))
+  const fitting = options.filter((option) => option.allUnder)
+  const pool = fitting
+  let winner = null
+  for (const option of pool) {
+    if (betterPlan(option, winner)) winner = option
+  }
+  return options.map((option) => ({ ...option, recommended: winner != null && option === winner }))
+}
+
+function permutations(items) {
+  if (items.length <= 1) return [items]
+  const out = []
+  for (let index = 0; index < items.length; index++) {
+    const rest = items.slice(0, index).concat(items.slice(index + 1))
+    for (const perm of permutations(rest)) out.push([items[index], ...perm])
+  }
+  return out
+}
+
+/** Contiguous pieces covering the route. Each piece shares its boundary point with the next. */
+function segmentRanges(pointCount, teamCount) {
+  const ranges = []
+  function walk(start, left, acc) {
+    if (left === 1) {
+      if (start < pointCount - 1) ranges.push([...acc, [start, pointCount - 1]])
+      return
+    }
+    for (let end = start + 1; end <= pointCount - left; end++) {
+      walk(end, left - 1, [...acc, [start, end]])
+    }
+  }
+  if (teamCount >= 2 && pointCount >= teamCount + 1) walk(0, teamCount, [])
+  return ranges
+}
+
+function geographicOption(opts, homes, useSharedRefuel) {
+  const points = opts.points ?? []
+  const refuel = useSharedRefuel ? opts.refuel ?? null : null
+  if (homes.length < 2 || (useSharedRefuel && !refuel)) return null
+  const ranges = segmentRanges(points.length, homes.length)
+  if (ranges.length === 0) return null
+  const masks = useSharedRefuel
+    ? Array.from({ length: (1 << homes.length) - 1 }, (_, index) => index + 1)
+    : [0]
+  let best = null
+  for (const range of ranges) {
+    for (const order of permutations(homes)) {
+      for (const mask of masks) {
+        const teams = range.map((bounds, index) => {
+          const team = order[index]
+          const stop = mask & (1 << index) ? refuel : null
+          const from = points[bounds[0]].ptIdent
+          const to = points[bounds[1]].ptIdent
+          return teamRow(team, from, to, stop, flyDay(opts, team, from, to, stop))
+        })
+        const id = useSharedRefuel ? 'shared-refuel' : 'geographic'
+        const title = useSharedRefuel
+          ? `${homes.length} crews, shared refuel at ${refuel.identifier}`
+          : `${homes.length} crews, no refuel`
+        const option = summarize(id, title, teams)
+        if (betterPlan(option, best)) best = option
+      }
+    }
+  }
+  return best
 }
 
 /**
@@ -266,26 +387,68 @@ function markRecommended(options) {
  * @param {Array<{ identifier: string, from: string, to: string, refuel?: boolean }>} [opts.saved]
  * @param {{ firstOffsetNm?: number, stepNm?: number }} [opts.policy]
  * @param {number} [opts.budgetNm]
+ * @param {{ teams: Array<{ ident: string, fromPt: string, toPt: string, totalNm: number, sorties: Array<{ number: number, distanceNm: number }> }>, refuelIdent?: string | null }} [opts.applied]
  */
 export function compareSurveyPlans(opts) {
   const homes = opts.homes ?? []
-  const byIdent = (ident) => homes.find((team) => team.identifier === ident)
-  const kskx = byIdent('KSKX')
-  const kabq = byIdent('KABQ')
-  const klru = byIdent('KLRU')
   const refuel = opts.refuel ?? null
+  const budgetNm = opts.budgetNm ?? 500
   const options = []
+  if (opts.applied?.teams?.length) {
+    const teams = opts.applied.teams.map((team) => ({
+      identifier: team.ident,
+      from: team.fromPt,
+      to: team.toPt,
+      home: team.ident,
+      refuel: opts.applied.refuelIdent ?? null,
+      refuelAirport:
+        opts.applied.refuelIdent && refuel && refuel.identifier === opts.applied.refuelIdent
+          ? airportCopy(refuel)
+          : null,
+      sorties: team.sorties.map((sortie) => ({
+        number: sortie.number,
+        distanceNm: sortie.distanceNm,
+        overBudget: sortie.distanceNm > budgetNm + 1e-6,
+      })),
+      totalNm: team.totalNm,
+    }))
+    options.push(summarize('applied', 'Applied plan', teams))
+  }
   if (opts.saved?.length) options.push(savedOption(opts, homes, refuel))
-  if (kskx && kabq && klru && refuel) options.push(onlyKlruRefuels(opts, [kskx, kabq, klru], refuel))
-  if (kskx && kabq) options.push(nudgeKskxBoundary(opts, kskx, kabq))
-  if (kabq && klru) {
-    const reference = twoCrewOption(opts, 'kabq-klru', 'Two crews from KABQ and KLRU, no refuel', kabq, klru)
-    if (reference) options.push(reference)
+  const geographic = geographicOption(opts, homes, false)
+  if (geographic) options.push(geographic)
+  if (refuel) {
+    const shared = geographicOption(opts, homes, true)
+    if (shared) options.push(shared)
+  }
+  const applied = options.find((option) => option.id === 'applied')
+  const quoted = []
+  for (const option of options) {
+    if (typeof opts.quote !== 'function' || option.id === 'applied' || option.id === 'saved') {
+      quoted.push(option)
+      continue
+    }
+    const priced = opts.quote(option)
+    if (!priced) continue
+    const different =
+      applied != null &&
+      option.teams.some((team) => {
+        const row = applied.teams.find((item) => item.identifier === team.identifier)
+        return !row || row.from !== team.from || row.to !== team.to
+      })
+    quoted.push({
+      ...option,
+      teams: priced.teams,
+      wingNm: priced.wingNm,
+      allUnder: priced.allUnder,
+      refuelStops: priced.refuelStops,
+      title: different ? `${option.title} · Alternative split` : option.title,
+    })
   }
   return {
     perSegmentSpacing: false,
     spacingNote: PER_SEGMENT_SPACING_NOTE,
-    options: markRecommended(options),
+    options: markRecommended(quoted),
   }
 }
 

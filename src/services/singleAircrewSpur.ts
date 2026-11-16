@@ -39,6 +39,20 @@ function tagged(
   }
 }
 
+function groupByVertex(track: OffsetRoutePoint[], centerline: SpurPoint[]): OffsetRoutePoint[][] {
+  const grouped = centerline.map(() => [] as OffsetRoutePoint[])
+  let index = 0
+  for (const point of track) {
+    if (point.ptIdent !== centerline[index]?.ptIdent) {
+      let next = index + 1
+      while (next < centerline.length && centerline[next]?.ptIdent !== point.ptIdent) next += 1
+      if (next < centerline.length) index = next
+    }
+    grouped[index].push(point)
+  }
+  return grouped
+}
+
 function withFileNames(points: Tagged[]): SingleAircrewTrackPoint[] {
   const named = assignOffsetWaypointNames(
     points.map((point, index) => ({
@@ -68,21 +82,29 @@ export function singleAircrewSortieTrack(opts: {
   inner: OffsetRoutePoint[]
   outer: OffsetRoutePoint[]
   sortie1Side: SortieSide
-  sortieNumber: 1 | 2
+  sortieNumber: number
 }): { side: SortieSide; waypoints: SingleAircrewTrackPoint[] } {
   const plain = orderSortieTrack(opts)
   const hits = detectReciprocalSpurs(opts.centerline)
   if (hits.length === 0) return plain
-  if (opts.inner.length !== opts.centerline.length || opts.outer.length !== opts.centerline.length) return plain
+  const ownGroupsFor = (track: OffsetRoutePoint[]) => groupByVertex(track, opts.centerline)
+  if (ownGroupsFor(opts.inner).some((group) => group.length === 0) || ownGroupsFor(opts.outer).some((group) => group.length === 0)) {
+    return plain
+  }
 
   const curve = routeCurveSide(opts.centerline)
   const side = plain.side
   const ownLateral = side === 'inner' ? curve.innerSide : curve.outerSide
   const otherSide = otherSortieSide(side)
   const otherLateral = otherSide === 'inner' ? curve.innerSide : curve.outerSide
-  const own = side === 'inner' ? opts.inner : opts.outer
-  const other = side === 'inner' ? opts.outer : opts.inner
+  const ownTrack = side === 'inner' ? opts.inner : opts.outer
+  const otherTrack = side === 'inner' ? opts.outer : opts.inner
+  const own = groupByVertex(ownTrack, opts.centerline)
+  const other = groupByVertex(otherTrack, opts.centerline)
   const sorted = [...hits].sort((a, b) => a.index - b.index)
+  const pushGroup = (pieces: Tagged[], group: OffsetRoutePoint[], index: number, routeSide: SortieSide, lateral: 'left' | 'right') => {
+    for (const point of group) pieces.push(tagged(point, routeSide, lateral, opts.centerline[index]))
+  }
 
   if (opts.sortieNumber === 2) {
     const drop = new Set<number>()
@@ -90,16 +112,12 @@ export function singleAircrewSortieTrack(opts: {
       drop.add(hit.index)
       drop.add(hit.index + 1)
     }
-    const kept = own
-      .map((point, index) => ({ point, index }))
-      .filter((item) => !drop.has(item.index))
-      .reverse()
-    return {
-      side,
-      waypoints: withFileNames(
-        kept.map((item) => tagged(item.point, side, ownLateral, opts.centerline[item.index]))
-      ),
+    const kept: Tagged[] = []
+    for (let index = own.length - 1; index >= 0; index -= 1) {
+      if (drop.has(index)) continue
+      pushGroup(kept, [...own[index]].reverse(), index, side, ownLateral)
     }
+    return { side, waypoints: withFileNames(kept) }
   }
 
   const pieces: Tagged[] = []
@@ -109,17 +127,13 @@ export function singleAircrewSortieTrack(opts: {
     const tip = hit.index + 1
     const back = hit.index + 2
     if (back >= own.length || entry < cursor) continue
-    for (let index = cursor; index < entry; index += 1) {
-      pieces.push(tagged(own[index], side, ownLateral, opts.centerline[index]))
-    }
-    pieces.push(tagged(own[entry], side, ownLateral, opts.centerline[entry]))
-    pieces.push(tagged(own[tip], side, ownLateral, opts.centerline[tip]))
-    pieces.push(tagged(other[tip], otherSide, otherLateral, opts.centerline[tip]))
-    pieces.push(tagged(own[back], side, ownLateral, opts.centerline[back]))
+    for (let index = cursor; index < entry; index += 1) pushGroup(pieces, own[index], index, side, ownLateral)
+    pushGroup(pieces, own[entry], entry, side, ownLateral)
+    pushGroup(pieces, own[tip], tip, side, ownLateral)
+    pushGroup(pieces, other[tip], tip, otherSide, otherLateral)
+    pushGroup(pieces, own[back], back, side, ownLateral)
     cursor = back + 1
   }
-  for (let index = cursor; index < own.length; index += 1) {
-    pieces.push(tagged(own[index], side, ownLateral, opts.centerline[index]))
-  }
+  for (let index = cursor; index < own.length; index += 1) pushGroup(pieces, own[index], index, side, ownLateral)
   return { side, waypoints: withFileNames(pieces) }
 }

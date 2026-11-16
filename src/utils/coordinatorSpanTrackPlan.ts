@@ -4,7 +4,11 @@ import {
   parseOffsetsListInput,
   validateSpanTrackPlan,
 } from '@survey-planning/corridorTrackPlan.js'
-import { parallelOffsetsForHalfWidth } from '@survey-planning/surveyGeometry.js'
+import {
+  NO_OFFSET_INSIDE_NOTE,
+  offsetsInsidePublishedWidth,
+  parallelOffsetsForHalfWidth,
+} from '@survey-planning/surveyGeometry.js'
 
 export type SpanTrackPlanEntry = {
   fromPt: string
@@ -99,6 +103,33 @@ export function resetRowOffsetsToDefault(
         ? formatOffsetsList(parallelOffsetsForHalfWidth(rightNm, policy))
         : '',
   }
+}
+
+/** A span side whose tracks all sit past the published width. Those tracks are not flown. */
+export function spanTrackFitWarnings(row: SpanTrackRowState): string[] {
+  const warnings: string[] = []
+  const sides = [
+    ['Left', row.leftNm, row.leftOffsetsText],
+    ['Right', row.rightNm, row.rightOffsetsText],
+  ] as const
+  for (const [label, widthText, offsetsText] of sides) {
+    if (!offsetsText.trim()) continue
+    const width = Number(widthText)
+    if (!Number.isFinite(width) || width <= 0) continue
+    let offsets: number[]
+    try {
+      offsets = parseOffsetsListInput(offsetsText)
+    } catch {
+      continue
+    }
+    const fit = offsetsInsidePublishedWidth(offsets, width)
+    if (fit.offsets.length === 0) {
+      warnings.push(
+        `${label}: ${NO_OFFSET_INSIDE_NOTE} Published width is ${width} NM and the first track is ${offsets[0]} NM.`
+      )
+    }
+  }
+  return warnings
 }
 
 export function applySpacingToRows(

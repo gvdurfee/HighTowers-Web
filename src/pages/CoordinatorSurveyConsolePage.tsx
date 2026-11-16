@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/schema'
 import { parseWaypointCode } from '@/utils/mtrWaypointCode'
@@ -18,11 +18,7 @@ import {
   compareTwoVsThreeTeamStaffing,
   buildLegWidthSummaries,
 } from '@survey-planning/surveySortiePlanner.js'
-import {
-  planTeamSegmentDay,
-  teamNeedsRefuel,
-  validateTeamSegments,
-} from '@survey-planning/segmentAssignment.js'
+import { planTeamSegmentDay, validateTeamSegments } from '@survey-planning/segmentAssignment.js'
 import {
   assignmentEditsForOption,
   compareSurveyPlans,
@@ -47,12 +43,45 @@ import { SortiePilotCard } from '@/components/SortiePilotCard'
 import { FlightPlanContentPackCard } from '@/components/FlightPlanContentPackCard'
 import { SortieFragmentExportCard } from '@/components/SortieFragmentExportCard'
 import { CoordinatorRouteLoadForm } from '@/components/CoordinatorRouteLoadForm'
+import { TeamDispatchWizard } from '@/components/TeamDispatchWizard'
+import { ReviewedSection } from '@/components/ReviewedSection'
+import { TeamDispatchSaveBar } from '@/components/TeamDispatchSaveBar'
+import {
+  missingCrewSides,
+  neighborSideWarning,
+  refuelAirportForCrew,
+  refuelEditsForDraft,
+  WIDTH_SIDE_HELP,
+  blankSpansFromPoints,
+  widthFieldLabels,
+  type WizardDraft,
+  type WizardSource,
+} from '@/services/teamDispatchWizard'
+import { setTeamDispatchUnsaved, setTeamSortiesStale, teamDispatchHasUnsaved } from '@/services/teamDispatchUnsaved'
+import {
+  TEAM_DISPATCH_SECTIONS,
+  clearReviewMarks,
+  clearReviewedSections,
+  clearTeamPlanAwaitingSave,
+  markSectionReviewed,
+  markTeamPlanAwaitingSave,
+  readReviewMarks,
+  reviewMarksAfterChange,
+  saveBarStatus,
+  saveBlocker,
+  uncoveredLaneMessage,
+  teamDispatchMapPath,
+  writeReviewMarks,
+  type ReviewMarks,
+  type TeamDispatchSectionId,
+} from '@/services/teamDispatchReview'
+import { attachPackedSorties, planDispatchSorties } from '@/services/teamDispatchSorties'
+import { spanWidthsFromRows, teamPlanSpanWidths } from '@/services/teamPlanCorridor'
 import { CoordinatorOffsetPlans } from '@/components/CoordinatorOffsetPlans'
 import { crewOffsetAirports } from '@/services/coordinatorOffsetExport'
-import type { SortieSide } from '@/services/offsetRouteFpl'
-import { draftTeamPlan, type TeamPlanAirport, type TeamRoutePoint } from '@/services/teamPlanRecord'
-import { buildNamedOffsetSortieFile } from '@/services/teamPlanSortieDownload'
-import { routeCurveSide } from '@survey-planning/offsetRoutePlan.js'
+import { type SortieSide } from '@/services/offsetRouteFpl'
+import { buildTeamSortieFile, draftTeamPlan, ferryCrossingNote, legacySortieNote, packedDownloadLabel, teamSortieOffsetRoute, type PackedTeamSortie, type TeamPlanAirport, type TeamRoutePoint } from '@/services/teamPlanRecord'
+import { resolvePublishedLegWidths, routeCurveSide, segmentCurveSide } from '@survey-planning/offsetRoutePlan.js'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
 import {
@@ -65,6 +94,15 @@ import {
   validateSpanTrackRows,
   type SpanTrackRowState,
 } from '@/utils/coordinatorSpanTrackPlan'
+import {
+  SORTIE_BUDGET_DEFAULT_NM,
+  SORTIE_BUDGET_MAX_NM,
+  SORTIE_BUDGET_MIN_NM,
+  SORTIE_BUDGET_STEP_NM,
+  formatSortieEndurance,
+  readSortieBudgetEntry,
+  resolveSortieBudget,
+} from '@/services/sortieBudget'
 
 const HINT_COORD_QUICK_REF = 'coordinatorSurvey.quickReference'
 const HINT_COORD_ENROUTE_RECOVERY = 'coordinatorSurvey.enrouteRecovery'
@@ -318,10 +356,9 @@ function CoordinatorConsoleGuide() {
           <h3 className="font-semibold text-gray-900 mb-2">Planner modes</h3>
           <ul className="space-y-2 list-disc pl-5">
             <li>
-              <strong>Single — 1 team:</strong> one aircraft flies both sides in sequence (Sortie 1 side, then the other
-              side on Sortie 2). Use it to finish a partial route fragment left incomplete because of weather or limited
-              resources. Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight
-              plan on the G1000. Sortie 2 is its own .fpl file.
+              <strong>Single — 1 team:</strong> one aircraft. Each sortie lists its side; fly the side shown. A later
+              sortie is already in flying order; load it and fly it as listed. Do not invert the flight plan on the
+              G1000. Each sortie is its own .fpl file.
             </li>
             <li>
               <strong>Single — 2 teams:</strong> two teams working neighboring sides at the same time — Team 1 inner,
@@ -352,15 +389,15 @@ function CoordinatorConsoleGuide() {
           </p>
           <ul className="space-y-2 list-disc pl-5">
             <li>
-              <strong>2 teams (opposite sides):</strong> sortie 1 — each aircraft surveys its assigned side and lands
-              at the shared refuel airport. The <strong>final sortie</strong> returns home — combined with remaining
-              survey work when it fits the NM budget, otherwise a separate ferry-only return sortie (pilots plan fuel).
+              <strong>2 teams:</strong> each crew stays on the side of the centerline it picks for every sortie. The
+              other crew flies the other side. Sorties land at the shared refuel airport, and the{' '}
+              <strong>final sortie</strong> returns home — combined with remaining survey work when it fits the NM
+              budget, otherwise a separate ferry-only return sortie (pilots plan fuel).
             </li>
             <li>
-              <strong>1 team — one aircraft flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2).</strong>{' '}
-              Use it to finish a partial route fragment left incomplete because of weather or limited resources. Sortie 1
-              lands at the shared refuel airport. Sortie 2 is already in flying order; load it and fly it as listed. Do
-              not invert the flight plan on the G1000. Sortie 2 is its own .fpl file.
+              <strong>1 team — one aircraft. Each sortie lists its side; fly the side shown.</strong> A later sortie
+              is already in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000.
+              Each sortie is its own .fpl file.
             </li>
             <li>
               <strong>Multi-aircraft:</strong> deconfliction is <strong>pilot responsibility</strong> — maintain radio
@@ -400,8 +437,8 @@ function CoordinatorConsoleGuide() {
               <tr className="border-b border-gray-200 bg-white">
                 <th className="py-2 px-3 text-left font-semibold text-gray-700">Sortie budget</th>
                 <td className="py-2 px-3">
-                  Max NM per sortie (typically 400–500). ~500 NM ≈ 4.5–5 hr with reserve; use for summer morning vs
-                  afternoon planning.
+                  Max NM per sortie (100–500, default 400). Hours next to the field use 100 KTAS because the app has no
+                  survey-speed setting.
                 </td>
               </tr>
               <tr className="border-b border-gray-200">
@@ -470,7 +507,7 @@ function SurveyPlannerResults({
     setExportErr(null)
     try {
       if (sortie.returnHomeOnly) {
-        setExportErr('Return-home sorties are not exported — pilots plan fuel and route to their home airport.')
+        setExportErr(null)
         return
       }
       const depIdent =
@@ -491,34 +528,55 @@ function SurveyPlannerResults({
         setExportErr('No published width for this segment.')
         return
       }
-      const curve = routeCurveSide(exportCtx.points)
-      const side: SortieSide = sortie.side === curve.outerSide ? 'outer' : 'inner'
-      const homeIdent = team.label.replace(/ \((left|right)\)$/i, '').trim()
-      const file = buildNamedOffsetSortieFile({
-        points: exportCtx.points,
-        legWidths: exportCtx.legWidths,
-        fromPt: sortie.waypointFrom,
-        toPt: sortie.waypointTo,
-        side,
-        departure: {
-          identifier: dep.identifier,
-          name: dep.name,
-          latitude: dep.latitude,
-          longitude: dep.longitude,
-          elevation: dep.elevation,
-        },
-        landing: {
-          identifier: dest.identifier,
-          name: dest.name,
-          latitude: dest.latitude,
-          longitude: dest.longitude,
-          elevation: dest.elevation,
+      const curve = segmentCurveSide(exportCtx.points, sortie.waypointFrom, sortie.waypointTo)
+      const surveySide = sortie.side === 'left' || sortie.side === 'right' ? sortie.side : null
+      const side: SortieSide = surveySide == null ? 'inner' : surveySide === curve.innerSide ? 'inner' : 'outer'
+      const airportOf = (airport: AirportResult) => ({
+        identifier: airport.identifier,
+        name: airport.name,
+        latitude: airport.latitude,
+        longitude: airport.longitude,
+        elevation: airport.elevation,
+      })
+      const file = buildTeamSortieFile({
+        team: {
+          id: 'team1',
+          label: dep.identifier,
+          departure: airportOf(dep),
+          landing: airportOf(dest),
+          refuelStop: null,
+          segmentFrom: sortie.waypointFrom,
+          segmentTo: sortie.waypointTo,
+          startPoint: sortie.startAt,
+          sorties: [],
+          packedSorties: [
+            {
+              number: sortie.sortieNumber,
+              side,
+              surveySide,
+              offsetsNm: sortie.offsets,
+              fromPt: sortie.waypointFrom,
+              toPt: sortie.waypointTo,
+              departureIdent: dep.identifier,
+              landingIdent: dest.identifier,
+              distanceNm: sortie.totalNm,
+              returnHomeOnly: false,
+              startAt: sortie.startAt,
+            },
+          ],
         },
         routeLabel: exportCtx.routeLabel,
-        sortieNumber: sortie.sortieNumber === 2 ? 2 : 1,
-        homeIdent,
-        policy: exportCtx.policy,
+        points: exportCtx.points,
+        legWidths: exportCtx.legWidths,
+        sortieNumber: sortie.sortieNumber,
+        firstOffsetNm: exportCtx.policy?.firstOffsetNm,
+        stepNm: exportCtx.policy?.stepNm,
       })
+      if ('error' in file) {
+        setExportErr(file.error)
+        return
+      }
+      if ('ferryOnly' in file) return
       downloadSortieFpl(file.xml, file.filename)
       onPilotBrief?.({
         teamLabel: depIdent,
@@ -530,7 +588,7 @@ function SurveyPlannerResults({
         ferryInLabel: dep.identifier,
         ferryOutLabel: dest.identifier,
         warnRoutePointLimit: false,
-        routePointCount: (file.xml.match(/<waypoint-type>USER WAYPOINT<\/waypoint-type>/g) ?? []).length,
+        routePointCount: file.userNames.length,
         filename: file.filename,
       })
     } catch (e) {
@@ -552,7 +610,7 @@ function SurveyPlannerResults({
         {result.totalWingNm != null && (
           <>
             {' '}
-            · <strong>{result.totalWingNm}</strong> NM wing total
+            · <strong>{result.totalWingNm}</strong> NM wing total, includes ferry
           </>
         )}
       </p>
@@ -566,7 +624,7 @@ function SurveyPlannerResults({
             {result.teams.map((t) => (
               <li key={t.label}>
                 {t.label} ({formatSurveySide(t.side, curve)}): {t.sortieCount} sortie{t.sortieCount === 1 ? '' : 's'},{' '}
-                {t.totalNm} NM
+                {t.totalNm} NM, includes ferry
               </li>
             ))}
           </ul>
@@ -594,7 +652,7 @@ function SurveyPlannerResults({
             {t.sortieCount != null && (
               <>
                 {' '}
-                · {t.sortieCount} sortie{t.sortieCount === 1 ? '' : 's'}, {t.totalNm} NM total
+                · {t.sortieCount} sortie{t.sortieCount === 1 ? '' : 's'}, {t.totalNm} NM, includes ferry
               </>
             )}
           </p>
@@ -660,14 +718,14 @@ function SurveyPlannerResults({
                     {exportCtx && (
                       <td className="py-2">
                         {sortie.returnHomeOnly ? (
-                          <span className="text-xs text-gray-500">Pilot planned</span>
+                          <span className="text-xs text-gray-500">Ferry only, no survey file</span>
                         ) : (
                           <button
                             type="button"
                             onClick={() => handleExportSortie(t, sortie)}
                             className="text-xs font-medium text-cap-ultramarine hover:underline whitespace-nowrap"
                           >
-                            Export .fpl
+                            Export one sortie (.fpl): that sortie&apos;s lanes, from departure to landing.
                           </button>
                         )}
                       </td>
@@ -696,6 +754,7 @@ function airportResultToRecord(a: AirportResult): AirportRecord {
 
 export function CoordinatorSurveyConsolePage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const planId = searchParams.get('plan') ?? ''
 
   const savedPlans = useLiveQuery(
@@ -729,7 +788,8 @@ export function CoordinatorSurveyConsolePage() {
   const team3CodeInputRef = useRef<HTMLInputElement>(null)
   const team3LookupRef = useRef<HTMLButtonElement>(null)
 
-  const [sortieBudgetNm, setSortieBudgetNm] = useState(500)
+  const [sortieBudgetNm, setSortieBudgetNm] = useState(SORTIE_BUDGET_DEFAULT_NM)
+  const [budgetClampNote, setBudgetClampNote] = useState<string | null>(null)
   const [ferryMode, setFerryMode] = useState<FerryMode>('return-home')
   const [refuelCode, setRefuelCode] = useState('')
   const [refuelAirport, setRefuelAirport] = useState<AirportResult | null>(null)
@@ -740,19 +800,31 @@ export function CoordinatorSurveyConsolePage() {
   const [widthErr, setWidthErr] = useState<string | null>(null)
   const [widthBusy, setWidthBusy] = useState(false)
   const [spanTrackRows, setSpanTrackRows] = useState<SpanTrackRowState[]>([])
-  const [firstOffsetNm, setFirstOffsetNm] = useState(3)
-  const [stepNm, setStepNm] = useState(6)
-  const spacingRef = useRef({ firstOffsetNm: 3, stepNm: 6 })
+  const [firstOffsetNm, setFirstOffsetNm] = useState(2.5)
+  const [stepNm, setStepNm] = useState(5)
+  const spacingRef = useRef({ firstOffsetNm: 2.5, stepNm: 5 })
   spacingRef.current = { firstOffsetNm, stepNm }
   const [plannerResult, setPlannerResult] = useState<PlannerResult | null>(null)
   const [compareBundle, setCompareBundle] = useState<CompareBundle | null>(null)
   const [pilotBrief, setPilotBrief] = useState<SortieFplPilotBrief | null>(null)
   const [crewSides, setCrewSides] = useState<Record<string, SortieSide | null>>({})
   const [segmentEdits, setSegmentEdits] = useState<Record<string, { from: string; to: string }> | null>(null)
+  const [assignmentLocked, setAssignmentLocked] = useState(false)
   const [appliedInsert, setAppliedInsert] = useState<PlanningInsert | null>(null)
   const [refuelEdits, setRefuelEdits] = useState<Record<string, AirportResult | null> | null>(null)
   const [useSuggestedSegments, setUseSuggestedSegments] = useState(false)
   const [teamPlanNotice, setTeamPlanNotice] = useState<string | null>(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [reviewMarks, setReviewMarks] = useState<ReviewMarks>({})
+  const [dispatchUnsaved, setDispatchUnsaved] = useState(false)
+  const [openSections, setOpenSections] = useState<TeamDispatchSectionId[]>([])
+  const sectionRefs = useRef<Partial<Record<TeamDispatchSectionId, HTMLElement | null>>>({})
+  const [resultsStale, setResultsStale] = useState(false)
+  const [hydratedPlanId, setHydratedPlanId] = useState<string | null>(null)
+  const wizardAutoOpened = useRef(false)
+  const hadPlannerResults = useRef(false)
+  const dirtyBaselinePlan = useRef<string | null>(null)
+  const widthSettle = useRef(false)
   const teamPlanRestored = useRef<string | null>(null)
   const { isSeen, markSeen } = useHintsSeen()
 
@@ -760,6 +832,8 @@ export function CoordinatorSurveyConsolePage() {
     () => (planId ? db.teamPlans.get(planId) : undefined),
     [planId]
   )
+  const savedTeamPlanRef = useRef(savedTeamPlan)
+  savedTeamPlanRef.current = savedTeamPlan
 
   const planBundle = useLiveQuery(async () => {
     if (!planId) return null
@@ -875,7 +949,149 @@ export function CoordinatorSurveyConsolePage() {
     }
   }, [planBundle, routeMeta, refuelAirport, team1Airport, team2Airport, team3Airport, refuelEdits, savedTeamPlan, appliedInsert, firstOffsetNm, stepNm, spanTrackRows, widthTexts])
 
+  const crossingNoteFor = (
+    crewIdent: string,
+    sortie: PackedTeamSortie,
+    departure: { identifier: string; latitude: number; longitude: number },
+    landing: { identifier: string; latitude: number; longitude: number }
+  ): string | null => {
+    if (!sortieExportCtx?.legWidths || !dispatchPlan || 'error' in dispatchPlan) return null
+    const ownTeam = dispatchPlan.teams.find((team) => team.ident.toUpperCase() === crewIdent.toUpperCase())
+    if (!ownTeam) return null
+    const asAirport = (ident: string) => {
+      const found = sortieExportCtx.resolveAirportByIdent(ident)
+      return found
+        ? { identifier: found.identifier, name: found.name, latitude: found.latitude, longitude: found.longitude }
+        : null
+    }
+    const widths = sortieExportCtx.legWidths
+    if (!widths) return null
+    const drafted = (team: (typeof dispatchPlan.teams)[number]) => ({
+      id: 'team1' as const,
+      label: team.ident,
+      departure: asAirport(team.ident),
+      landing: asAirport(team.ident),
+      refuelStop: refuelAirport
+        ? { identifier: refuelAirport.identifier, name: refuelAirport.name, latitude: refuelAirport.latitude, longitude: refuelAirport.longitude }
+        : null,
+      segmentFrom: team.fromPt,
+      segmentTo: team.toPt,
+      startPoint: team.fromPt,
+      sorties: [],
+      packedSorties: team.sorties,
+      chosenSide: null,
+    })
+    const own = teamSortieOffsetRoute({
+      team: drafted(ownTeam),
+      points: sortieExportCtx.points,
+      legWidths: widths,
+      sortieNumber: sortie.number,
+      firstOffsetNm,
+      stepNm,
+      homeIdent: crewIdent,
+      homes: dispatchPlan.teams.map((team) => team.ident),
+    })
+    if (!('waypoints' in own)) return null
+    const others = dispatchPlan.teams
+      .filter((team) => team.ident.toUpperCase() !== crewIdent.toUpperCase())
+      .flatMap((team) =>
+        team.sorties
+          .filter((item) => item.offsetsNm.length > 0)
+          .map((item) => {
+            const route = teamSortieOffsetRoute({
+              team: drafted(team),
+              points: sortieExportCtx.points,
+              legWidths: widths,
+              sortieNumber: item.number,
+              firstOffsetNm,
+              stepNm,
+              homeIdent: team.ident,
+              homes: dispatchPlan.teams.map((crew) => crew.ident),
+            })
+            return 'waypoints' in route
+              ? { ident: team.ident, fromPt: item.fromPt, toPt: item.toPt, points: route.waypoints }
+              : null
+          })
+          .filter((item): item is { ident: string; fromPt: string; toPt: string; points: typeof own.waypoints } => item != null)
+      )
+    return ferryCrossingNote({
+      departure: { lat: departure.latitude, lon: departure.longitude },
+      landing: { lat: landing.latitude, lon: landing.longitude },
+      own: own.waypoints,
+      others,
+    })
+  }
+
+  const exportDispatchSortie = (crewIdent: string, sortie: PackedTeamSortie) => {
+    if (!sortieExportCtx || sortie.returnHomeOnly || sortie.offsetsNm.length === 0) return
+    const homes = [team1Airport, team2Airport, team3Airport].filter((airport): airport is AirportResult => Boolean(airport))
+    const home = homes.find((airport) => airport.identifier.toUpperCase() === crewIdent.toUpperCase())
+    const dep = sortieExportCtx.resolveAirportByIdent(sortie.departureIdent)
+    const dest = sortieExportCtx.resolveAirportByIdent(sortie.landingIdent) ?? dep
+    if (!home || !dep || !dest || !sortieExportCtx.legWidths) return
+    const airportOf = (airport: { identifier: string; name: string; latitude: number; longitude: number; elevation?: number }) => ({
+      identifier: airport.identifier,
+      name: airport.name,
+      latitude: airport.latitude,
+      longitude: airport.longitude,
+      elevation: airport.elevation,
+    })
+    const file = buildTeamSortieFile({
+      team: {
+        id: 'team1',
+        label: home.identifier,
+        departure: airportOf(home),
+        landing: airportOf(dest),
+        refuelStop: dep.identifier.toUpperCase() === home.identifier.toUpperCase() ? null : airportOf(dep),
+        segmentFrom: sortie.fromPt,
+        segmentTo: sortie.toPt,
+        startPoint: sortie.startAt,
+        sorties: [],
+        packedSorties:
+          dispatchPlan && !('error' in dispatchPlan)
+            ? (dispatchPlan.teams.find((team) => team.ident.toUpperCase() === crewIdent.toUpperCase())?.sorties ?? [sortie])
+            : [sortie],
+      },
+      routeLabel: sortieExportCtx.routeLabel,
+      points: sortieExportCtx.points,
+      legWidths: sortieExportCtx.legWidths,
+      sortieNumber: sortie.number,
+      firstOffsetNm: sortieExportCtx.policy?.firstOffsetNm,
+      stepNm: sortieExportCtx.policy?.stepNm,
+      homeIdent: home.identifier,
+      homes: homes.map((airport) => airport.identifier),
+    })
+    if ('xml' in file) {
+      downloadSortieFpl(file.xml, file.filename)
+      const curve = segmentCurveSide(sortieExportCtx.points, sortie.fromPt, sortie.toPt)
+      setPilotBrief({
+        teamLabel: home.identifier,
+        side: formatSurveySide(sortie.side ?? 'inner', curve),
+        rangeLabel: `${sortie.fromPt}→${sortie.toPt}`,
+        startAt: sortie.startAt ?? '',
+        passCount: sortie.offsetsNm.length,
+        offsetsLabel: sortie.offsetsNm.join(', '),
+        ferryInLabel: dep.identifier,
+        ferryOutLabel: dest.identifier,
+        warnRoutePointLimit: false,
+        routePointCount: file.userNames.length,
+        filename: file.filename,
+        sortieNumber: sortie.number,
+        turnDeg: file.maxTurnDeg,
+        laneExample: file.userNames[0],
+        crossingNote: crossingNoteFor(crewIdent, sortie, airportOf(dep), airportOf(dest)) ?? undefined,
+        sideNote: segmentCurveSide(sortieExportCtx.points, sortie.fromPt, sortie.toPt).note ?? undefined,
+      })
+    }
+  }
+
   const isAnchorPlan = Boolean(planBundle && isCoordinatorSurveyAnchor(planBundle.plan))
+
+  useEffect(() => {
+    if (wizardAutoOpened.current || planId) return
+    wizardAutoOpened.current = true
+    setWizardOpen(true)
+  }, [planId])
 
   useEffect(() => {
     teamPlanRestored.current = null
@@ -897,6 +1113,8 @@ export function CoordinatorSurveyConsolePage() {
     setRefuelEdits(null)
     setUseSuggestedSegments(false)
     setAppliedInsert(null)
+    setHydratedPlanId(null)
+    dirtyBaselinePlan.current = null
   }, [planId])
 
   useEffect(() => {
@@ -930,7 +1148,10 @@ export function CoordinatorSurveyConsolePage() {
     if (savedTeamPlan && savedTeamPlan.flightPlanId !== planId) return
     if (teamPlanRestored.current === planId) return
     teamPlanRestored.current = planId
-    if (!savedTeamPlan) return
+    if (!savedTeamPlan) {
+      setHydratedPlanId(planId)
+      return
+    }
     const count = Math.min(3, Math.max(1, savedTeamPlan.teams.length)) as TeamCount
     setTeamCount(count)
     setRunMode('single')
@@ -955,17 +1176,39 @@ export function CoordinatorSurveyConsolePage() {
     apply(byId('team3')?.departure ?? null, setTeam3Code, setTeam3Airport)
     const sides: Record<string, SortieSide | null> = {}
     for (const team of savedTeamPlan.teams) {
-      sides[team.id] = team.sorties.find((sortie) => sortie.number === 1)?.side ?? null
+    const packedSide = team.packedSorties?.find((sortie) => sortie.side)?.side ?? null
+    sides[team.id] = team.chosenSide ?? packedSide ?? team.sorties.find((sortie) => sortie.side)?.side ?? null
     }
     setCrewSides(sides)
+    const savedRefuel = savedTeamPlan.teams.find((team) => team.refuelStop)?.refuelStop ?? null
+    if (savedRefuel) {
+      setFerryMode('staged-refuel')
+      setRefuelAirport({
+        identifier: savedRefuel.identifier,
+        name: savedRefuel.name,
+        latitude: savedRefuel.latitude,
+        longitude: savedRefuel.longitude,
+        elevation: savedRefuel.elevation,
+      })
+    }
     if (savedTeamPlan.firstOffsetNm != null && savedTeamPlan.firstOffsetNm > 0) {
       setFirstOffsetNm(savedTeamPlan.firstOffsetNm)
     }
     if (savedTeamPlan.stepNm != null && savedTeamPlan.stepNm > 0) {
       setStepNm(savedTeamPlan.stepNm)
     }
+    if (savedTeamPlan.sortieBudgetNm != null) {
+      const resolved = resolveSortieBudget(savedTeamPlan.sortieBudgetNm)
+      setSortieBudgetNm(resolved.nm)
+      setBudgetClampNote(
+        resolved.reduced
+          ? `Saved sortie distance ${savedTeamPlan.sortieBudgetNm} NM was reduced to ${resolved.nm} NM.`
+          : null
+      )
+    }
     setAppliedInsert(savedTeamPlan.routeInsert ?? null)
     setTeamPlanNotice('Saved team plan loaded.')
+    setHydratedPlanId(planId)
   }, [planId, savedTeamPlan])
 
   const loadWidth = useCallback(async () => {
@@ -991,15 +1234,49 @@ export function CoordinatorSurveyConsolePage() {
     void loadWidth()
   }, [loadWidth])
 
+  const storedSpanKey = JSON.stringify(teamPlanSpanWidths(savedTeamPlan) ?? null)
+  const storedSpanWidths = useMemo(() => teamPlanSpanWidths(savedTeamPlan), [storedSpanKey])
+
   useEffect(() => {
-    if (widthTexts.length === 0) {
-      setSpanTrackRows([])
+    if (storedSpanWidths) {
+      setSpanTrackRows(
+        applySpacingToRows(
+          storedSpanWidths.map((span) => ({
+            fromPt: span.fromPt,
+            toPt: span.toPt,
+            leftNm: String(span.leftNm),
+            rightNm: String(span.rightNm),
+            leftOffsetsText: '',
+            rightOffsetsText: '',
+            displayText: `${span.fromPt}→${span.toPt}`,
+          })),
+          spacingRef.current
+        )
+      )
+      setPlannerResult(null)
+      setCompareBundle(null)
       return
     }
+    if (widthTexts.length === 0) return
     setSpanTrackRows(spanTrackRowsFromWidthTexts(widthTexts, spacingRef.current))
     setPlannerResult(null)
     setCompareBundle(null)
-  }, [widthTexts])
+  }, [widthTexts, storedSpanWidths])
+
+  useEffect(() => {
+    if (spanTrackRows.length > 0 && spanTrackRows.every((row) => Number(row.leftNm) > 0 && Number(row.rightNm) > 0)) {
+      setWidthErr(null)
+    }
+  }, [spanTrackRows])
+
+  useEffect(() => {
+    if (!widthErr || spanTrackRows.length > 0 || !planBundle || planBundle.waypoints.length < 2) return
+    setSpanTrackRows(
+      blankSpansFromPoints(
+        planBundle.waypoints.map((waypoint) => ({ ptIdent: waypointPtIdent(waypoint.originalName) }))
+      )
+    )
+  }, [widthErr, spanTrackRows.length, planBundle])
 
   useEffect(() => {
     setSpanTrackRows((rows) =>
@@ -1008,9 +1285,78 @@ export function CoordinatorSurveyConsolePage() {
   }, [firstOffsetNm, stepNm])
 
   useEffect(() => {
+    hadPlannerResults.current = Boolean(plannerResult || compareBundle)
+  })
+
+  useEffect(() => {
+    if (hadPlannerResults.current) setResultsStale(true)
     setPlannerResult(null)
     setCompareBundle(null)
   }, [spanTrackRows, sortieBudgetNm, ferryMode])
+
+  useEffect(() => {
+    if (widthBusy) widthSettle.current = true
+  }, [widthBusy])
+
+  useEffect(() => {
+    if (!planId || hydratedPlanId !== planId || widthBusy) return
+    if (dirtyBaselinePlan.current !== planId || widthSettle.current) {
+      dirtyBaselinePlan.current = planId
+      widthSettle.current = false
+      return
+    }
+    setTeamDispatchUnsaved(planId, true)
+    setDispatchUnsaved(true)
+    if (savedTeamPlanRef.current?.teams.some((team) => (team.packedSorties?.length ?? 0) > 0)) {
+      setTeamSortiesStale(planId, true)
+    }
+  }, [
+    planId,
+    hydratedPlanId,
+    widthBusy,
+    teamCount,
+    runMode,
+    sortieBudgetNm,
+    ferryMode,
+    refuelAirport,
+    spanTrackRows,
+    firstOffsetNm,
+    stepNm,
+    crewSides,
+    team1Airport,
+    team2Airport,
+    team3Airport,
+    segmentEdits,
+    refuelEdits,
+  ])
+
+  useEffect(() => {
+    if (!planId) return
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!teamDispatchHasUnsaved(planId)) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    const warnClick = (event: MouseEvent) => {
+      if (!teamDispatchHasUnsaved(planId)) return
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const anchor = target.closest('a')
+      if (!anchor) return
+      const href = anchor.getAttribute('href')
+      if (!href || href.startsWith('#')) return
+      if (!window.confirm('Team Dispatch has unsaved changes. Leave this page?')) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    }
+    window.addEventListener('beforeunload', warn)
+    document.addEventListener('click', warnClick, true)
+    return () => {
+      window.removeEventListener('beforeunload', warn)
+      document.removeEventListener('click', warnClick, true)
+    }
+  }, [planId])
 
   const spanTrackErr = useMemo(() => validateSpanTrackRows(spanTrackRows), [spanTrackRows])
 
@@ -1179,6 +1525,14 @@ export function CoordinatorSurveyConsolePage() {
   }
 
   const runPlanner = () => {
+    setResultsStale(false)
+    if (planId) {
+      setReviewMarks((prev) => {
+        const next = clearReviewedSections(prev, ['results', 'sides'])
+        writeReviewMarks(planId, next)
+        return next
+      })
+    }
     const base = plannerBaseInput()
     const t1 = team1Input()
     if (!base || !t1) return
@@ -1352,7 +1706,8 @@ export function CoordinatorSurveyConsolePage() {
             })
           : null
       let refuel: AirportResult | null = null
-      if (refuelEdits && crew.id in refuelEdits) refuel = refuelEdits[crew.id]
+      const chosenRefuel = refuelAirportForCrew(crew.id, ferryMode, refuelAirport, refuelEdits)
+      if (ferryMode === 'staged-refuel') refuel = chosenRefuel
       else if (!useSuggestedSegments && saved && 'refuelStop' in saved) {
         const stop = saved.refuelStop
         refuel = stop
@@ -1364,13 +1719,6 @@ export function CoordinatorSurveyConsolePage() {
               elevation: stop.elevation,
             }
           : null
-      } else if (
-        ferryMode === 'staged-refuel' &&
-        refuelAirport &&
-        bare &&
-        teamNeedsRefuel(bare, sortieBudgetNm)
-      ) {
-        refuel = refuelAirport
       }
       const day =
         refuel && home && legWidths && segment.from && segment.to
@@ -1445,70 +1793,136 @@ export function CoordinatorSurveyConsolePage() {
     return { team1: full, team2: full, team3: full }
   }, [geographicPlan, routePointIdents])
 
-  const geographicDetail = useMemo(() => {
-    if (!geographicPlan || !plannerResult || !('teams' in plannerResult)) return null
-    const teams = geographicPlan.rows.map((row) => {
-      const over = row.day?.sorties.filter((sortie) => sortie.overBudget) ?? []
-      const note =
-        over.length > 0
-          ? over.map((sortie) => `Sortie ${sortie.number} is over the ${sortieBudgetNm} NM budget.`).join(' ')
-          : null
-      return {
-        label: `${row.label} — ${row.from || '?'}→${row.to || '?'}`,
-        side: 'both' as const,
-        waypointFrom: row.from,
-        waypointTo: row.to,
-        entryWaypoint: row.day?.sorties[0]?.startAt ?? null,
-        entryIndex: row.day?.sorties[0]?.startIdx ?? null,
-        ferryInNm: row.day?.sorties[0]?.ferryInNm ?? 0,
-        sorties: (row.day?.sorties ?? []).map((sortie) => ({
-          sortieNumber: sortie.number,
-          startIdx: sortie.startIdx,
-          endIdx: sortie.endIdx,
-          startAt: sortie.startAt ?? row.from,
-          waypointFrom: sortie.waypointFrom,
-          waypointTo: sortie.waypointTo,
-          offsets: sortie.offsets,
-          offsetsPerSide: sortie.offsets.join(', '),
-          routeSequence: sortie.routeSequence,
-          ferryInNm: sortie.ferryInNm,
-          alongRouteNm: Math.round(sortie.alongRouteNm * 10) / 10,
-          ferryOutNm: sortie.ferryOutNm,
-          ferryInLabel: sortie.departureIdent,
-          ferryOutLabel: sortie.landingIdent,
-          totalNm: sortie.distanceNm,
-          overBudget: sortie.overBudget,
-          side: sortie.surveySide,
-        })),
-        sortieCount: row.day?.sorties.length ?? 0,
-        totalNm: row.day?.totalNm ?? 0,
-        note,
-      }
+  const dispatchPlan = useMemo(() => {
+    if (!planBundle || !routeMeta || spanTrackRows.length === 0) return null
+    const team1Home =
+      team1Airport ??
+      (planBundle.departure
+        ? {
+            identifier: planBundle.departure.identifier,
+            name: planBundle.departure.name,
+            latitude: planBundle.departure.latitude,
+            longitude: planBundle.departure.longitude,
+          }
+        : null)
+    const airports = [team1Home, team2Airport, team3Airport]
+      .slice(0, teamCount)
+      .filter((airport): airport is AirportResult => Boolean(airport))
+      .map((airport) => ({
+        identifier: airport.identifier,
+        latitude: airport.latitude,
+        longitude: airport.longitude,
+      }))
+    if (airports.length < teamCount) return null
+    return planDispatchSorties({
+      aircraftCount: teamCount,
+      routeType: routeMeta.routeType,
+      routeNumber: routeMeta.routeNumber,
+      waypoints: planBundle.waypoints.map((waypoint) => ({
+        ptIdent: waypointPtIdent(waypoint.originalName),
+        lat: waypoint.latitude,
+        lon: waypoint.longitude,
+      })),
+      widthTexts,
+      spans: spanTrackRows,
+      firstOffsetNm,
+      stepNm,
+      sortieBudgetNm,
+      ferryMode,
+      refuel: refuelAirport
+        ? {
+            identifier: refuelAirport.identifier,
+            latitude: refuelAirport.latitude,
+            longitude: refuelAirport.longitude,
+          }
+        : null,
+      airports,
+      sides: Object.fromEntries(
+        [
+          [team1Airport?.identifier, crewSides.team1],
+          [team2Airport?.identifier, crewSides.team2],
+          [team3Airport?.identifier, crewSides.team3],
+        ].filter((entry): entry is [string, SortieSide | null] => Boolean(entry[0]))
+      ),
+      assignment:
+        assignmentLocked && segmentEdits
+          ? (['team1', 'team2', 'team3'] as const).slice(0, teamCount).flatMap((id) => {
+              const airport = id === 'team1' ? team1Airport : id === 'team2' ? team2Airport : team3Airport
+              const segment = segmentEdits[id]
+              if (!airport || !segment?.from || !segment.to) return []
+              return [
+                {
+                  ident: airport.identifier,
+                  fromPt: segment.from,
+                  toPt: segment.to,
+                  refuel: Boolean(refuelAirportForCrew(id, ferryMode, refuelAirport, refuelEdits)),
+                },
+              ]
+            })
+          : undefined,
     })
-    return {
-      ...plannerResult,
-      teams,
-      totalSorties: geographicPlan.totalSorties,
-      totalWingNm: geographicPlan.totalWingNm,
-    }
-  }, [geographicPlan, plannerResult, sortieBudgetNm])
+  }, [
+    planBundle,
+    routeMeta,
+    spanTrackRows,
+    team1Airport,
+    team2Airport,
+    team3Airport,
+    teamCount,
+    widthTexts,
+    firstOffsetNm,
+    stepNm,
+    sortieBudgetNm,
+    ferryMode,
+    refuelAirport,
+    crewSides,
+    assignmentLocked,
+    segmentEdits,
+    refuelEdits,
+  ])
 
   const rememberSides = useCallback((sides: Record<string, SortieSide | null>) => {
     setCrewSides(sides)
   }, [])
 
   const planComparison = useMemo(() => {
-    if (!planBundle || !plannerResult || !('legs' in plannerResult)) return null
+    if (!planBundle) return null
     const points = planBundle.waypoints.map((waypoint) => ({
       ptIdent: waypointPtIdent(waypoint.originalName),
       lat: waypoint.latitude,
       lon: waypoint.longitude,
       g1000Name: waypoint.g1000Name,
     }))
-    const legWidths = plannerResult.legs.map((leg) =>
-      leg.leftNm != null && leg.rightNm != null ? { leftNm: leg.leftNm, rightNm: leg.rightNm } : null
-    )
-    if (legWidths.some((leg) => leg == null)) return null
+    const fromPlanner =
+      plannerResult && 'legs' in plannerResult
+        ? plannerResult.legs.map((leg) =>
+            leg.leftNm != null && leg.rightNm != null ? { leftNm: leg.leftNm, rightNm: leg.rightNm } : null
+          )
+        : null
+    let legWidths = fromPlanner
+    if (!legWidths || legWidths.some((leg) => leg == null)) {
+      try {
+        legWidths = buildLegWidthSummaries({
+          waypoints: points,
+          widthTexts: [],
+          teams: [],
+          spanTrackPlan: spanTrackPlanFromRows(spanTrackRows),
+        }).map((leg) =>
+          leg.leftNm != null && leg.rightNm != null ? { leftNm: leg.leftNm, rightNm: leg.rightNm } : null
+        )
+      } catch {
+        legWidths = null
+      }
+    }
+    if (!legWidths || legWidths.some((leg) => leg == null)) {
+      const resolved = resolvePublishedLegWidths(points, widthTexts)
+      if (resolved.status === 'published') {
+        legWidths = resolved.legs.map((leg) =>
+          leg ? { leftNm: leg.leftNm, rightNm: leg.rightNm } : null
+        )
+      }
+    }
+    if (!legWidths || legWidths.some((leg) => leg == null)) return null
     const homes = [team1Airport, team2Airport, team3Airport].filter((airport): airport is AirportResult => Boolean(airport))
     if (homes.length < 2) return null
     const refuel =
@@ -1522,9 +1936,11 @@ export function CoordinatorSurveyConsolePage() {
               from: team.segmentFrom!,
               to: team.segmentTo!,
               refuel: Boolean(team.refuelStop),
+              totalNm: team.packedSorties?.reduce((sum, sortie) => sum + sortie.distanceNm, 0),
+              sorties: team.packedSorties?.map((sortie) => ({ number: sortie.number, distanceNm: sortie.distanceNm })),
             }))
         : undefined
-    return compareSurveyPlans({
+    const comparison = compareSurveyPlans({
       points,
       legWidths,
       homes,
@@ -1532,10 +1948,109 @@ export function CoordinatorSurveyConsolePage() {
       saved,
       policy: { firstOffsetNm, stepNm },
       budgetNm: sortieBudgetNm,
+      applied:
+        dispatchPlan && !('error' in dispatchPlan)
+          ? {
+              refuelIdent: refuel?.identifier ?? null,
+              teams: dispatchPlan.teams.map((team) => ({
+                ident: team.ident,
+                fromPt: team.fromPt,
+                toPt: team.toPt,
+                totalNm: team.totalNm,
+                sorties: team.sorties.map((sortie) => ({
+                  number: sortie.number,
+                  distanceNm: sortie.distanceNm,
+                })),
+              })),
+            }
+          : null,
+      quote: (option) => {
+        const airports = [team1Airport, team2Airport, team3Airport]
+          .slice(0, teamCount)
+          .filter((airport): airport is AirportResult => Boolean(airport))
+          .map((airport) => ({
+            identifier: airport.identifier,
+            latitude: airport.latitude,
+            longitude: airport.longitude,
+          }))
+        if (!routeMeta || airports.length < teamCount) return null
+        const priced = planDispatchSorties({
+          aircraftCount: teamCount,
+          routeType: routeMeta.routeType,
+          routeNumber: routeMeta.routeNumber,
+          waypoints: points,
+          widthTexts,
+          spans: spanTrackRows,
+          firstOffsetNm,
+          stepNm,
+          sortieBudgetNm,
+          ferryMode: option.ferryMode ?? ferryMode,
+          refuel: refuel
+            ? { identifier: refuel.identifier, latitude: refuel.latitude, longitude: refuel.longitude }
+            : null,
+          airports,
+          sides: Object.fromEntries(
+            [
+              [team1Airport?.identifier, crewSides.team1],
+              [team2Airport?.identifier, crewSides.team2],
+              [team3Airport?.identifier, crewSides.team3],
+            ].filter((entry): entry is [string, SortieSide | null] => Boolean(entry[0]))
+          ),
+          assignment: option.teams.map((team) => ({
+            ident: team.identifier,
+            fromPt: team.from,
+            toPt: team.to,
+            refuel: Boolean(team.refuel),
+          })),
+        })
+        if (!priced || 'error' in priced) return null
+        const gap = uncoveredLaneMessage({
+          points,
+          legs: legWidths.filter((leg): leg is { leftNm: number; rightNm: number } => leg != null),
+          policy: { firstOffsetNm, stepNm },
+          crews: priced.teams,
+        })
+        if (gap) return null
+        const teams = option.teams.map((row) => {
+          const packed = priced.teams.find((team) => team.ident.toUpperCase() === row.identifier.toUpperCase())
+          if (!packed) return row
+          return {
+            ...row,
+            from: packed.fromPt,
+            to: packed.toPt,
+            totalNm: packed.totalNm,
+            sorties: packed.sorties.map((sortie) => ({
+              number: sortie.number,
+              distanceNm: sortie.distanceNm,
+              overBudget: sortie.distanceNm > sortieBudgetNm + 1e-6,
+            })),
+          }
+        })
+        const wingNm = Math.round(teams.reduce((sum, team) => sum + team.totalNm, 0) * 10) / 10
+        return {
+          teams,
+          wingNm,
+          allUnder: teams.every((team) => team.sorties.length > 0 && team.sorties.every((sortie) => !sortie.overBudget)),
+          refuelStops: teams.filter((team) => team.refuel).length,
+        }
+      },
     })
+    if (!comparison) return null
+    if (dispatchPlan && !('error' in dispatchPlan)) {
+      const gap = uncoveredLaneMessage({
+        points,
+        legs: legWidths.filter((leg): leg is { leftNm: number; rightNm: number } => leg != null),
+        policy: { firstOffsetNm, stepNm },
+        crews: dispatchPlan.teams,
+      })
+      if (gap) comparison.options = comparison.options.filter((option) => option.id !== 'applied')
+    }
+    return comparison
   }, [
     planBundle,
     plannerResult,
+    spanTrackRows,
+    dispatchPlan,
     team1Airport,
     team2Airport,
     team3Airport,
@@ -1545,6 +2060,11 @@ export function CoordinatorSurveyConsolePage() {
     firstOffsetNm,
     stepNm,
     sortieBudgetNm,
+    teamCount,
+    crewSides,
+    ferryMode,
+    widthTexts,
+    routeMeta,
   ])
 
   const applyComparison = (option: ComparisonOption) => {
@@ -1555,17 +2075,27 @@ export function CoordinatorSurveyConsolePage() {
       { id: 'team3', identifier: team3Airport?.identifier ?? '' },
     ].filter((crew) => crew.identifier)
     const edits = assignmentEditsForOption(option, crews)
+    setAssignmentLocked(true)
     setSegmentEdits(edits.segments)
     setRefuelEdits(edits.refuels)
     setAppliedInsert(edits.insertedPoint)
-    setTeamPlanNotice('Comparison loaded into Geographic assignment. Save team plan when you want Map View to use it.')
+    if (planId) {
+      setTeamDispatchUnsaved(planId, true)
+      setDispatchUnsaved(true)
+    }
+    setTeamPlanNotice('Comparison loaded. The sortie list changed and is not saved yet.')
   }
 
-  const saveTeamPlan = async () => {
-    if (!planId) return
+  const saveTeamPlan = async (): Promise<boolean> => {
+    if (!planId) return false
+    const unsetSides = missingCrewSides(crewSides, offsetCrews.map((crew) => crew.id))
+    if (unsetSides.length > 0) {
+      setTeamPlanNotice('Choose Inner or Outer for every crew before saving.')
+      return false
+    }
     if (geographicPlan && !geographicPlan.validation.ok) {
       setTeamPlanNotice(geographicPlan.validation.messages[0] ?? 'Fix the team segments before saving.')
-      return
+      return false
     }
     const airportOf = (airport: AirportResult | null): TeamPlanAirport | null =>
       airport
@@ -1577,7 +2107,13 @@ export function CoordinatorSurveyConsolePage() {
             elevation: airport.elevation,
           }
         : null
-    const plan = draftTeamPlan({
+    if (teamCount >= 2 && (!dispatchPlan || 'error' in dispatchPlan)) {
+      setTeamPlanNotice(
+        dispatchPlan && 'error' in dispatchPlan ? dispatchPlan.error : 'The sortie list is not ready.'
+      )
+      return false
+    }
+    const drafted = draftTeamPlan({
       flightPlanId: planId,
       savedAt: new Date().toISOString(),
       crews: offsetCrews.map((crew) => ({
@@ -1595,18 +2131,25 @@ export function CoordinatorSurveyConsolePage() {
             }
           : null),
         landing: null,
-        refuelStop: airportOf(geographicPlan?.rows.find((row) => row.id === crew.id)?.refuel ?? null),
+        refuelStop: airportOf(refuelAirportForCrew(crew.id, ferryMode, refuelAirport, refuelEdits)),
       })),
-      sides: Object.fromEntries(
-        offsetCrews.map((crew) => [crew.id, crewSides[crew.id] ?? (geographicPlan ? 'inner' : null)])
-      ),
+      sides: Object.fromEntries(offsetCrews.map((crew) => [crew.id, crewSides[crew.id] ?? null])),
       segments: teamSegments,
       firstOffsetNm,
       stepNm,
+      sortieBudgetNm,
+      spanWidths: spanWidthsFromRows(spanTrackRows) ?? undefined,
     })
+    const plan =
+      dispatchPlan && !('error' in dispatchPlan) ? attachPackedSorties(drafted, dispatchPlan) : drafted
     plan.routeInsert = appliedInsert
     await db.teamPlans.put(plan)
+    setTeamDispatchUnsaved(planId, false)
+    setDispatchUnsaved(false)
+    setTeamSortiesStale(planId, false)
+    clearTeamPlanAwaitingSave(planId)
     setTeamPlanNotice('Team plan saved. Map View uses this plan.')
+    return true
   }
   const offsetRouteKind =
     routeMeta?.routeType === 'SR' ? 'sr' : routeMeta?.routeType === 'IR' || routeMeta?.routeType === 'VR' ? 'irvr' : 'other'
@@ -1618,7 +2161,9 @@ export function CoordinatorSurveyConsolePage() {
   const canRun =
     planBundle &&
     planBundle.waypoints.length >= minWaypoints &&
-    widthTexts.length > 0 &&
+    (widthTexts.length > 0 ||
+      (spanTrackRows.length > 0 &&
+        spanTrackRows.every((row) => Number(row.leftNm) > 0 && Number(row.rightNm) > 0))) &&
     spanTrackRows.length > 0 &&
     !spanTrackErr &&
     !widthBusy &&
@@ -1627,6 +2172,125 @@ export function CoordinatorSurveyConsolePage() {
     team3Ready &&
     refuelReady
 
+  const applyWizard = (draft: WizardDraft) => {
+    const count = draft.aircraftCount ?? 1
+    setTeamCount(count)
+    setRunMode('single')
+    setSortieBudgetNm(draft.sortieBudgetNm)
+    setBudgetClampNote(null)
+    setFerryMode(draft.ferryMode)
+    if (draft.ferryMode === 'return-home') {
+      setRefuelAirport(null)
+      setRefuelCode('')
+    } else {
+      setRefuelAirport(draft.refuel)
+      setRefuelCode(draft.refuel?.identifier ?? '')
+    }
+    setRefuelErr(null)
+    setFirstOffsetNm(draft.firstOffsetNm)
+    setStepNm(draft.stepNm)
+    if (draft.spans.length > 0) {
+      setSpanTrackRows(
+        applySpacingToRows(draft.spans, { firstOffsetNm: draft.firstOffsetNm, stepNm: draft.stepNm })
+      )
+    }
+    const applyTeam = (
+      team: WizardDraft['teams']['team1'],
+      setCode: (value: string) => void,
+      setAirport: (value: AirportResult | null) => void
+    ) => {
+      setCode(team.airport?.identifier ?? team.code)
+      setAirport(team.airport)
+    }
+    applyTeam(draft.teams.team1, setTeam1Code, setTeam1Airport)
+    if (count >= 2) applyTeam(draft.teams.team2, setTeam2Code, setTeam2Airport)
+    else {
+      setTeam2Code('')
+      setTeam2Airport(null)
+    }
+    if (count >= 3) applyTeam(draft.teams.team3, setTeam3Code, setTeam3Airport)
+    else {
+      setTeam3Code('')
+      setTeam3Airport(null)
+    }
+    setTeam1Err(null)
+    setTeam2Err(null)
+    setTeam3Err(null)
+    const appliedSides = {
+      team1: draft.crewSides.team1,
+      team2: count >= 2 ? draft.crewSides.team2 : null,
+      team3: count >= 3 ? draft.crewSides.team3 : null,
+    }
+    setCrewSides(appliedSides)
+    if (count === 3 && draft.segments.team1 && draft.segments.team2 && draft.segments.team3) {
+      setSegmentEdits({
+        team1: draft.segments.team1,
+        team2: draft.segments.team2,
+        team3: draft.segments.team3,
+      })
+    } else {
+      setSegmentEdits(null)
+    }
+    setRefuelEdits(refuelEditsForDraft({ ...draft, aircraftCount: count }))
+    setAppliedInsert(null)
+    setUseSuggestedSegments(false)
+    setAssignmentLocked(false)
+    setWizardOpen(false)
+    if (planId) {
+      clearReviewMarks(planId)
+      setReviewMarks({})
+      setOpenSections([])
+    }
+    setTeamPlanNotice('Setup answers are on the page. Review them, then press Save.')
+  }
+
+  const wizardSource: WizardSource = {
+    spans: spanTrackRows,
+    firstOffsetNm,
+    stepNm,
+    sortieBudgetNm,
+    ferryMode,
+    refuel: refuelAirport,
+    aircraftCount: teamCount,
+    teams: {
+      team1: { code: team1Code, airport: team1Airport },
+      team2: { code: team2Code, airport: team2Airport },
+      team3: { code: team3Code, airport: team3Airport },
+    },
+    crewSides,
+    segments: {
+      team1: savedTeamPlan?.teams.find((team) => team.id === 'team1')?.segmentFrom
+        ? {
+            from: savedTeamPlan.teams.find((team) => team.id === 'team1')?.segmentFrom ?? '',
+            to: savedTeamPlan.teams.find((team) => team.id === 'team1')?.segmentTo ?? '',
+          }
+        : null,
+      team2: savedTeamPlan?.teams.find((team) => team.id === 'team2')?.segmentFrom
+        ? {
+            from: savedTeamPlan.teams.find((team) => team.id === 'team2')?.segmentFrom ?? '',
+            to: savedTeamPlan.teams.find((team) => team.id === 'team2')?.segmentTo ?? '',
+          }
+        : null,
+      team3: savedTeamPlan?.teams.find((team) => team.id === 'team3')?.segmentFrom
+        ? {
+            from: savedTeamPlan.teams.find((team) => team.id === 'team3')?.segmentFrom ?? '',
+            to: savedTeamPlan.teams.find((team) => team.id === 'team3')?.segmentTo ?? '',
+          }
+        : null,
+    },
+  }
+  const wizardWaypoints =
+    planBundle?.waypoints.map((waypoint) => ({
+      ptIdent: waypointPtIdent(waypoint.originalName),
+      lat: waypoint.latitude,
+      lon: waypoint.longitude,
+    })) ?? []
+  const wizardEntry = wizardWaypoints[0]?.ptIdent ?? null
+  const wizardExit = wizardWaypoints[wizardWaypoints.length - 1]?.ptIdent ?? null
+  const widthLabels = widthFieldLabels(
+    routeCurveSide(wizardWaypoints).innerSide === 'right' ? 'right' : 'left'
+  )
+
   const legsResult =
     compareBundle?.kind === '1-2'
       ? compareBundle.data.oneTeam
@@ -1634,12 +2298,157 @@ export function CoordinatorSurveyConsolePage() {
         ? compareBundle.data.twoTeams
         : plannerResult
 
+  const reviewSignatures = useMemo(() => {
+    const route = (planBundle?.waypoints ?? []).map((waypoint) => waypoint.id).join(',')
+    const widths = spanTrackRows.map((row) => `${row.fromPt}:${row.leftNm}/${row.rightNm}`).join('|')
+    const tracks = `${firstOffsetNm}/${stepNm}|${spanTrackRows.map((row) => `${row.leftOffsetsText};${row.rightOffsetsText}`).join('|')}`
+    const aircraft = `${teamCount}|${runMode}|${team1Airport?.identifier ?? ''}|${team2Airport?.identifier ?? ''}|${team3Airport?.identifier ?? ''}|${team1Code}|${team2Code}|${team3Code}`
+    const distance = `${sortieBudgetNm}|${ferryMode}|${refuelAirport?.identifier ?? ''}|${refuelCode}`
+    const results = `${dispatchPlan && !('error' in dispatchPlan) ? dispatchPlan.totalLine : ''}|${JSON.stringify(segmentEdits)}|${resultsStale ? 'stale' : 'fresh'}|${plannerResult ? 'planned' : ''}|${compareBundle ? compareBundle.kind : ''}`
+    const sides = JSON.stringify(crewSides)
+    return { route, widths, tracks, aircraft, distance, results, sides }
+  }, [
+    planBundle,
+    spanTrackRows,
+    firstOffsetNm,
+    stepNm,
+    teamCount,
+    runMode,
+    team1Airport,
+    team2Airport,
+    team3Airport,
+    team1Code,
+    team2Code,
+    team3Code,
+    sortieBudgetNm,
+    ferryMode,
+    refuelAirport,
+    refuelCode,
+    dispatchPlan,
+    segmentEdits,
+    resultsStale,
+    plannerResult,
+    compareBundle,
+    crewSides,
+  ])
+  const reviewSignatureKey = JSON.stringify(reviewSignatures)
+
+  useEffect(() => {
+    if (!planId) {
+      setReviewMarks({})
+      return
+    }
+    markTeamPlanAwaitingSave(planId)
+    const fieldsReady = spanTrackRows.length > 0 || Boolean(widthErr)
+    setReviewMarks((current) => {
+      const stored = readReviewMarks(planId)
+      const base = Object.keys(current).length > 0 ? current : stored
+      if (!fieldsReady) return base
+      const next = reviewMarksAfterChange(base, reviewSignatures)
+      if (next !== base) writeReviewMarks(planId, next)
+      return next
+    })
+  }, [planId, reviewSignatureKey, spanTrackRows.length, widthErr])
+
+  const invalidWidth = spanTrackRows.some((row) => !(Number(row.leftNm) > 0) || !(Number(row.rightNm) > 0))
+  const sectionProblems: Partial<Record<TeamDispatchSectionId, string>> = {
+    widths: widthErr || (spanTrackRows.length > 0 && invalidWidth ? 'Enter a width greater than 0 for every span.' : null) || undefined,
+    tracks: spanTrackErr || undefined,
+    aircraft:
+      (needsTeam2 && !team2Airport && 'Look up Team 2 departure airport.') ||
+      (needsTeam3 && !team3Airport && 'Look up Team 3 departure airport.') ||
+      (isAnchorPlan && !team1Airport && 'Look up Team 1 departure airport.') ||
+      undefined,
+    distance:
+      ferryMode === 'staged-refuel' && !refuelAirport ? 'Look up the shared refueling airport.' : undefined,
+    results:
+      (resultsStale && 'Results are out of date. Run again.') ||
+      (dispatchPlan && 'error' in dispatchPlan && dispatchPlan.error) ||
+      (geographicPlan && !geographicPlan.validation.ok && geographicPlan.validation.messages[0]) ||
+      undefined,
+  }
+  const missingSideIds = missingCrewSides(crewSides, offsetCrews.map((crew) => crew.id))
+  const missingSideLabels = missingSideIds.map((id) => offsetCrews.find((crew) => crew.id === id)?.label ?? id)
+  if (missingSideLabels.length > 0) sectionProblems.sides = `Choose Inner or Outer for ${missingSideLabels[0]}.`
+  const overLimit =
+    dispatchPlan && !('error' in dispatchPlan)
+      ? dispatchPlan.teams
+          .flatMap((team) =>
+            team.sorties
+              .filter((sortie) => sortie.distanceNm > sortieBudgetNm + 1e-6)
+              .map((sortie) => ({ ident: team.ident, number: sortie.number, nm: sortie.distanceNm }))
+          )
+          .sort((a, b) => b.nm - a.nm)[0] ?? null
+      : null
+  const coverageMessage =
+    dispatchPlan && !('error' in dispatchPlan) && planBundle
+      ? uncoveredLaneMessage({
+          points: planBundle.waypoints.map((waypoint) => ({ ptIdent: waypointPtIdent(waypoint.originalName) })),
+          legs: spanTrackRows.map((row) => ({ leftNm: Number(row.leftNm), rightNm: Number(row.rightNm) })),
+          policy: { firstOffsetNm, stepNm },
+          crews: dispatchPlan.teams,
+        })
+      : null
+  const blocker = saveBlocker({
+    missingSideLabels,
+    segmentMessages: geographicPlan && !geographicPlan.validation.ok ? geographicPlan.validation.messages : [],
+    overLimit,
+    coverageMessage,
+  })
+
+  const setSectionOpen = (id: TeamDispatchSectionId, open: boolean) => {
+    setOpenSections((prev) => (open ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((item) => item !== id)))
+    if (!open && planId && !sectionProblems[id]) {
+      const next = markSectionReviewed(reviewMarks, id, reviewSignatures[id])
+      writeReviewMarks(planId, next)
+      setReviewMarks(next)
+    }
+  }
+
+  const focusSection = (id: TeamDispatchSectionId) => {
+    setOpenSections((prev) => (prev.includes(id) ? prev : [...prev, id]))
+    window.setTimeout(() => sectionRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
+  }
+
+  const saveAndOpenMap = async () => {
+    const saved = await saveTeamPlan()
+    if (saved && planId) navigate(teamDispatchMapPath(planId))
+  }
+
   return (
-    <div className="app-page-shell overflow-auto">
+    <div className="app-page-shell overflow-hidden min-h-0">
       {pilotBrief && (
         <SortiePilotCard brief={pilotBrief} isOpen onClose={() => setPilotBrief(null)} />
       )}
-      <div className="app-panel w-full p-6 md:p-8">
+      <TeamDispatchWizard
+        open={wizardOpen}
+        savedPlans={savedPlans ?? []}
+        hasPlan={Boolean(planBundle)}
+        routeLabel={routeMeta ? `${routeMeta.routeType}${routeMeta.routeNumber}` : planBundle?.plan.name ?? null}
+        entry={wizardEntry}
+        exit={wizardExit}
+        waypointCount={wizardWaypoints.length}
+        source={wizardSource}
+        sourceKey={`${planId ?? ''}|${spanTrackRows.length}|${team1Airport?.identifier ?? ''}|${team2Airport?.identifier ?? ''}|${team3Airport?.identifier ?? ''}`}
+        waypoints={wizardWaypoints}
+        routeType={routeMeta?.routeType ?? ''}
+        routeNumber={routeMeta?.routeNumber ?? ''}
+        widthTexts={widthTexts}
+        onRouteLoaded={(id) => setSearchParams({ plan: id })}
+        onCancel={() => setWizardOpen(false)}
+        onFinish={applyWizard}
+        lookupAirport={async (code) => {
+          try {
+            const result = await apiService.fetchAirport(code)
+            if (result.status !== 'found') return { error: airportLookupMessage(result) ?? 'Airport not found.' }
+            return { airport: result.airport }
+          } catch {
+            return { error: FAA_AIRPORT_SERVICE_MESSAGE }
+          }
+        }}
+      />
+      <div className="app-panel w-full flex flex-col min-h-0 flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-auto p-6 md:p-8 pb-8">
         <header className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Team Dispatch</h1>
           <p className="text-sm text-gray-700 mt-2 max-w-4xl">
@@ -1648,11 +2457,23 @@ export function CoordinatorSurveyConsolePage() {
             <strong>.fpl</strong> and <strong>email it to that aircraft&apos;s Mission Pilot</strong> (or
             copy it to an SD card).
           </p>
+          {savedTeamPlan && legacySortieNote(savedTeamPlan.teams.find((team) => legacySortieNote(team)) ?? null) && (
+            <p className="mt-3 text-sm text-amber-800" role="note">
+              {legacySortieNote(savedTeamPlan.teams.find((team) => legacySortieNote(team)) ?? savedTeamPlan.teams[0])}
+            </p>
+          )}
           <div className="flex flex-wrap items-start justify-between gap-2 mt-2">
             <p className="text-sm text-gray-600 flex-1 min-w-0">
               What-if sortie planner for wing route surveys. See{' '}
               <code className="text-xs bg-gray-100 px-1 rounded">docs/COORDINATOR_SURVEY_CONSOLE.md</code>.
             </p>
+            <button
+              type="button"
+              onClick={() => setWizardOpen(true)}
+              className="text-sm font-medium text-cap-ultramarine hover:underline shrink-0"
+            >
+              Reopen setup questions
+            </button>
             <GuidedHint
               hintId={HINT_COORD_ENROUTE_RECOVERY}
               stepNumber={1}
@@ -1662,10 +2483,9 @@ export function CoordinatorSurveyConsolePage() {
                   Coordinator picks <strong>one shared refuel airport</strong> near the MTR for all aircraft.{' '}
                   <strong>2 teams:</strong> sortie 1 surveys one side and lands at refuel; the <strong>final sortie</strong>{' '}
                   returns home — merged with remaining survey legs when within the NM budget.{' '}
-                  <strong>1 team</strong> flies both sides in sequence (Sortie 1 side, then the other side on Sortie 2).
-                  Use it to finish a partial route fragment left incomplete because of weather or limited resources.
-                  Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on
-                  the G1000. Sortie 2 is its own .fpl file.
+                  <strong>1 team</strong> is one aircraft. Each sortie lists its side; fly the side shown. A later
+                  sortie is already in flying order; load it and fly it as listed. Do not invert the flight plan on
+                  the G1000. Each sortie is its own .fpl file.
                   <br />
                   <br />
                   <strong>Multi-aircraft:</strong> pilots deconflict — radio contact and <strong>staggered
@@ -1702,9 +2522,71 @@ export function CoordinatorSurveyConsolePage() {
         )}
 
         {planBundle && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(28rem,1fr)] gap-6 items-start">
-            <div className="space-y-6 min-w-0">
-            <section className="rounded-xl border border-gray-200 bg-white p-5">
+          <section className="mb-6 rounded-xl border border-gray-200 bg-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                <div>
+                  <dt className="text-gray-500">Route</dt>
+                  <dd className="font-medium text-gray-900">
+                    {routeMeta ? `${routeMeta.routeType}${routeMeta.routeNumber}` : planBundle.plan.name}
+                    {wizardEntry && wizardExit ? ` · ${wizardEntry} to ${wizardExit}` : ''}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Aircraft</dt>
+                  <dd className="font-medium text-gray-900">{teamCount}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Airports</dt>
+                  <dd className="font-medium text-gray-900">
+                    {[team1Airport?.identifier, teamCount >= 2 ? team2Airport?.identifier : null, teamCount >= 3 ? team3Airport?.identifier : null]
+                      .filter(Boolean)
+                      .join(', ') || '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Distance limit</dt>
+                  <dd className="font-medium text-gray-900">
+                    {sortieBudgetNm} NM · {formatSortieEndurance(sortieBudgetNm)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Landing</dt>
+                  <dd className="font-medium text-gray-900">
+                    {ferryMode === 'staged-refuel'
+                      ? `Shared refuel${refuelAirport ? ` at ${refuelAirport.identifier}` : ''}`
+                      : 'Return to home airport'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Track spacing</dt>
+                  <dd className="font-medium text-gray-900">
+                    First {firstOffsetNm} NM, then every {stepNm} NM
+                  </dd>
+                </div>
+              </dl>
+              <button
+                type="button"
+                onClick={() => setWizardOpen(true)}
+                className="text-sm font-medium text-cap-ultramarine hover:underline shrink-0"
+              >
+                Reopen setup questions
+              </button>
+            </div>
+          </section>
+        )}
+
+        {planBundle && (
+          <div className="space-y-3">
+            <ReviewedSection
+              id="route"
+              ref={(node) => { sectionRefs.current.route = node }}
+              title="Route"
+              reviewed={Boolean(reviewMarks.route)}
+              problem={sectionProblems.route ?? null}
+              open={openSections.includes('route')}
+              onOpenChange={(open) => setSectionOpen('route', open)}
+            >
               <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                 <h2 className="text-lg font-semibold text-gray-900">Scenario</h2>
                 <button
@@ -1759,7 +2641,49 @@ export function CoordinatorSurveyConsolePage() {
                 ))}
               </ul>
 
+              <FlightPlanContentPackCard waypoints={planBundle.waypoints} />
+            </ReviewedSection>
+            <ReviewedSection
+              id="widths"
+              ref={(node) => { sectionRefs.current.widths = node }}
+              title="Corridor widths"
+              reviewed={Boolean(reviewMarks.widths)}
+              problem={sectionProblems.widths ?? null}
+              open={openSections.includes('widths')}
+              onOpenChange={(open) => setSectionOpen('widths', open)}
+            >
               <CorridorTrackPlanEditor
+                part="widths"
+                spanTrackRows={spanTrackRows}
+                onSpanTrackRowsChange={(rows) => {
+                  setSpanTrackRows(rows)
+                  if (rows.some((row) => Number(row.leftNm) > 0 && Number(row.rightNm) > 0)) setWidthErr(null)
+                }}
+                firstOffsetNm={firstOffsetNm}
+                stepNm={stepNm}
+                onFirstOffsetNmChange={setFirstOffsetNm}
+                onStepNmChange={setStepNm}
+                widthBusy={widthBusy}
+                widthErr={widthErr}
+                spanTrackErr={spanTrackErr}
+                isSeen={isSeen}
+                markSeen={markSeen}
+                widthLabels={widthLabels}
+                widthHelp={WIDTH_SIDE_HELP}
+                legPreview={legPreview ?? undefined}
+              />
+            </ReviewedSection>
+            <ReviewedSection
+              id="tracks"
+              ref={(node) => { sectionRefs.current.tracks = node }}
+              title="Survey tracks"
+              reviewed={Boolean(reviewMarks.tracks)}
+              problem={sectionProblems.tracks ?? null}
+              open={openSections.includes('tracks')}
+              onOpenChange={(open) => setSectionOpen('tracks', open)}
+            >
+              <CorridorTrackPlanEditor
+                part="tracks"
                 spanTrackRows={spanTrackRows}
                 onSpanTrackRowsChange={setSpanTrackRows}
                 firstOffsetNm={firstOffsetNm}
@@ -1771,15 +2695,20 @@ export function CoordinatorSurveyConsolePage() {
                 spanTrackErr={spanTrackErr}
                 isSeen={isSeen}
                 markSeen={markSeen}
+                widthLabels={widthLabels}
+                widthHelp={WIDTH_SIDE_HELP}
                 legPreview={legPreview ?? undefined}
               />
-            </section>
-            </div>
-
-            <div className="space-y-6 min-w-0">
-            <FlightPlanContentPackCard waypoints={planBundle.waypoints} />
-
-            <section className="rounded-xl border border-gray-200 bg-white p-5">
+            </ReviewedSection>
+            <ReviewedSection
+              id="aircraft"
+              ref={(node) => { sectionRefs.current.aircraft = node }}
+              title="Aircraft and departures"
+              reviewed={Boolean(reviewMarks.aircraft)}
+              problem={sectionProblems.aircraft ?? null}
+              open={openSections.includes('aircraft')}
+              onOpenChange={(open) => setSectionOpen('aircraft', open)}
+            >
               <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                 <h2 className="text-lg font-semibold text-gray-900">Teams &amp; parameters</h2>
                 <GuidedHint
@@ -1850,12 +2779,13 @@ export function CoordinatorSurveyConsolePage() {
                         name="team-count"
                         className="mt-1"
                         checked={teamCount === 1}
-                        onChange={() => setTeamCount(1)}
+                        onChange={() => {
+                          setTeamCount(1)
+                          setCrewSides((current) => ({ ...current, team2: null, team3: null }))
+                        }}
                       />
                       <span>
-                        1 team — one aircraft flies both sides in sequence (Sortie 1 side, then the other side on Sortie
-                        2). Use it to finish a partial route fragment left incomplete because of weather or limited
-                        resources.
+                        1 team — one aircraft. Each sortie lists its side; fly the side shown.
                       </span>
                     </label>
                     <label className="inline-flex items-center gap-2 cursor-pointer">
@@ -1863,16 +2793,22 @@ export function CoordinatorSurveyConsolePage() {
                         type="radio"
                         name="team-count"
                         checked={teamCount === 2}
-                        onChange={() => setTeamCount(2)}
+                        onChange={() => {
+                          setTeamCount(2)
+                          setCrewSides((current) => ({ ...current, team3: null }))
+                        }}
                       />
-                      2 teams (opposite sides)
+                      2 teams (each stays on its side)
                     </label>
                     <label className="inline-flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
                         name="team-count"
                         checked={teamCount === 3}
-                        onChange={() => setTeamCount(3)}
+                        onChange={() => {
+                          setTeamCount(3)
+                          setCrewSides((current) => ({ ...current, team3: null }))
+                        }}
                       />
                       3 teams (geographic split)
                     </label>
@@ -1880,7 +2816,7 @@ export function CoordinatorSurveyConsolePage() {
                   {teamCount === 3 && (
                     <p className="text-sm text-gray-600 mt-2">
                       Route is divided into three contiguous segments. Each team flies <strong>both sides</strong> of
-                      its segment from its own departure (~{sortieBudgetNm} NM sortie budget ≈ 4.5–5 hr). Recommended:
+                      its segment from its own departure (~{sortieBudgetNm} NM, {formatSortieEndurance(sortieBudgetNm)}). Recommended:
                       each segment flies the opposite side from the segments next to it (e.g. segment 1 Inner, segment 2
                       Outer, segment 3 Inner). This is a recommendation, not guaranteed separation; pilots still
                       deconflict.
@@ -2106,7 +3042,16 @@ export function CoordinatorSurveyConsolePage() {
                   </div>
                 )}
               </div>
-
+            </ReviewedSection>
+            <ReviewedSection
+              id="distance"
+              ref={(node) => { sectionRefs.current.distance = node }}
+              title="Distance limit and landing"
+              reviewed={Boolean(reviewMarks.distance)}
+              problem={sectionProblems.distance ?? null}
+              open={openSections.includes('distance')}
+              onOpenChange={(open) => setSectionOpen('distance', open)}
+            >
               <div className="max-w-xs">
                 <label htmlFor="sortie-budget" className="block text-sm font-medium text-gray-700 mb-1">
                   Sortie distance budget (NM)
@@ -2114,13 +3059,24 @@ export function CoordinatorSurveyConsolePage() {
                 <input
                   id="sortie-budget"
                   type="number"
-                  min={100}
-                  max={800}
-                  step={50}
+                  min={SORTIE_BUDGET_MIN_NM}
+                  max={SORTIE_BUDGET_MAX_NM}
+                  step={SORTIE_BUDGET_STEP_NM}
                   value={sortieBudgetNm}
-                  onChange={(e) => setSortieBudgetNm(Number(e.target.value) || 500)}
+                  onChange={(e) => {
+                    const next = Number(e.target.value)
+                    setSortieBudgetNm(Number.isFinite(next) ? next : SORTIE_BUDGET_DEFAULT_NM)
+                    setBudgetClampNote(null)
+                  }}
+                  onBlur={(e) => setSortieBudgetNm(readSortieBudgetEntry(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 />
+                <p className="mt-1 text-sm text-gray-600">{formatSortieEndurance(sortieBudgetNm)}</p>
+                {budgetClampNote && (
+                  <p className="mt-1 text-sm text-gray-700" role="status">
+                    {budgetClampNote}
+                  </p>
+                )}
               </div>
 
               <fieldset className="mt-5">
@@ -2148,11 +3104,14 @@ export function CoordinatorSurveyConsolePage() {
                 {ferryMode === 'staged-refuel' && (
                   <div className="space-y-4">
                   <div className="rounded-lg border border-gray-200 bg-slate-50 p-4 max-w-2xl">
-                    <p className="font-medium text-gray-900 mb-2">Refueling airport (shared)</p>
+                    <p className="font-medium text-gray-900 mb-2">
+                      Refueling airport (shared)
+                    </p>
                     <p className="text-xs text-gray-600 mb-3">
-                      With <strong>2 teams (opposite sides)</strong>, each aircraft completes its corridor side on sortie
-                      1 and lands here. The <strong>final sortie</strong> returns home — combined with any remaining
-                      survey legs when total NM fits the budget, otherwise a separate return-only sortie. With{' '}
+                      With <strong>2 teams</strong>, each crew stays on the side of the centerline it picks for every
+                      sortie and lands here. The other crew flies the other side. The <strong>final sortie</strong>{' '}
+                      returns home — combined with any remaining survey legs when total NM fits the budget, otherwise
+                      a separate return-only sortie. With{' '}
                       <strong>1 team</strong>, sortie 1 flies the chosen side and lands here. Sortie 2 is already in
                       flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2
                       is its own .fpl file.
@@ -2213,13 +3172,26 @@ export function CoordinatorSurveyConsolePage() {
                   </div>
                 )}
               </fieldset>
-
+            </ReviewedSection>
+            <ReviewedSection
+              id="results"
+              ref={(node) => { sectionRefs.current.results = node }}
+              title="Planner results and split"
+              reviewed={Boolean(reviewMarks.results)}
+              problem={sectionProblems.results ?? null}
+              open={openSections.includes('results')}
+              onOpenChange={(open) => setSectionOpen('results', open)}
+            >
               {planBundle.waypoints.length < 2 && (
                 <p className="text-sm text-gray-600 mt-3">
                   Need at least two resolved waypoints in the flight plan before running the planner.
                 </p>
               )}
-              {planBundle.waypoints.length >= 2 && !widthBusy && widthTexts.length === 0 && !widthErr && (
+              {planBundle.waypoints.length >= 2 &&
+                !widthBusy &&
+                widthTexts.length === 0 &&
+                !widthErr &&
+                spanTrackRows.every((row) => !(Number(row.leftNm) > 0) || !(Number(row.rightNm) > 0)) && (
                 <p className="text-sm text-gray-600 mt-3">
                   Load NASR corridor width in Scenario before running the planner.
                 </p>
@@ -2240,7 +3212,7 @@ export function CoordinatorSurveyConsolePage() {
                 (runMode === 'single' && teamCount === 3)) &&
                 planBundle.waypoints.length < 4 && (
                 <p className="text-sm text-gray-600 mt-3">
-                  Three-team geographic split needs at least four waypoints on the flight plan.
+                  Three aircraft need at least 3 route segments (4 points).
                 </p>
               )}
               {ferryMode === 'staged-refuel' && !refuelAirport && (
@@ -2271,7 +3243,6 @@ export function CoordinatorSurveyConsolePage() {
                       ? 'Compare 2 vs 3 teams'
                       : 'Run planner'}
               </button>
-            </section>
 
             <SortieFragmentExportCard
               waypoints={planBundle.waypoints}
@@ -2300,20 +3271,9 @@ export function CoordinatorSurveyConsolePage() {
                   : 'Set a departure airport on this flight plan, or look up Team 1, before exporting a sortie fragment.'
               }
               onPilotBrief={setPilotBrief}
+              trackPolicy={{ firstOffsetNm, stepNm }}
             />
-            </div>
-
-            <div className="lg:col-span-2 xl:col-span-2">
-              <div className="mb-3 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => void saveTeamPlan()}
-                  disabled={Boolean(geographicPlan && !geographicPlan.validation.ok)}
-                  className="px-3 py-2 text-sm font-medium rounded-lg bg-cap-ultramarine text-white disabled:opacity-50"
-                >
-                  Save team plan
-                </button>
-                {geographicPlan && !geographicPlan.validation.ok && (
+              {geographicPlan && !geographicPlan.validation.ok && (
                   <div role="alert">
                     {geographicPlan.validation.messages.map((message) => (
                       <p key={message} className="text-sm text-red-700">
@@ -2322,30 +3282,90 @@ export function CoordinatorSurveyConsolePage() {
                     ))}
                   </div>
                 )}
-                {teamPlanNotice && <p className="text-sm text-gray-700">{teamPlanNotice}</p>}
-              </div>
-              <CoordinatorOffsetPlans
-                key={planId}
-                flightPlanId={planId}
-                routeLabel={
-                  routeMeta
-                    ? `${routeMeta.routeType}${routeMeta.routeNumber}`
-                    : planBundle.plan.name.replace(/\s+/g, '')
-                }
-                waypoints={planBundle.waypoints}
-                widthTexts={widthTexts}
-                widthBusy={widthBusy}
-                widthError={widthErr}
-                routeKind={offsetRouteKind}
-                onReloadWidths={() => void loadWidth()}
-                crews={offsetCrews}
-                savedTeams={savedTeamPlan?.teams}
-                onSidesChange={rememberSides}
-              />
-            </div>
+              {savedTeamPlan && legacySortieNote(savedTeamPlan.teams[0]) && (
+                <p className="mb-4 text-sm text-amber-800" role="note">
+                  {legacySortieNote(savedTeamPlan.teams.find((team) => legacySortieNote(team)) ?? savedTeamPlan.teams[0])}
+                </p>
+              )}
+              {dispatchPlan && !('error' in dispatchPlan) && (
+                <div className="mb-4 text-sm text-gray-800">
+                  <p>{dispatchPlan.totalLine}</p>
+                  {neighborSideWarning(
+                    dispatchPlan.teams.map((team) => ({
+                      label: team.ident,
+                      ident: team.ident,
+                      side: team.sorties.find((sortie) => sortie.side === 'inner' || sortie.side === 'outer')?.side ?? null,
+                      from: team.fromPt,
+                      to: team.toPt,
+                    }))
+                  ) && (
+                    <p className="mt-1">
+                      {neighborSideWarning(
+                        dispatchPlan.teams.map((team) => ({
+                          label: team.ident,
+                          ident: team.ident,
+                          side: team.sorties.find((sortie) => sortie.side === 'inner' || sortie.side === 'outer')?.side ?? null,
+                          from: team.fromPt,
+                          to: team.toPt,
+                        }))
+                      )}
+                    </p>
+                  )}
+                  <ul className="mt-1 space-y-1">
+                    {dispatchPlan.lines.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                  <div className="mt-3 flex flex-col gap-1">
+                    {dispatchPlan.teams.flatMap((team) =>
+                      team.sorties.map((sortie) =>
+                        sortie.returnHomeOnly || sortie.offsetsNm.length === 0 ? (
+                          <span key={`${team.ident}-${sortie.number}`} className="text-xs text-gray-500">
+                            {team.ident} Sortie {sortie.number} — Ferry only, no survey file
+                          </span>
+                        ) : (
+                          <button
+                            key={`${team.ident}-${sortie.number}`}
+                            type="button"
+                            onClick={() => exportDispatchSortie(team.ident, sortie)}
+                            className="text-xs font-medium text-cap-ultramarine hover:underline text-left"
+                          >
+                            {packedDownloadLabel(team.ident, sortie, sortieExportCtx?.points ?? [])}
+                          </button>
+                        )
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+              {dispatchPlan && 'error' in dispatchPlan && (
+                <p className="mb-4 text-sm text-red-700" role="alert">
+                  {dispatchPlan.error}
+                </p>
+              )}
+              {planComparison && planComparison.options.length > 0 && (
+                <ComparePlansPanel
+                  options={planComparison.options}
+                  spacingNote={planComparison.spacingNote}
+                  onApply={applyComparison}
+                />
+              )}
+            {resultsStale && !compareBundle && !plannerResult && (
+              <section className="lg:col-span-2 xl:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm text-gray-900">Results are out of date — Run again</p>
+                <button
+                  type="button"
+                  onClick={runPlanner}
+                  disabled={!canRun}
+                  className="mt-2 px-3 py-2 text-sm font-medium rounded-lg bg-cap-ultramarine text-white disabled:opacity-50"
+                >
+                  Run again
+                </button>
+              </section>
+            )}
 
             {(compareBundle || plannerResult) && legsResult && (
-              <section className="lg:col-span-2 xl:col-span-2 rounded-xl border border-gray-200 bg-white p-5">
+              <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
                 <h2 className="text-lg font-semibold text-gray-900 mb-2">Results</h2>
                 <p className="text-sm text-gray-600 mb-4">
                   Sortie plan from Scenario corridor tracks and team parameters. Centerline{' '}
@@ -2397,7 +3417,7 @@ export function CoordinatorSurveyConsolePage() {
                           <>Edited segments.{' '}
                           </>
                         )}
-                        Each team flies both corridor sides of its segment. Save stores these segments.
+                        Saving writes the sortie list below. The miles include ferry.
                       </p>
                       <table className="min-w-full text-sm">
                         <thead>
@@ -2406,9 +3426,8 @@ export function CoordinatorSurveyConsolePage() {
                             <th className="py-2 pr-3">From</th>
                             <th className="py-2 pr-3">To</th>
                             <th className="py-2 pr-3">Refuel stop</th>
-                            <th className="py-2 pr-3">Sortie 1</th>
-                            <th className="py-2 pr-3">Sortie 2</th>
-                            <th className="py-2">Total</th>
+                            <th className="py-2 pr-3">Sorties</th>
+                            <th className="py-2">NM, includes ferry</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2423,6 +3442,7 @@ export function CoordinatorSurveyConsolePage() {
                                   onChange={(event) => {
                                     const value = event.target.value
                                     setUseSuggestedSegments(false)
+                                    setAssignmentLocked(true)
                                     setSegmentEdits((current) => {
                                       const base = Object.fromEntries(
                                         geographicPlan.rows.map((item) => [item.id, { from: item.from, to: item.to }])
@@ -2450,6 +3470,7 @@ export function CoordinatorSurveyConsolePage() {
                                   onChange={(event) => {
                                     const value = event.target.value
                                     setUseSuggestedSegments(false)
+                                    setAssignmentLocked(true)
                                     setSegmentEdits((current) => {
                                       const base = Object.fromEntries(
                                         geographicPlan.rows.map((item) => [item.id, { from: item.from, to: item.to }])
@@ -2474,31 +3495,25 @@ export function CoordinatorSurveyConsolePage() {
                                   value={row.refuel}
                                   shared={refuelAirport}
                                   onChange={(airport) => {
+                                    setAssignmentLocked(true)
                                     setRefuelEdits((current) => ({ ...(current ?? {}), [row.id]: airport }))
                                   }}
                                 />
                               </td>
                               <td className="py-2 pr-3 tabular-nums">
-                                {row.day?.sorties[0] ? (
-                                  <span className={row.day.sorties[0].overBudget ? 'text-amber-800 font-medium' : ''}>
-                                    {row.day.sorties[0].distanceNm}
-                                    {row.day.sorties[0].overBudget ? ' ⚠' : ''}
-                                  </span>
-                                ) : (
-                                  '—'
-                                )}
+                                {dispatchPlan && !('error' in dispatchPlan)
+                                  ? (dispatchPlan.teams.find(
+                                      (team) => team.ident.toUpperCase() === row.label.toUpperCase()
+                                    )?.sortieCount ?? '—')
+                                  : (row.day?.sorties.length ?? '—')}
                               </td>
-                              <td className="py-2 pr-3 tabular-nums">
-                                {row.day?.sorties[1] ? (
-                                  <span className={row.day.sorties[1].overBudget ? 'text-amber-800 font-medium' : ''}>
-                                    {row.day.sorties[1].distanceNm}
-                                    {row.day.sorties[1].overBudget ? ' ⚠' : ''}
-                                  </span>
-                                ) : (
-                                  '—'
-                                )}
+                              <td className="py-2 tabular-nums">
+                                {dispatchPlan && !('error' in dispatchPlan)
+                                  ? (dispatchPlan.teams.find(
+                                      (team) => team.ident.toUpperCase() === row.label.toUpperCase()
+                                    )?.totalNm ?? '—')
+                                  : (row.day?.totalNm ?? '—')}
                               </td>
-                              <td className="py-2 tabular-nums">{row.day?.totalNm ?? '—'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -2513,22 +3528,17 @@ export function CoordinatorSurveyConsolePage() {
                         </div>
                       )}
                       <p className="mt-3 text-sm text-gray-800">
-                        Wing total <strong>{geographicPlan.totalWingNm}</strong> NM · {geographicPlan.totalSorties}{' '}
-                        sorties
-                        {geographicPlan.rows.some((row) => row.day?.sorties.some((sortie) => sortie.overBudget))
-                          ? ' · one or more sorties exceed the budget'
-                          : ''}
+                        {dispatchPlan && !('error' in dispatchPlan) ? (
+                          dispatchPlan.totalLine
+                        ) : (
+                          <>
+                            Wing total <strong>{geographicPlan.totalWingNm}</strong> NM · {geographicPlan.totalSorties}{' '}
+                            sorties
+                          </>
+                        )}
                       </p>
                     </div>
                   )}
-
-                {planComparison && planComparison.options.length > 0 && (
-                  <ComparePlansPanel
-                    options={planComparison.options}
-                    spacingNote={planComparison.spacingNote}
-                    onApply={applyComparison}
-                  />
-                )}
 
                 {compareBundle?.kind === '1-2' && (
                   <div className="mb-8 rounded-lg border-2 border-cap-ultramarine/40 bg-slate-50 p-4">
@@ -2757,24 +3767,65 @@ export function CoordinatorSurveyConsolePage() {
                       showRefuelGuidance={ferryMode === 'staged-refuel'}
                     />
                   </>
-                ) : (
-                  (geographicDetail ?? plannerResult) && (
-                    <SurveyPlannerResults
-                      result={(geographicDetail ?? plannerResult)!}
-                      exportCtx={sortieExportCtx}
-                      onPilotBrief={setPilotBrief}
-                      showRefuelGuidance={ferryMode === 'staged-refuel'}
-                    />
-                  )
-                )}
+                ) : null}
 
                 <p className="text-sm font-bold text-cap-pimento mt-4" role="note">
                   {legsResult.disclaimer}
                 </p>
-              </section>
+              </div>
             )}
+            </ReviewedSection>
+            <ReviewedSection
+              id="sides"
+              ref={(node) => { sectionRefs.current.sides = node }}
+              title="Sortie 1 sides"
+              reviewed={Boolean(reviewMarks.sides)}
+              problem={sectionProblems.sides ?? null}
+              open={openSections.includes('sides')}
+              onOpenChange={(open) => setSectionOpen('sides', open)}
+            >
+              <CoordinatorOffsetPlans
+                key={planId}
+                flightPlanId={planId}
+                routeLabel={
+                  routeMeta
+                    ? `${routeMeta.routeType}${routeMeta.routeNumber}`
+                    : planBundle.plan.name.replace(/\s+/g, '')
+                }
+                waypoints={planBundle.waypoints}
+                widthTexts={widthTexts}
+                widthBusy={widthBusy}
+                widthError={widthErr}
+                routeKind={offsetRouteKind}
+                onReloadWidths={() => void loadWidth()}
+                crews={offsetCrews}
+                savedTeams={savedTeamPlan?.teams}
+                sides={crewSides}
+                onSidesChange={rememberSides}
+              />
+            </ReviewedSection>
           </div>
         )}
+      </div>
+      {planBundle && (
+        <TeamDispatchSaveBar
+          reviewedCount={TEAM_DISPATCH_SECTIONS.filter((section) => reviewMarks[section.id]).length}
+          sectionCount={TEAM_DISPATCH_SECTIONS.length}
+          status={saveBarStatus({
+            stale: resultsStale,
+            unsaved: dispatchUnsaved,
+            saved: Boolean(savedTeamPlan),
+          })}
+          disabled={blocker.reason != null}
+          disabledReason={blocker.reason}
+          notice={teamPlanNotice}
+          onDisabledReason={() => {
+            if (blocker.sectionId) focusSection(blocker.sectionId)
+          }}
+          onSave={() => void saveTeamPlan()}
+          onSaveAndMap={() => void saveAndOpenMap()}
+        />
+      )}
       </div>
     </div>
   )

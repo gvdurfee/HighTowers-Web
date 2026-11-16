@@ -47,7 +47,7 @@ export function WorkflowGuidePage() {
         <header className="text-center mb-8">
           <h1 className="text-2xl font-bold text-cap-ultramarine mb-2">Workflow Guide</h1>
           <p className="text-gray-600 max-w-2xl mx-auto">
-            Follow these steps in order to complete an Air Force Route Survey.
+            Follow these steps in order to complete an Air Force Military Training Route Survey.
           </p>
           <p className="text-sm text-gray-600 max-w-2xl mx-auto mt-2">
             Wing coordinators: open <strong>Team Dispatch</strong> under Mission Planning to load the

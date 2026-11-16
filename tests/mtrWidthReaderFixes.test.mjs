@@ -189,27 +189,21 @@ describe('width reader coverage fixes', () => {
     const resolved = resolvePublishedLegWidths(points(IR112_CHAIN), IR112_ROWS)
     const legs = resolved.legs.filter(Boolean)
     const note = publishedWidthNote('IR112', legs)
-    expect(note).toBe(
-      'Using published widths for IR112. Offsets are flown halfway to each edge: 2.5 NM on 5 NM sides, 2 NM on the 4 NM right side from D to E.'
-    )
-    expect(note.match(/5 NM sides/g)).toHaveLength(1)
-    expect(note.match(/4 NM right side/g)).toHaveLength(1)
+    expect(note).toBe('Tracks: first 2.5 NM, then every 5 NM, to the published edge.')
     expect(publishedWidthNote('IR112', legs, true)).toBe(`${note} Some widths entered by pilot.`)
     expect(
       publishedWidthNote('IR038', [
         { fromPt: 'A', toPt: 'B', leftNm: 10, rightNm: 10 },
         { fromPt: 'B', toPt: 'C', leftNm: 10, rightNm: 10 },
       ])
-    ).toBe('Using published widths for IR038. Offsets are flown halfway to each edge: 5 NM on 10 NM sides.')
+    ).toBe('Tracks: first 2.5 NM, then every 5 NM, to the published edge.')
     expect(
       publishedWidthNote('VR100', [
         { fromPt: 'A', toPt: 'B', leftNm: 5, rightNm: 4 },
         { fromPt: 'B', toPt: 'C', leftNm: 5, rightNm: 5 },
         { fromPt: 'C', toPt: 'D', leftNm: 5, rightNm: 4 },
       ])
-    ).toBe(
-      'Using published widths for VR100. Offsets are flown halfway to each edge: 2.5 NM on 5 NM sides, 2 NM on the 4 NM right side from A to B and C to D.'
-    )
+    ).toBe('Tracks: first 2.5 NM, then every 5 NM, to the published edge.')
     expect(publishedWidthNote('IR112', [])).toBeNull()
   })
 })

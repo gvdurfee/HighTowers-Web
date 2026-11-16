@@ -103,31 +103,15 @@ describe('offset flight plan buttons', () => {
     downloads.length = 0
   })
 
-  it('keeps each button on the saved side, including after the picker changes', () => {
+  it('does not offer a second download list on a team plan', () => {
     const curve = routeCurveSide(square)
     expect(curve.sense).toBe('clockwise')
     expect(curve.innerSide).toBe('right')
     const view = mount(savedTeam(true))
     fillWidths(view.host)
-    const before = sortieButtons(view.host).map((button) => button.textContent)
-    expect(before[0]).toContain('Sortie 1 — Inner (right of course)')
-    expect(before[1]).toContain('Sortie 2 — Outer (left of course)')
-    expect(sortieButtons(view.host).every((button) => button.disabled === false)).toBe(true)
-
-    act(() => {
-      sortieButtons(view.host)[0].dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      sortieButtons(view.host)[1].dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(downloads).toHaveLength(2)
-    const suffix = { 0: 'I', 1: 'O' }
-    downloads.forEach((file, index) => {
-      const names = userIds(file.xml)
-      expect(names.length).toBeGreaterThan(0)
-      expect(names.every((name) => name.endsWith(suffix[index]))).toBe(true)
-      const role = suffix[index] === 'I' ? 'Inner' : 'Outer'
-      expect(before[index]).toContain(role)
-    })
-
+    expect(sortieButtons(view.host)).toHaveLength(0)
+    expect(view.host.textContent).not.toContain('left of course')
+    expect(view.host.textContent).not.toContain('right of course')
     const outer = [...view.host.querySelectorAll('label')].find((label) =>
       label.textContent.includes('Outer (outside')
     )
@@ -135,64 +119,9 @@ describe('offset flight plan buttons', () => {
       outer.querySelector('input').click()
     })
     expect(view.host.textContent).toContain(SAVED_SIDE_CHANGED_NOTICE)
-    const after = sortieButtons(view.host)
-    expect(after.map((button) => button.textContent)).toEqual(before)
-    expect(after.every((button) => button.disabled)).toBe(true)
-    act(() => {
-      after[0].dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(downloads).toHaveLength(2)
-
-    for (const number of [1, 2]) {
-      const file = buildTeamSortieFile({
-        team: savedTeam(true),
-        routeLabel: 'VR900',
-        points: square,
-        legWidths: widths,
-        sortieNumber: number,
-      })
-      expect('error' in file).toBe(false)
-      const letter = number === 1 ? 'I' : 'O'
-      expect(userIds(file.xml).every((name) => name.endsWith(letter))).toBe(true)
-      expect(before[number - 1]).toContain(letter === 'I' ? 'Inner' : 'Outer')
-    }
     view.unmount()
   })
 
-  it('a 1-team plan downloads Sortie 1 and Sortie 2 with I/O suffixes that match the button labels', () => {
-    const curve = routeCurveSide(square)
-    const view = mount(savedTeam(true))
-    fillWidths(view.host)
-    const buttons = sortieButtons(view.host)
-    expect(buttons).toHaveLength(2)
-    expect(buttons[0].textContent).toContain(sortieButtonLabel(1, 'inner', curve))
-    expect(buttons[1].textContent).toContain(sortieButtonLabel(2, 'outer', curve))
-    act(() => {
-      buttons[0].dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      buttons[1].dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(downloads).toHaveLength(2)
-    downloads.forEach((file, index) => {
-      const inner = buttons[index].textContent.includes('Inner')
-      const names = userIds(file.xml)
-      expect(names.length).toBeGreaterThan(0)
-      expect(names.every((name) => name.endsWith(inner ? 'I' : 'O'))).toBe(true)
-    })
-    view.unmount()
-  })
-
-  it('shows the build error next to the buttons', () => {
-    const view = mount(savedTeam(false))
-    fillWidths(view.host)
-    const button = sortieButtons(view.host)[0]
-    expect(button.disabled).toBe(false)
-    act(() => {
-      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(view.host.textContent).toContain('No segment assigned.')
-    expect(downloads).toHaveLength(0)
-    view.unmount()
-  })
 
   it('blocks a saved crew when a width is missing', () => {
     const view = mount(savedTeam(true))

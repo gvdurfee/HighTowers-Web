@@ -7,7 +7,9 @@ import {
   drawSavedTeam,
   memoryTeamPlanStore,
   sortiesForSide,
+  teamSortieOffsetRoute,
 } from '../src/services/teamPlanRecord.ts'
+import { refuelAirportForCrew, refuelEditsForDraft } from '../src/services/teamDispatchWizard.ts'
 
 const VR114 = ['A', 'B', 'C', 'D', 'E', 'F', 'M1']
 const VR114_COORDS = [
@@ -114,6 +116,112 @@ describe('saved team plan', () => {
     expect(blank.overlay.passes).toEqual([])
     expect(blank.notes).toContain('No segment assigned.')
     expect(blank.notes).toContain('No Sortie 1 side set.')
+  })
+
+  it('draws two aircraft on opposite sides and swaps those sides on sortie 2', () => {
+    const plan = draftTeamPlan({
+      flightPlanId: 'vr114-two',
+      savedAt: '2026-11-14T00:00:00.000Z',
+      firstOffsetNm: 2.5,
+      stepNm: 5,
+      crews: [
+        { id: 'team1', label: 'Team 1', departure: airport('KABQ', 35.04, -106.61) },
+        { id: 'team2', label: 'Team 2', departure: airport('KLRU', 32.29, -106.92) },
+      ],
+      sides: { team1: 'inner', team2: 'outer' },
+      segments: {
+        team1: { from: 'A', to: 'M1', start: 'A' },
+        team2: { from: 'A', to: 'M1', start: 'A' },
+      },
+    })
+    const [team1, team2] = plan.teams.map((team) =>
+      drawSavedTeam({ team, points, legWidths: widths, firstOffsetNm: 2.5, stepNm: 5 })
+    )
+    const fix = (draw, number) => draw.overlay.passes.find((pass) => pass.number === number)?.waypoints[0]
+    const apart = (a, b) => {
+      const dLat = (b.lat - a.lat) * 60
+      const dLon = (b.lon - a.lon) * 60 * Math.cos((((a.lat + b.lat) / 2) * Math.PI) / 180)
+      return Math.hypot(dLat, dLon)
+    }
+    const sortie1 = fix(team1, 1)
+    const other = fix(team2, 1)
+    const swapped = fix(team1, 2)
+    expect(sortie1 && other && swapped).toBeTruthy()
+    expect(apart(sortie1, other)).toBeGreaterThan(4)
+
+    const ktcc = airport('KTCC', 35.18, -103.6)
+    const edits = refuelEditsForDraft({
+      ferryMode: 'staged-refuel',
+      refuel: ktcc,
+      aircraftCount: 2,
+    })
+    const refueled = draftTeamPlan({
+      flightPlanId: 'vr114-refuel',
+      savedAt: '2026-11-14T00:00:00.000Z',
+      firstOffsetNm: 2.5,
+      stepNm: 5,
+      crews: [
+        {
+          id: 'team1',
+          label: 'Team 1',
+          departure: airport('KABQ', 35.04, -106.61),
+          refuelStop: refuelAirportForCrew('team1', 'staged-refuel', ktcc, edits),
+        },
+      ],
+      sides: { team1: 'inner' },
+      segments: { team1: { from: 'A', to: 'M1', start: 'A' } },
+    })
+    const home = draftTeamPlan({
+      flightPlanId: 'vr114-home',
+      savedAt: '2026-11-14T00:00:00.000Z',
+      crews: [{ id: 'team1', label: 'Team 1', departure: airport('KABQ', 35.04, -106.61) }],
+      sides: { team1: 'inner' },
+      segments: { team1: { from: 'A', to: 'M1', start: 'A' } },
+    })
+    const first = teamSortieOffsetRoute({
+      team: refueled.teams[0],
+      points,
+      legWidths: widths,
+      sortieNumber: 1,
+      firstOffsetNm: 2.5,
+      stepNm: 5,
+    })
+    const second = teamSortieOffsetRoute({
+      team: refueled.teams[0],
+      points,
+      legWidths: widths,
+      sortieNumber: 2,
+      firstOffsetNm: 2.5,
+      stepNm: 5,
+    })
+    const roundTrip = teamSortieOffsetRoute({
+      team: home.teams[0],
+      points,
+      legWidths: widths,
+      sortieNumber: 1,
+    })
+    expect(first.landing.identifier).toBe('KTCC')
+    expect(second.departure.identifier).toBe('KTCC')
+    expect(second.landing.identifier).toBe('KABQ')
+    expect(roundTrip.landing.identifier).toBe('KABQ')
+    expect(apart(swapped, other)).toBeLessThan(1)
+    expect(team1.sorties[0].surveySide).not.toBe(team2.sorties[0].surveySide)
+    expect(team1.sorties[1].surveySide).toBe(team2.sorties[0].surveySide)
+    expect(team1.sorties[0].offsetsNm[0]).toBe(2.5)
+    expect(team1.overlay.passes[0].coordinates[0]).toEqual([sortie1.lon, sortie1.lat])
+  })
+
+  it('keeps each of three aircraft inside its own segment', () => {
+    const plan = threeTeamPlan()
+    const drawn = plan.teams.map((team) => drawSavedTeam({ team, points, legWidths: widths, firstOffsetNm: 2.5, stepNm: 5 }))
+    const names = (draw) => draw.overlay.passes.flatMap((pass) => pass.waypoints.map((point) => point.name))
+    const team1 = names(drawn[0])
+    const team3 = names(drawn[2])
+    expect(team1.length).toBeGreaterThan(0)
+    expect(team1.every((name) => name.startsWith('A') || name.startsWith('B'))).toBe(true)
+    expect(team3.some((name) => name.startsWith('A') || name.startsWith('B'))).toBe(false)
+    expect(team3.some((name) => name.startsWith('M'))).toBe(true)
+    expect(drawn[0].overlay.passes[0].coordinates.length).toBeGreaterThan(1)
   })
 
   it('builds the same .fpl as the shared offset export and leaves a full IR112 file unchanged', () => {

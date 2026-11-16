@@ -26,6 +26,11 @@ export type SortieFplPilotBrief = {
   warnRoutePointLimit: boolean
   routePointCount: number
   filename: string
+  sortieNumber?: number
+  turnDeg?: number
+  laneExample?: string
+  crossingNote?: string
+  sideNote?: string
 }
 
 function waypointPtIdent(originalName: string): string {

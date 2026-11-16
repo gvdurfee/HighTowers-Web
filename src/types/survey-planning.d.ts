@@ -1,3 +1,37 @@
+declare module '@survey-planning/surveySortiePacker.js' {
+  export function bestSortiePlan(
+    wps: Array<{ ptIdent: string; lat: number; lon: number }>,
+    team: { label?: string; side: 'left' | 'right'; depLat?: number; depLon?: number },
+    startIdx: number,
+    endIdx: number,
+    offsets: number[],
+    ferry?: {
+      ferryInPt?: { lat: number; lon: number; label?: string }
+      ferryOutPt?: { lat: number; lon: number; label?: string }
+      ferryInLabel?: string
+      ferryOutLabel?: string
+    } | null,
+    neighbors?: unknown
+  ): {
+    offsets: number[]
+    waypointFrom: string
+    waypointTo: string
+    startAt: string
+    ferryInLabel: string
+    ferryOutLabel: string
+    totalNm: number
+  }
+
+  export function packSortiesForTeam(
+    wps: unknown[],
+    legs: unknown[],
+    team: { label?: string; side: 'left' | 'right'; depLat?: number; depLon?: number },
+    budgetNm: number,
+    stagedRefuel?: unknown,
+    neighbors?: unknown
+  ): Array<Record<string, unknown>>
+}
+
 declare module '@survey-planning/corridorTrackPlan.js' {
   export type SpanTrackPlanEntry = {
     fromPt: string
@@ -49,6 +83,7 @@ declare module '@survey-planning/surveyGeometry.js' {
     halfWidthNm: number,
     policy?: { firstOffsetNm?: number; stepNm?: number; outerMarginNm?: number }
   ): number[]
+  export function nauticalMilesBetween(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number
   export function offsetsInsidePublishedWidth(
     offsets: number[] | null | undefined,
     halfWidthNm: number | null | undefined
@@ -116,6 +151,18 @@ declare module '@survey-planning/surveySortiePlanner.js' {
     stepNm: number
     outerMarginNm: number
   }
+
+  export function orderSortiesPreferredSide(
+    wps: Array<{ ptIdent: string; lat: number; lon: number }>,
+    team: { label?: string; side?: string; depLat: number; depLon: number },
+    sorties: Array<Record<string, unknown>>,
+    preferredSide: 'left' | 'right' | null,
+    stagedRefuel: {
+      home: { lat: number; lon: number; label?: string }
+      recovery: { lat: number; lon: number; label?: string }
+    } | null,
+    budgetNm: number
+  ): Array<Record<string, unknown>>
 
   export function planThreeTeamGeographicScenario(
     input: {
@@ -285,19 +332,20 @@ declare module '@survey-planning/g1000Names.js' {
   export function laneWaypointName(
     originalName: string,
     side: 'inner' | 'outer',
-    laneNumber: number
+    laneNumber: number,
+    prefix?: string
   ): { name: string; error: string | null }
   export function assignG1000WaypointNames(
     inputs: Array<{ originalName: string; prefix?: string }>
   ): { names: Array<{ g1000Name: string }>; error: string | null }
   export function sortieRouteName(
     routeLabel: string,
-    sortieNumber: 1 | 2,
+    sortieNumber: number,
     side: 'inner' | 'outer'
   ): string
   export function sortieFileName(
     routeLabel: string,
-    sortieNumber: 1 | 2,
+    sortieNumber: number,
     side: 'inner' | 'outer'
   ): string
 }
@@ -360,7 +408,8 @@ declare module '@survey-planning/offsetRoutePlan.js' {
     waypoints: OffsetRoutePoint[],
     offsetNmPerLeg: number[],
     corridorNmPerLeg: number[],
-    side: 'left' | 'right'
+    side: 'left' | 'right',
+    neighbors?: { before?: OffsetRoutePoint | null; after?: OffsetRoutePoint | null } | null
   ): OffsetTrack
 
   export function reverseOffsetTrack(waypoints: OffsetRoutePoint[]): OffsetRoutePoint[]
@@ -375,6 +424,12 @@ declare module '@survey-planning/offsetRoutePlan.js' {
 
   export function routeCurveSide(
     waypoints: Array<{ lat: number; lon: number; ptIdent?: string; originalName?: string }>
+  ): RouteCurve
+
+  export function segmentCurveSide(
+    waypoints: Array<{ lat: number; lon: number; ptIdent?: string; originalName?: string }>,
+    fromIdent: string,
+    toIdent: string
   ): RouteCurve
 
   export function buildOffsetRoutes(
@@ -559,6 +614,7 @@ declare module '@survey-planning/planComparison.js' {
     wingNm: number
     allUnder: boolean
     recommended: boolean
+    ferryMode?: 'return-home' | 'staged-refuel'
     insertedPoint: PlanningInsert | null
     boundaryNote: string | null
   }
@@ -580,6 +636,22 @@ declare module '@survey-planning/planComparison.js' {
     saved?: Array<{ identifier: string; from: string; to: string; refuel?: boolean }>
     policy?: { firstOffsetNm?: number; stepNm?: number }
     budgetNm?: number
+    applied?: {
+      refuelIdent?: string | null
+      teams: Array<{
+        ident: string
+        fromPt: string
+        toPt: string
+        totalNm: number
+        sorties: Array<{ number: number; distanceNm: number }>
+      }>
+    } | null
+    quote?: (option: ComparisonOption) => {
+      teams: ComparisonOption['teams']
+      wingNm: number
+      allUnder: boolean
+      refuelStops: number
+    } | null
   }): { perSegmentSpacing: boolean; spacingNote: string; options: ComparisonOption[] }
 
   export function assignmentEditsForOption(

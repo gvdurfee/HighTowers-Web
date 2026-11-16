@@ -30,10 +30,13 @@ export function formatSortieOffsetsLabel(offsets: number[]): string {
 }
 
 /** Default parallel-track offsets for the whole route from NASR width text. */
-export function defaultSortieOffsetsLabelFromWidthTexts(widthTexts: string[]): string {
+export function defaultSortieOffsetsLabelFromWidthTexts(
+  widthTexts: string[],
+  policy?: { firstOffsetNm?: number; stepNm?: number }
+): string {
   const maxHalf = maxHalfWidthNmFromWidthTexts(widthTexts)
   if (maxHalf == null) return ''
-  return formatSortieOffsetsLabel(parallelOffsetsForHalfWidth(maxHalf))
+  return formatSortieOffsetsLabel(parallelOffsetsForHalfWidth(maxHalf, policy))
 }
 
 /**
@@ -46,16 +49,17 @@ export function defaultSortieOffsetsForFragment(opts: {
   waypoints: SortieOffsetWaypoint[]
   fromPt: string
   toPt: string
+  policy?: { firstOffsetNm?: number; stepNm?: number }
 }): string {
   const { waypoints, widthTexts, fromPt, toPt } = opts
   if (!fromPt || !toPt || waypoints.length < 2) {
-    return defaultSortieOffsetsLabelFromWidthTexts(widthTexts)
+    return defaultSortieOffsetsLabelFromWidthTexts(widthTexts, opts.policy)
   }
 
   const fromIdx = waypoints.findIndex((w) => w.ptIdent === fromPt)
   const toIdx = waypoints.findIndex((w) => w.ptIdent === toPt)
   if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) {
-    return defaultSortieOffsetsLabelFromWidthTexts(widthTexts)
+    return defaultSortieOffsetsLabelFromWidthTexts(widthTexts, opts.policy)
   }
 
   const lo = Math.min(fromIdx, toIdx)
@@ -79,8 +83,8 @@ export function defaultSortieOffsetsForFragment(opts: {
   }
 
   if (maxHalf <= 0) {
-    return defaultSortieOffsetsLabelFromWidthTexts(widthTexts)
+    return defaultSortieOffsetsLabelFromWidthTexts(widthTexts, opts.policy)
   }
 
-  return formatSortieOffsetsLabel(parallelOffsetsForHalfWidth(maxHalf))
+  return formatSortieOffsetsLabel(parallelOffsetsForHalfWidth(maxHalf, opts.policy))
 }

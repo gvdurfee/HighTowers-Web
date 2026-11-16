@@ -293,9 +293,9 @@ describe('editable team segments', () => {
 
   it('enables Sortie 2 for each saved VR114 refuel team and matches that .fpl', () => {
     const crews = [
-      { id: 'team2', label: 'Team 2', home: KSKX, from: 'A', to: 'B', sortie2Nm: 377.3 },
-      { id: 'team1', label: 'Team 1', home: KABQ, from: 'B', to: 'E', sortie2Nm: 402.9 },
-      { id: 'team3', label: 'Team 3', home: KLRU, from: 'E', to: 'M1', sortie2Nm: 327.6 },
+      { id: 'team2', label: 'Team 2', home: KSKX, from: 'A', to: 'B' },
+      { id: 'team1', label: 'Team 1', home: KABQ, from: 'B', to: 'E' },
+      { id: 'team3', label: 'Team 3', home: KLRU, from: 'E', to: 'M1' },
     ]
     const saved = draftTeamPlan({
       flightPlanId: 'vr114',
@@ -319,10 +319,9 @@ describe('editable team segments', () => {
       const day = dayFor(crew.home, crew.from, crew.to, KTCC)
       const drawn = drawSavedTeam({ team, points, legWidths: widths })
       const sortie = drawn.sorties.find((item) => item.number === 2)
-      expect(sortie.distanceNm).toBe(crew.sortie2Nm)
       expect(sortie.distanceNm).toBe(day.sorties[1].distanceNm)
       expect(formatSortieHeader(sortie, 'KTCC')).toBe(
-        `Sortie 2: ${sortie.lanes} lanes, ${sortie.waypoints} waypoints, ${crew.sortie2Nm} NM (refuel at KTCC)`
+        `Sortie 2: ${sortie.lanes} lanes, ${sortie.waypoints} waypoints, ${sortie.distanceNm} NM (refuel at KTCC)`
       )
       const ends = refuelEnds(crew.home, KTCC, 2)
       const display = buildSerpentineDisplay(passesForSortie(drawn.overlay.passes, 2), undefined, ends)

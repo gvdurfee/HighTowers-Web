@@ -61,6 +61,33 @@ describe('compare plans panel', () => {
       apply.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(host.querySelector('output').textContent).toBe('A-B|false')
+    const duplicate = {
+      ...option,
+      id: option.id,
+      teams: [
+        {
+          ...option.teams[0],
+          sorties: [
+            { number: 1, distanceNm: 100, overBudget: false },
+            { number: 1, distanceNm: 200, overBudget: false },
+          ],
+        },
+      ],
+    }
+    const warnings = []
+    const report = console.error
+    console.error = (...args) => warnings.push(args.map(String).join(' '))
+    act(() => {
+      root.render(
+        createElement(ComparePlansPanel, {
+          options: [option, duplicate],
+          spacingNote: 'Spacing is one value for the whole route.',
+          onApply: () => {},
+        })
+      )
+    })
+    console.error = report
+    expect(warnings.join('\n')).not.toMatch(/same key/)
     act(() => {
       root.unmount()
     })

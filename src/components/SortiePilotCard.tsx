@@ -71,6 +71,11 @@ export function SortiePilotCard({ brief, isOpen, onClose }: SortiePilotCardProps
         <div className="space-y-3 text-sm text-gray-700 leading-relaxed border-t border-gray-100 pt-4">
           <section>
             <h3 className="font-semibold text-gray-900 mb-1">Offset lanes</h3>
+            <p className="text-sm text-gray-700 mb-2">
+              Lane numbers are fixed: lane 1 = 2.5 NM from centerline on every sortie. Expect turns up to about {brief.turnDeg ?? 155}° at lane entry and exit; join the lane, don&apos;t cut the corner.
+            </p>
+            <p className="mb-2">Each sortie lists its side; fly the side shown.</p>
+            {brief.sideNote && <p className="mb-2">{brief.sideNote}</p>}
             <p>
               Each lane is its own user waypoints at the offset coordinates. Load the route and fly it.
               Lane spacing for this sortie:{' '}
@@ -95,19 +100,16 @@ export function SortiePilotCard({ brief, isOpen, onClose }: SortiePilotCardProps
             <h3 className="font-semibold text-gray-900 mb-1">Multi-aircraft &amp; recovery days</h3>
             <p className="mb-2">
               When several aircraft survey the same corridor, <strong>deconfliction is pilot responsibility</strong>
-              — maintain radio contact and <strong>stagger takeoff times</strong>. Announce when you enter and exit
-              each lane, giving your position by waypoint name (for example, entering B1O).
+              — maintain radio contact and <strong>stagger takeoff times</strong>. Announce entering and exiting each
+              lane by waypoint name, for example &apos;entering {brief.laneExample ?? 'B1O'}&apos;.
             </p>
-            <p className="mb-2">
-              Coordinator assigns <strong>one shared refuel airport</strong> near the route for all aircraft. On
-              staged-refuel days, <strong>sortie 1</strong> ferry out ends at that field (ferry in from home may be
-              long); after refuel, <strong>sortie 2</strong> flies the opposite side and returns <strong>home</strong>.
-              Sortie 2 waypoint ranges may differ per aircraft when the planner optimizes that way.
-            </p>
-            <p>
-              Sortie 2 is already in flying order; load it and fly it as listed. Do not invert the flight plan on the
-              G1000. Sortie 2 is its own .fpl file.
-            </p>
+            {brief.crossingNote && <p className="mb-2">{brief.crossingNote}</p>}
+            {(brief.sortieNumber ?? 1) > 1 && (
+              <p>
+                This sortie is already in flying order; load it and fly it as listed. Do not invert the flight plan on the
+                G1000.
+              </p>
+            )}
           </section>
         </div>
 

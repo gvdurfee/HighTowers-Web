@@ -10,7 +10,7 @@ export type SerpentineAirport = {
 }
 
 export type SerpentinePass = {
-  number: 1 | 2
+  number: number
   side: SortieSide
   names: string[]
   /** [lon, lat] along this lane. Airport transits are drawn separately. */
@@ -61,7 +61,7 @@ export function surveySideOfTrack(
 }
 
 function passFromTrack(opts: {
-  number: 1 | 2
+  number: number
   side: SortieSide
   track: OffsetRoutePoint[]
   start: SerpentineAirport | null

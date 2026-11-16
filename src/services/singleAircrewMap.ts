@@ -13,7 +13,7 @@ export function isSingleAircrewPlan(
 }
 
 export function singleAircrewSortieButtonLabel(opts: {
-  number: 1 | 2
+  number: number
   departure?: string | null
   destination?: string | null
   sortie1Side?: SortieSide | null
@@ -64,4 +64,19 @@ export function showFullFlightPlanSection(
 
 export function singleAircrewSortieHint(): string {
   return 'Fly Sortie 1 out, refuel at destination, then fly Sortie 2 home on the other side. Load both files in the G1000 before departure, and activate each one before its takeoff.'
+}
+
+/** The empty-path sentence. Single-aircrew plans keep the choose-side prompt instead. */
+export function mapEmptyPathNotice(opts: {
+  singleAircrew: boolean
+  teamPlanKnown: boolean
+  teamDraws: boolean
+  overlayId: string
+  overlayLabel: string
+  sortie1Side: string | null | undefined
+  passCount: number
+}): string | null {
+  if (!opts.teamPlanKnown || opts.singleAircrew || opts.teamDraws || opts.passCount > 0) return null
+  if (opts.overlayId === 'team1' && opts.sortie1Side) return null
+  return `${opts.overlayLabel} has no airport or Sortie 1 side on this flight plan, so no path is drawn.`
 }
