@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CoordinatorRouteLoadForm } from '@/components/CoordinatorRouteLoadForm'
+import { GuidedHint } from '@/components/GuidedHint'
+import { useHintsSeen } from '@/hooks/useHintsSeen'
 import { parallelOffsetsForHalfWidth } from '@survey-planning/surveyGeometry.js'
 import {
   compareOneVsTwoTeamStaffing,
@@ -103,6 +105,7 @@ export function TeamDispatchWizard({
   const [helpNote, setHelpNote] = useState<string | null>(null)
   const [budgetError, setBudgetError] = useState<string | null>(null)
   const prefilledOpen = useRef(false)
+  const { isSeen, markSeen } = useHintsSeen()
 
   useEffect(() => {
     if (!open) {
@@ -448,6 +451,15 @@ export function TeamDispatchWizard({
 
           {step.id === 'depart' && draft.aircraftCount != null && (
             <div className="space-y-4">
+              <GuidedHint
+                hintId="wizard.crewsCloser"
+                stepNumber={1}
+                title="Crews and aircraft"
+                body="Start with the crews and aircraft you have. Crews and aircraft based closer to the route save ferry time."
+                isSeen={isSeen('wizard.crewsCloser')}
+                onDismiss={markSeen}
+                surface="light"
+              />
               {teamIdsForCount(draft.aircraftCount).map((id) => (
                 <TeamLookup
                   key={id}

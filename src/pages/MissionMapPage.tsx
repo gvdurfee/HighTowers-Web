@@ -10,6 +10,7 @@ import { nearestWaypointInfo } from '@/utils/towerWaypointGeometry'
 import { parseWaypointCode, publishedPointLabel } from '@/utils/mtrWaypointCode'
 import { TowerLeaderMarker, TOWER_MAP_COLOR } from '@/components/TowerLeaderMarker'
 import { GuidedHint } from '@/components/GuidedHint'
+import { SortieProgressPanel } from '@/components/SortieProgressPanel'
 import { MapViewCrewControls } from '@/components/MapViewCrewControls'
 import { OffsetRoutePanel, type OffsetMapGeometry } from '@/components/OffsetRoutePanel'
 import { confirmLeaveOffsetPlan } from '@/services/offsetPlanLeaveGuard'
@@ -24,7 +25,10 @@ import {
   legacySortieNote,
   mapSortieButtons,
   NO_TEAM_PLAN_NOTE,
+  progressSummaryLines,
+  teamProgressCatalog,
 } from '@/services/teamPlanRecord'
+import { COVERED_LINE, coverageLines, REMAINING_LINE, type SortieProgress } from '@/services/teamPlanProgress'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import {
   emptyCrewOverlay,
@@ -409,6 +413,15 @@ export function MissionMapPage() {
     )
   }, [savedTeamPlan, selectedPlanId, planningRoute, legWidths])
 
+  const progressCatalog = useMemo(() => {
+    if (!savedTeamPlan || savedTeamPlan.flightPlanId !== selectedPlanId) return []
+    return teamProgressCatalog({
+      plan: savedTeamPlan,
+      points: planningRoute.points,
+      legWidths: legWidths ? planningRoute.widths : null,
+    })
+  }, [savedTeamPlan, selectedPlanId, planningRoute, legWidths])
+
   const crewOverlays = useMemo(() => {
     if (teamDraws) return teamDraws.map((draw) => draw.overlay)
     const centerline = [...(planData?.waypoints ?? [])]
@@ -568,6 +581,38 @@ export function MissionMapPage() {
       sortieAirports
     )
   }, [shownPasses, offsetGeometry, sortieAirports])
+  const [sortieProgress, setSortieProgress] = useState<Record<string, SortieProgress>>({})
+  const progressRef = useRef<Record<string, SortieProgress>>({})
+  const progressWrites = useRef(0)
+  const progressQueue = useRef(Promise.resolve())
+  useEffect(() => {
+    if (progressWrites.current > 0) return
+    progressRef.current = savedTeamPlan?.progress ?? {}
+    setSortieProgress(progressRef.current)
+  }, [savedTeamPlan])
+  const progressLines = useMemo(
+    () => progressSummaryLines(progressCatalog, sortieProgress),
+    [progressCatalog, sortieProgress]
+  )
+  const shownProgress = progressCatalog.find((row) => row.teamId === selectedCrew && row.number === shownSortie)
+  const shownCoverage = shownProgress ? coverageLines(shownProgress.stops, sortieProgress[shownProgress.id]) : null
+  const saveSortieProgress = (id: string, mark: SortieProgress | null) => {
+    if (!savedTeamPlan) return
+    const progress = { ...progressRef.current }
+    if (!mark) delete progress[id]
+    else progress[id] = mark
+    progressRef.current = progress
+    setSortieProgress(progress)
+    const flightPlanId = savedTeamPlan.flightPlanId
+    progressWrites.current += 1
+    progressQueue.current = progressQueue.current
+      .then(async () => {
+        await db.teamPlans.update(flightPlanId, { progress, progressNotice: null })
+      })
+      .finally(() => {
+        progressWrites.current -= 1
+      })
+  }
   const airportNotes = !planData
     ? []
     : (serpentine?.airportNotes ?? (teamDraws ? [] : crewAirportNotes(sortieAirports)))
@@ -904,6 +949,47 @@ export function MissionMapPage() {
 
       <div id="map-view-details" className="map-bellows" data-open={detailsOpen ? 'true' : 'false'}>
         <div className="map-bellows-inner">
+        {!singleAircrew && savedTeamPlan && progressCatalog.some((row) => row.teamId === selectedCrew) && (
+          <div>
+            <div className="px-4 pt-2">
+              <GuidedHint
+                hintId="mapView.crewProgress"
+                stepNumber={3}
+                title="Where a crew stopped"
+                body="Mark where a crew stopped so everyone can see what's covered and what's left. The flight plan files don't change."
+                isSeen={isSeen('mapView.crewProgress')}
+                onDismiss={markSeen}
+                surface="dark"
+              />
+            </div>
+            <SortieProgressPanel
+              rows={progressCatalog
+                .filter((row) => row.teamId === selectedCrew)
+                .map((row) => ({
+                  id: row.id,
+                  number: row.number,
+                  stops: row.stops,
+                  mark: sortieProgress[row.id],
+                }))}
+              crewLines={progressLines.crews}
+              planLine={progressLines.plan}
+              notice={savedTeamPlan.progressNotice ?? null}
+              onChange={saveSortieProgress}
+            />
+            {shownCoverage && (
+              <p className="px-4 pb-2 text-sm text-white/90 flex flex-wrap items-center gap-4">
+                <span className="inline-flex items-center gap-2">
+                  <span className="inline-block w-8 border-t-4 border-[#0072B2]" />
+                  Covered — solid blue
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <span className="inline-block w-8 border-t-4 border-dashed border-[#E69F00]" />
+                  Still to fly — dashed orange
+                </span>
+              </p>
+            )}
+          </div>
+        )}
         {!singleAircrew && savedTeamPlan === null && teamPlanAwaitingSave(selectedPlanId ?? '') && (
           <p className="px-4 pt-2 text-sm text-white/80">
             This team plan hasn&apos;t been saved yet.{' '}
@@ -1084,13 +1170,33 @@ export function MissionMapPage() {
               />
             </Source>
           )}
-          {teamDraws && serpentine && serpentine.flows.length > 0 && (
+          {teamDraws && serpentine && serpentine.flows.length > 0 && !shownCoverage && (
             <Source id="serpentine-flow" type="geojson" data={lineCollection(serpentine.flows)}>
               <Layer
                 id="serpentine-flow-line"
                 type="line"
                 layout={{ 'line-join': 'round', 'line-cap': 'round' }}
                 paint={{ 'line-color': SERPENTINE_YELLOW, 'line-width': 5 }}
+              />
+            </Source>
+          )}
+          {shownCoverage && lineFromCoordinates(shownCoverage.covered) && (
+            <Source id="sortie-covered" type="geojson" data={lineFromCoordinates(shownCoverage.covered)!}>
+              <Layer
+                id="sortie-covered-line"
+                type="line"
+                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                paint={{ 'line-color': COVERED_LINE, 'line-width': 6 }}
+              />
+            </Source>
+          )}
+          {shownCoverage && lineFromCoordinates(shownCoverage.remaining) && (
+            <Source id="sortie-remaining" type="geojson" data={lineFromCoordinates(shownCoverage.remaining)!}>
+              <Layer
+                id="sortie-remaining-line"
+                type="line"
+                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                paint={{ 'line-color': REMAINING_LINE, 'line-width': 5, 'line-dasharray': [2, 1.5] }}
               />
             </Source>
           )}
@@ -1146,7 +1252,7 @@ export function MissionMapPage() {
             </Source>
           )}
 
-          {serpentine && serpentine.crossoverLegs.length > 0 && (
+          {serpentine && serpentine.crossoverLegs.length > 0 && !shownCoverage && (
             <Source id="crossover-leg" type="geojson" data={lineCollection(serpentine.crossoverLegs)}>
               <Layer
                 id="crossover-leg-line"

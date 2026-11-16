@@ -12,6 +12,15 @@ import { laneWaypointName } from '@survey-planning/g1000Names.js'
 import { buildOffsetTrack, reverseOffsetTrack, routeCurveSide, segmentCurveSide } from '@survey-planning/offsetRoutePlan.js'
 import { nauticalMilesBetween } from '@survey-planning/surveyGeometry.js'
 import { planSideLanes } from '@survey-planning/sortieLanePlan.js'
+import {
+  sortieProgressId,
+  surveyStops,
+  surveySummaryLine,
+  coveredSurveyNm,
+  waypointKey,
+  type SortieProgress,
+  type SurveyStop,
+} from '@/services/teamPlanProgress'
 
 export const NO_TEAM_PLAN_NOTE = 'No team plan saved. Set up teams in Team Dispatch.'
 export const NO_SEGMENT_NOTE = 'No segment assigned.'
@@ -95,6 +104,13 @@ export type SavedTeamPlan = {
     alongNm: number
     point: { ptIdent: string; lat: number; lon: number; g1000Name?: string; originalName?: string }
   } | null
+  /**
+   * Where each crew stopped. Keyed by team id and sortie number.
+   * Older records omit this and read as not started. This does not change the sortie list.
+   */
+  progress?: Record<string, SortieProgress>
+  /** One notice when a later save clears marks for sorties whose waypoints changed. */
+  progressNotice?: string | null
   teams: TeamPlanTeam[]
 }
 
@@ -1061,4 +1077,100 @@ export function ferryCrossingNote(opts: {
   }
   if (hits.length === 0) return null
   return `The ferry crosses ${hits.join(' and ')}. Cross at the assigned altitude and announce.`
+}
+
+export type TeamProgressSortie = {
+  id: string
+  teamId: CrewOverlayId
+  number: number
+  /** Crew home field, for the summary line. */
+  crew: string
+  /** Home field and sortie number, for the stale-progress notice. */
+  label: string
+  stops: SurveyStop[]
+  waypointKey: string
+}
+
+/** Survey waypoints for each packed sortie. Does not read or change the sortie list. */
+export function teamProgressCatalog(opts: {
+  plan: SavedTeamPlan
+  points: TeamRoutePoint[]
+  legWidths: Array<OffsetLegWidth | null> | null
+}): TeamProgressSortie[] {
+  const homes = opts.plan.teams.map((team) => team.departure?.identifier ?? '').filter(Boolean)
+  const rows: TeamProgressSortie[] = []
+  for (const team of opts.plan.teams) {
+    const crew = team.departure?.identifier || team.label
+    for (const sortie of team.packedSorties ?? []) {
+      if (sortie.returnHomeOnly || sortie.offsetsNm.length === 0) continue
+      const id = sortieProgressId(team.id, sortie.number)
+      const label = `${crew} sortie ${sortie.number}`
+      if (!opts.legWidths || !sortie.side) {
+        rows.push({ id, teamId: team.id, number: sortie.number, crew, label, stops: [], waypointKey: '' })
+        continue
+      }
+      const route = teamSortieOffsetRoute({
+        team,
+        points: opts.points,
+        legWidths: opts.legWidths,
+        sortieNumber: sortie.number,
+        firstOffsetNm: opts.plan.firstOffsetNm,
+        stepNm: opts.plan.stepNm,
+        homeIdent: team.departure?.identifier,
+        homes,
+      })
+      const stops =
+        'waypoints' in route
+          ? surveyStops(route.waypoints, [
+              sortie.departureIdent,
+              sortie.landingIdent,
+              team.departure?.identifier,
+              team.landing?.identifier,
+              team.refuelStop?.identifier,
+            ])
+          : []
+      rows.push({
+        id,
+        teamId: team.id,
+        number: sortie.number,
+        crew,
+        label,
+        stops,
+        waypointKey: waypointKey(stops),
+      })
+    }
+  }
+  return rows
+}
+
+export function progressSummaryLines(
+  catalog: TeamProgressSortie[],
+  progress: Record<string, SortieProgress> | undefined
+): { crews: string[]; plan: string } {
+  const byCrew = new Map<string, { surveyed: number; total: number }>()
+  let surveyed = 0
+  let total = 0
+  for (const sortie of catalog) {
+    const miles = surveyLaneNmOf(sortie, progress)
+    const bucket = byCrew.get(sortie.crew) ?? { surveyed: 0, total: 0 }
+    bucket.surveyed = Math.round((bucket.surveyed + miles.surveyed) * 10) / 10
+    bucket.total = Math.round((bucket.total + miles.total) * 10) / 10
+    byCrew.set(sortie.crew, bucket)
+    surveyed = Math.round((surveyed + miles.surveyed) * 10) / 10
+    total = Math.round((total + miles.total) * 10) / 10
+  }
+  return {
+    crews: [...byCrew.entries()].map(([crew, miles]) => `${crew}: ${surveySummaryLine(miles.surveyed, miles.total)}`),
+    plan: `Plan: ${surveySummaryLine(surveyed, total)}`,
+  }
+}
+
+function surveyLaneNmOf(
+  sortie: TeamProgressSortie,
+  progress: Record<string, SortieProgress> | undefined
+): { surveyed: number; total: number } {
+  return {
+    surveyed: coveredSurveyNm(sortie.stops, progress?.[sortie.id]),
+    total: coveredSurveyNm(sortie.stops, { status: 'completed' }),
+  }
 }

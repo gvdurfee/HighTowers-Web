@@ -14,6 +14,12 @@ Team Dispatch is intended for wide-corridor MTRs (for example VR114). Narrow-cor
 
 **VR114 reference** (A–M1, tracks 2.5 NM then every 5 NM, KLRU / KABQ / KSKX, refuel KTCC, 400 NM). Inner / Outer / Inner is 8 sorties and 2,633.7 NM: KSKX A–B 3 / 1,009.6, KABQ B–E 3 / 968.9, KLRU E–M1 2 / 655.2. The longest sortie is 380.6 NM. Outer / Inner / Outer is 8 sorties and 2,697.6 NM.
 
+## Multi-day surveys: crews resume on their own; the dispatcher can mark where a crew stopped
+
+A crew does not have to finish its piece in one day. Leave the flight plan loaded. The next day, after takeoff, the pilots select the waypoint where they stopped, fly Direct-To it, and continue. The app does not pick day breaks, resume points, or Direct-To help, and the `.fpl` files do not change.
+
+On Map View, a saved team plan can mark each sortie Not started, Stopped at one of that sortie's lane waypoints, or Completed. An optional note and the date are stored with the team plan, in a field beside the sortie list. The map draws the covered survey as a solid blue line and what is left as a dashed orange line. Map View and the sortie brief show `Surveyed X of Y NM (Z%)` for each crew and for the plan. Those miles are survey lane miles only. If a later save changes one sortie's waypoints, only that sortie's mark is cleared, and one notice names it.
+
 **Names.** Team lanes use the crew’s home-field letter, the point, the lane number, and I or O (`QB1O`, `XB2I`). Lane 1 is 2.5 NM from centerline when that is the plan spacing, then every 5 NM. At most 6 characters, A–Z and 0–9. One name is one position across the plan’s files. When the same name would sit at a different place, a letter is inserted before the side letter (`B1AI`). That letter is not a lane number.
 
 **On-screen order** (the page is not a numbered stepper; parentheses are the headings):

@@ -80,7 +80,8 @@ import { spanWidthsFromRows, teamPlanSpanWidths } from '@/services/teamPlanCorri
 import { CoordinatorOffsetPlans } from '@/components/CoordinatorOffsetPlans'
 import { crewOffsetAirports } from '@/services/coordinatorOffsetExport'
 import { type SortieSide } from '@/services/offsetRouteFpl'
-import { buildTeamSortieFile, draftTeamPlan, ferryCrossingNote, legacySortieNote, packedDownloadLabel, teamSortieOffsetRoute, type PackedTeamSortie, type TeamPlanAirport, type TeamRoutePoint } from '@/services/teamPlanRecord'
+import { buildTeamSortieFile, draftTeamPlan, ferryCrossingNote, legacySortieNote, packedDownloadLabel, progressSummaryLines, teamProgressCatalog, teamSortieOffsetRoute, type PackedTeamSortie, type TeamPlanAirport, type TeamRoutePoint } from '@/services/teamPlanRecord'
+import { progressClearNotice, reconcileSortieProgress, sortieProgressId } from '@/services/teamPlanProgress'
 import { resolvePublishedLegWidths, routeCurveSide, segmentCurveSide } from '@survey-planning/offsetRoutePlan.js'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import { isCoordinatorSurveyAnchor } from '@/utils/coordinatorSurveyPlan'
@@ -949,6 +950,18 @@ export function CoordinatorSurveyConsolePage() {
     }
   }, [planBundle, routeMeta, refuelAirport, team1Airport, team2Airport, team3Airport, refuelEdits, savedTeamPlan, appliedInsert, firstOffsetNm, stepNm, spanTrackRows, widthTexts])
 
+  const savedProgressLines = useMemo(() => {
+    if (!savedTeamPlan || !sortieExportCtx?.points.length || !sortieExportCtx.legWidths) return []
+    const catalog = teamProgressCatalog({
+      plan: savedTeamPlan,
+      points: sortieExportCtx.points,
+      legWidths: sortieExportCtx.legWidths,
+    })
+    if (catalog.length === 0) return []
+    const lines = progressSummaryLines(catalog, savedTeamPlan.progress)
+    return [...lines.crews, lines.plan]
+  }, [savedTeamPlan, sortieExportCtx])
+
   const crossingNoteFor = (
     crewIdent: string,
     sortie: PackedTeamSortie,
@@ -1081,6 +1094,7 @@ export function CoordinatorSurveyConsolePage() {
         laneExample: file.userNames[0],
         crossingNote: crossingNoteFor(crewIdent, sortie, airportOf(dep), airportOf(dest)) ?? undefined,
         sideNote: segmentCurveSide(sortieExportCtx.points, sortie.fromPt, sortie.toPt).note ?? undefined,
+        progressLines: savedProgressLines,
       })
     }
   }
@@ -2143,12 +2157,37 @@ export function CoordinatorSurveyConsolePage() {
     const plan =
       dispatchPlan && !('error' in dispatchPlan) ? attachPackedSorties(drafted, dispatchPlan) : drafted
     plan.routeInsert = appliedInsert
+    const existing = await db.teamPlans.get(planId)
+    const previousLabels: Record<string, string> = {}
+    for (const team of existing?.teams ?? []) {
+      const crew = team.departure?.identifier || team.label
+      for (const sortie of team.packedSorties ?? []) {
+        previousLabels[sortieProgressId(team.id, sortie.number)] = `${crew} sortie ${sortie.number}`
+      }
+    }
+    if (sortieExportCtx?.points.length && sortieExportCtx.legWidths) {
+      const catalog = teamProgressCatalog({
+        plan,
+        points: sortieExportCtx.points,
+        legWidths: sortieExportCtx.legWidths,
+      })
+      const reconciled = reconcileSortieProgress(existing?.progress, catalog, previousLabels)
+      plan.progress = reconciled.progress
+      plan.progressNotice = progressClearNotice(reconciled.cleared)
+    } else if (existing?.progress) {
+      plan.progress = existing.progress
+      plan.progressNotice = existing.progressNotice ?? null
+    }
     await db.teamPlans.put(plan)
     setTeamDispatchUnsaved(planId, false)
     setDispatchUnsaved(false)
     setTeamSortiesStale(planId, false)
     clearTeamPlanAwaitingSave(planId)
-    setTeamPlanNotice('Team plan saved. Map View uses this plan.')
+    setTeamPlanNotice(
+      plan.progressNotice
+        ? `Team plan saved. Map View uses this plan. ${plan.progressNotice}`
+        : 'Team plan saved. Map View uses this plan.'
+    )
     return true
   }
   const offsetRouteKind =
@@ -3182,6 +3221,22 @@ export function CoordinatorSurveyConsolePage() {
               open={openSections.includes('results')}
               onOpenChange={(open) => setSectionOpen('results', open)}
             >
+              <GuidedHint
+                hintId="teamDispatch.multiDay"
+                stepNumber={2}
+                title="Multi-day flying"
+                body="A crew doesn't have to finish its piece in one day. Leave the flight plan loaded. Next day, after takeoff, select the waypoint where you stopped, fly Direct-To it, and continue."
+                isSeen={isSeen('teamDispatch.multiDay')}
+                onDismiss={markSeen}
+                surface="light"
+              />
+              {savedProgressLines.length > 0 && (
+                <div className="mt-3 text-sm text-gray-800">
+                  {savedProgressLines.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </div>
+              )}
               {planBundle.waypoints.length < 2 && (
                 <p className="text-sm text-gray-600 mt-3">
                   Need at least two resolved waypoints in the flight plan before running the planner.

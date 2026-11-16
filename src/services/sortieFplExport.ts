@@ -31,6 +31,8 @@ export type SortieFplPilotBrief = {
   laneExample?: string
   crossingNote?: string
   sideNote?: string
+  /** Surveyed miles for each crew, then the whole plan. Not written into the .fpl. */
+  progressLines?: string[]
 }
 
 function waypointPtIdent(originalName: string): string {

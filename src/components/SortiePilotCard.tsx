@@ -104,6 +104,13 @@ export function SortiePilotCard({ brief, isOpen, onClose }: SortiePilotCardProps
               lane by waypoint name, for example &apos;entering {brief.laneExample ?? 'B1O'}&apos;.
             </p>
             {brief.crossingNote && <p className="mb-2">{brief.crossingNote}</p>}
+            {brief.progressLines && brief.progressLines.length > 0 && (
+              <div className="mb-2">
+                {brief.progressLines.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </div>
+            )}
             {(brief.sortieNumber ?? 1) > 1 && (
               <p>
                 This sortie is already in flying order; load it and fly it as listed. Do not invert the flight plan on the
