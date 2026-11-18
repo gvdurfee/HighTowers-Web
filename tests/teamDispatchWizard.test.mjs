@@ -24,6 +24,7 @@ import {
   wizardStepIds,
   THREE_AIRCRAFT_SEGMENT_NOTE,
   threeAircraftAllowed,
+  twoTeamLandingNote,
 } from '../src/services/teamDispatchWizard.ts'
 
 const source = {
@@ -399,5 +400,13 @@ describe('wizard help, finish, and the saved drawing', () => {
     expect(refuelAirportForCrew('team3', 'staged-refuel', ktcc, edits)?.identifier).toBe('KTCC')
     expect(refuelAirportForCrew('team1', 'return-home', ktcc, edits)).toBeNull()
     expect(refuelEditsForDraft({ ferryMode: 'return-home', refuel: ktcc, aircraftCount: 2 })).toBeNull()
+  })
+})
+
+describe('two-team landing note', () => {
+  it('shows the side note for 2 aircraft and hides it for 3', () => {
+    expect(twoTeamLandingNote(2)).toMatch(/^With 2 teams, each crew stays on the side/)
+    expect(twoTeamLandingNote(3)).toBeNull()
+    expect(twoTeamLandingNote(1)).toBeNull()
   })
 })

@@ -1,3 +1,4 @@
+import { g1000RouteNameFromFilename } from '@survey-planning/g1000Names.js'
 import { buildSortieOffsetFpl } from '@/services/offsetRouteFpl'
 import { routeCurveSide } from '@survey-planning/offsetRoutePlan.js'
 import { nauticalMilesBetween } from '@survey-planning/surveyGeometry.js'
@@ -97,19 +98,19 @@ function offsetFile(opts: {
   departure: TeamPlanAirport
   landing: TeamPlanAirport
   homeIdent: string
+  filename?: string
 }): { xml: string; filename: string } {
+  const filename = opts.filename ?? teamSortieFilename(opts.routeLabel, opts.homeIdent, opts.sortieNumber)
   const file = buildSortieOffsetFpl({
     routeLabel: opts.routeLabel,
+    routeName: g1000RouteNameFromFilename(filename),
     sortieNumber: opts.sortieNumber,
     side: opts.side,
     waypoints: opts.waypoints,
     departure: opts.departure,
     destination: opts.landing,
   })
-  return {
-    xml: file.xml,
-    filename: teamSortieFilename(opts.routeLabel, opts.homeIdent, opts.sortieNumber),
-  }
+  return { xml: file.xml, filename }
 }
 
 /** One offset-lane file. Results-row and fragment exports use this same writer. */
@@ -145,6 +146,7 @@ export function buildNamedOffsetSortieFile(opts: {
     namePrefix: opts.namePrefix,
   })
   if ('error' in named) throw new Error(named.error)
+  const filename = packedSortieFilename(opts.routeLabel, home, opts.fromPt, opts.toPt, opts.sortieNumber)
   const file = offsetFile({
     routeLabel: opts.routeLabel,
     sortieNumber: opts.sortieNumber,
@@ -153,6 +155,7 @@ export function buildNamedOffsetSortieFile(opts: {
     departure: opts.departure,
     landing: opts.landing,
     homeIdent: home,
+    filename,
   })
   const path = [opts.departure, ...named.waypoints, opts.landing].map((point) => ({
     lat: 'lat' in point ? point.lat : point.latitude,
@@ -162,7 +165,7 @@ export function buildNamedOffsetSortieFile(opts: {
   for (let index = 1; index < path.length; index += 1) distance += nauticalMilesBetween(path[index - 1], path[index])
   return {
     xml: file.xml,
-    filename: packedSortieFilename(opts.routeLabel, home, opts.fromPt, opts.toPt, opts.sortieNumber),
+    filename,
     distanceNm: Math.round(distance * 10) / 10,
     maxTurnDeg: maxCourseChangeDeg(path),
   }

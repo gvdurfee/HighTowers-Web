@@ -52,6 +52,7 @@ import {
   refuelAirportForCrew,
   refuelEditsForDraft,
   WIDTH_SIDE_HELP,
+  twoTeamLandingNote,
   blankSpansFromPoints,
   widthFieldLabels,
   type WizardDraft,
@@ -3146,15 +3147,16 @@ export function CoordinatorSurveyConsolePage() {
                     <p className="font-medium text-gray-900 mb-2">
                       Refueling airport (shared)
                     </p>
-                    <p className="text-xs text-gray-600 mb-3">
-                      With <strong>2 teams</strong>, each crew stays on the side of the centerline it picks for every
-                      sortie and lands here. The other crew flies the other side. The <strong>final sortie</strong>{' '}
-                      returns home — combined with any remaining survey legs when total NM fits the budget, otherwise
-                      a separate return-only sortie. With{' '}
-                      <strong>1 team</strong>, sortie 1 flies the chosen side and lands here. Sortie 2 is already in
-                      flying order; load it and fly it as listed. Do not invert the flight plan on the G1000. Sortie 2
-                      is its own .fpl file.
-                    </p>
+                    {twoTeamLandingNote(teamCount) && (
+                      <p className="text-xs text-gray-600 mb-3">{twoTeamLandingNote(teamCount)}</p>
+                    )}
+                    {teamCount === 1 && (
+                      <p className="text-xs text-gray-600 mb-3">
+                        With <strong>1 team</strong>, sortie 1 flies the chosen side and lands here. Sortie 2 is already
+                        in flying order; load it and fly it as listed. Do not invert the flight plan on the G1000.
+                        Sortie 2 is its own .fpl file.
+                      </p>
+                    )}
                     <div className="flex gap-2 min-w-0">
                       <input
                         type="text"

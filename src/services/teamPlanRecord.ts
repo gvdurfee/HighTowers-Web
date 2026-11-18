@@ -1,4 +1,5 @@
 import { buildCoordinatorCrewOffsetFile } from '@/services/coordinatorOffsetExport'
+import { g1000RouteNameFromFilename } from '@survey-planning/g1000Names.js'
 import { buildSortieOffsetFpl } from '@/services/offsetRouteFpl'
 import {
   emptyCrewOverlay,
@@ -389,9 +390,9 @@ export function buildTeamSortieFile(opts: {
       packed.toPt,
       opts.sortieNumber
     )
-    const routeName = filename.replace(/\.fpl$/i, '')
+    const routeName = g1000RouteNameFromFilename(filename)
     const file = buildSortieOffsetFpl({
-      routeLabel: routeName,
+      routeLabel: opts.routeLabel,
       routeName,
       sortieNumber: opts.sortieNumber,
       side: route.side,
@@ -402,7 +403,7 @@ export function buildTeamSortieFile(opts: {
     return {
       xml: file.xml,
       filename,
-      routeName: filename.replace(/\.fpl$/i, ''),
+      routeName,
       userNames: route.waypoints.map((point) => point.g1000Name),
       maxTurnDeg: maxCourseChangeDeg(
         [route.departure, ...route.waypoints, route.landing].map((point) => ({
@@ -494,6 +495,13 @@ export function maxCourseChangeDeg(points: Array<{ lat: number; lon: number }>):
     max = Math.max(max, Math.abs(turn))
   }
   return Math.round(max)
+}
+
+/** Map View and the pilot brief. A missing turn is left out; 155 is not a stand-in. */
+export function laneTurnSentence(turnDeg?: number | null): string {
+  const turn = turnDeg != null && Number.isFinite(turnDeg) && turnDeg > 0 ? Math.round(turnDeg) : null
+  const degrees = turn != null ? `up to about ${turn}° ` : ''
+  return `Lane numbers are fixed: lane 1 = 2.5 NM from centerline on every sortie. Expect turns ${degrees}at lane entry and exit; join the lane, don't cut the corner.`
 }
 
 function placesApart(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {

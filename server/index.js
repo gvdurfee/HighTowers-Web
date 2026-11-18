@@ -9,7 +9,7 @@ import dotenv from 'dotenv'
 import express from 'express'
 import { createReadStream } from 'fs'
 import { createWriteStream } from 'fs'
-import { mkdir, unlink } from 'fs/promises'
+import { mkdir, readdir, stat, unlink } from 'fs/promises'
 import { pipeline } from 'stream/promises'
 import { parse } from 'csv-parse'
 import fetch from 'node-fetch'
@@ -26,6 +26,7 @@ import { createAdminRouter } from './routes/admin.js'
 import { logAdminConfigStatus } from './lib/adminAuth.js'
 import { contentPackAuth, logContentPackAuthStatus } from './lib/contentPackAuth.js'
 import { assembleWidthClauses } from '../shared/survey-planning/mtrWidthParser.js'
+import { localToday, nasrCycleDate, newestCachedCycle, previousNasrCycle, toMtrZipDate } from './nasrCycle.js'
 import { assignG1000WaypointNames } from '../shared/survey-planning/g1000Names.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -82,23 +83,27 @@ const PORT = process.env.PORT ?? 3001
 
 const NASR_INDEX_URL = 'https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/'
 
-// Convert YYYY-MM-DD to DD_Mon_YYYY for MTR extra ZIP filename
-function toMtrZipDate(isoDate) {
-  const [y, m, d] = isoDate.split('-').map(Number)
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  const day = String(d).padStart(2, '0')
-  const mon = months[m - 1]
-  return `${day}_${mon}_${y}`
-}
-
-// Compute fallback cycle date: most recent Thursday (NASR cycles are Thursdays)
-function getFallbackCycleDate() {
-  const d = new Date()
-  const day = d.getDay() // 0=Sun, 4=Thu
-  let diff = (day - 4 + 7) % 7
-  if (diff > 0) diff -= 7 // go back to last Thu
-  d.setDate(d.getDate() + diff)
-  return d.toISOString().slice(0, 10)
+async function cachedCycleOnOrBefore(cacheDir, today) {
+  let names = []
+  try {
+    names = await readdir(cacheDir)
+  } catch {
+    return null
+  }
+  const dates = []
+  for (const name of names) {
+    const match = name.match(/^(\d{4}-\d{2}-\d{2})_MTR_PT\.csv$/)
+    if (!match) continue
+    const date = match[1]
+    try {
+      const points = await stat(path.join(cacheDir, `${date}_MTR_PT.csv`))
+      const widths = await stat(path.join(cacheDir, `${date}_MTR_WDTH.csv`))
+      if (points.size > 1000 && widths.size > 100) dates.push(date)
+    } catch {
+      // A points file without its width file is not a usable cycle.
+    }
+  }
+  return newestCachedCycle(dates, today)
 }
 
 // Parse NASR subscription index and extract current cycle date (YYYY-MM-DD)
@@ -124,9 +129,8 @@ async function getCurrentCycleDate() {
     const [, year, mm, dd] = dateMatch
     return `${year}-${mm}-${dd}`
   } catch (err) {
-    // FAA may block server requests (403); use computed fallback
-    const fallback = getFallbackCycleDate()
-    console.warn('NASR index unavailable, using fallback cycle:', fallback, err?.message ?? err)
+    const fallback = nasrCycleDate(localToday())
+    console.warn('NASR index unavailable, using 28-day cycle:', fallback, err?.message ?? err)
     return fallback
   }
 }
@@ -165,11 +169,23 @@ async function downloadMtrCsv(effectiveDate) {
     // No cache
   }
 
-  let res = await fetch(zipUrl)
+  let res
+  try {
+    res = await fetch(zipUrl)
+  } catch (err) {
+    const cached = await cachedCycleOnOrBefore(cacheDir, localToday())
+    if (cached) {
+      console.warn(`NASR download failed. Using cached cycle ${cached}.`, err?.message ?? err)
+      return {
+        csvPath: path.join(cacheDir, `${cached}_MTR_PT.csv`),
+        widthCsvPath: path.join(cacheDir, `${cached}_MTR_WDTH.csv`),
+        effectiveDate: cached,
+      }
+    }
+    throw err
+  }
   if (!res.ok) {
-    const [y, m, d] = effectiveDate.split('-').map(Number)
-    const prev = new Date(y, m - 1, d - 28)
-    actualDate = prev.toISOString().slice(0, 10)
+    actualDate = previousNasrCycle(effectiveDate)
     csvPath = path.join(cacheDir, `${actualDate}_MTR_PT.csv`)
     widthCsvPath = path.join(cacheDir, `${actualDate}_MTR_WDTH.csv`)
     try {
@@ -177,14 +193,31 @@ async function downloadMtrCsv(effectiveDate) {
       const stPt = await stat(csvPath)
       const stWd = await stat(widthCsvPath)
       if (stPt.size > 1000 && stWd.size > 100) {
+        console.warn(`NASR cycle ${effectiveDate} was not downloaded. Using cached cycle ${actualDate}.`)
         return { csvPath, widthCsvPath, effectiveDate: actualDate }
       }
     } catch {}
     const prevZipDate = toMtrZipDate(actualDate)
     const prevZipUrl = `https://nfdc.faa.gov/webContent/28DaySub/extra/${prevZipDate}_MTR_CSV.zip`
-    res = await fetch(prevZipUrl)
+    try {
+      res = await fetch(prevZipUrl)
+    } catch (err) {
+      res = { ok: false }
+      console.warn(`NASR download failed for ${prevZipUrl}.`, err?.message ?? err)
+    }
   }
-  if (!res.ok) throw new Error(`FAA MTR ZIP not found: ${zipUrl} (${res.status})`)
+  if (!res.ok) {
+    const cached = await cachedCycleOnOrBefore(cacheDir, localToday())
+    if (cached) {
+      console.warn(`NASR download failed. Using cached cycle ${cached}.`)
+      return {
+        csvPath: path.join(cacheDir, `${cached}_MTR_PT.csv`),
+        widthCsvPath: path.join(cacheDir, `${cached}_MTR_WDTH.csv`),
+        effectiveDate: cached,
+      }
+    }
+    throw new Error(`FAA MTR ZIP not found: ${zipUrl} (${res.status})`)
+  }
 
   const cacheKey = actualDate
 

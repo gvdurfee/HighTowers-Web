@@ -28,21 +28,6 @@ type FlightPlanInput = {
   waypoints: WaypointInput[]
 }
 
-/** Sortie fragment export: serpentine route sequence + unique fragment waypoints for table. */
-export type SortieFlightPlanInput = {
-  routeLabel: string
-  sortieNumber: number
-  departureAirport: AirportInput
-  /** Round-robin sorties use the same airport as departure. */
-  destinationAirport: AirportInput
-  /** Unique MTR user waypoints in the fragment (waypoint-table). */
-  fragmentWaypoints: Pick<WaypointInput, 'g1000Name' | 'latitude' | 'longitude'>[]
-  /** Ordered g1000 names including non-consecutive reuse for serpentine legs. */
-  routeSequence: string[]
-  /** Fixed clock for a byte-identical export. Defaults to the current time. */
-  created?: Date
-}
-
 function escapeXml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -150,67 +135,7 @@ function emitWaypointTableLine(row: TableRow): string[] {
   ]
 }
 
-function fragmentWaypointsForTable(
-  fragmentWaypoints: SortieFlightPlanInput['fragmentWaypoints']
-): WaypointInput[] {
-  return fragmentWaypoints.map((wp, i) => ({
-    id: `sortie-${i}`,
-    originalName: wp.g1000Name,
-    g1000Name: wp.g1000Name,
-    latitude: wp.latitude,
-    longitude: wp.longitude,
-    routeType: 'VR',
-    sequence: i,
-  }))
-}
-
 export const G1000Service = {
-  generateSortieFlightPlan(input: SortieFlightPlanInput): string {
-    const created = formatDate(input.created ?? new Date())
-    const dep = input.departureAirport
-    const dest = input.destinationAirport
-    const tableWaypoints = fragmentWaypointsForTable(input.fragmentWaypoints)
-    const tableRows = buildWaypointTableRows(dep, dest, tableWaypoints)
-
-    const routeName = [
-      dep.identifier,
-      input.routeLabel,
-      `sortie${input.sortieNumber}`,
-    ]
-      .filter(Boolean)
-      .join(' ')
-
-    const lines: string[] = []
-    lines.push(
-      '<?xml version="1.0" encoding="UTF-8"?>',
-      '<flight-plan xmlns="http://www8.garmin.com/xmlschemas/FlightPlan/v1">',
-      `  <created>${escapeXml(created)}</created>`,
-      '  <waypoint-table>'
-    )
-
-    for (const row of tableRows) {
-      lines.push(...emitWaypointTableLine(row))
-    }
-
-    lines.push(
-      '  </waypoint-table>',
-      '  <route>',
-      `    <route-name>${escapeXml(routeName)}</route-name>`,
-      '    <flight-plan-index>1</flight-plan-index>'
-    )
-
-    lines.push(...emitRoutePointLines(dep.identifier, 'AIRPORT', 'K2'))
-
-    for (const id of input.routeSequence) {
-      lines.push(...emitRoutePointLines(id.trim(), 'USER WAYPOINT', ''))
-    }
-
-    lines.push(...emitRoutePointLines(dest.identifier, 'AIRPORT', 'K2'))
-
-    lines.push('  </route>', '</flight-plan>', '')
-    return lines.join('\n')
-  },
-
   generateFlightPlan(flightPlan: FlightPlanInput): string {
     const waypoints = [...flightPlan.waypoints].sort(
       (a, b) => a.sequence - b.sequence

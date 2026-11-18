@@ -9,6 +9,7 @@ import {
 } from '@/services/sortieFplExport'
 import { buildNamedOffsetSortieFile } from '@/services/teamPlanSortieDownload'
 import { crewWaypointPrefix, uniqueSortieFilename } from '@/services/teamPlanRecord'
+import { manualRouteName } from '@survey-planning/g1000Names.js'
 import { segmentCurveSide } from '@survey-planning/offsetRoutePlan.js'
 import type { SortieSide } from '@/services/offsetRouteFpl'
 import {
@@ -207,7 +208,9 @@ export function SortieFragmentExportCard({
         namePrefix: crewWaypointPrefix(teamDeparture.identifier, [teamDeparture.identifier]),
       })
       const filename = uniqueSortieFilename(file.filename, exportNames.current)
-      downloadSortieFpl(file.xml, filename)
+      const routeName = manualRouteName(filename, sortieSide)
+      const xml = file.xml.replace(/<route-name>[^<]*<\/route-name>/, `<route-name>${routeName}</route-name>`)
+      downloadSortieFpl(xml, filename)
       const userBlock = file.xml.split('<waypoint>').find((part) => part.includes('USER WAYPOINT'))
       const laneExample = userBlock?.match(/<identifier>([^<]+)/)?.[1]
       const curve = segmentCurveSide(

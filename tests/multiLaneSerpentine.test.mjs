@@ -3,7 +3,6 @@ import { assignG1000WaypointNames } from '../shared/survey-planning/g1000Names.j
 import { parallelOffsetsForHalfWidth } from '../shared/survey-planning/surveyGeometry.js'
 import { bestSortiePlan, buildUniformOffsetSegments } from '../shared/survey-planning/surveySortiePacker.js'
 import { buildSerpentineRouteSequence } from '../shared/survey-planning/surveySortieFplRoute.js'
-import { G1000Service } from '../src/services/g1000.ts'
 import { airportsForSortie, buildSerpentineDisplay, passesForSortie } from '../src/services/serpentineDisplay.ts'
 import { draftTeamPlan, drawSavedTeam, formatSortieHeader } from '../src/services/teamPlanRecord.ts'
 import { buildTeamPlanSortieFile } from '../src/services/teamPlanSortieDownload.ts'
@@ -105,21 +104,6 @@ function consoleSide(points, widths, side, departure, landing, policy = {}) {
 }
 
 function fplUserNamesFrom(xml) {
-  const route = xml.slice(xml.indexOf('<route>'), xml.indexOf('</route>'))
-  return [...route.matchAll(/<waypoint-identifier>([^<]+)<\/waypoint-identifier>\s*<waypoint-type>([^<]*)<\/waypoint-type>/g)]
-    .filter((match) => match[2].includes('USER'))
-    .map((match) => match[1])
-}
-
-function fplUserNames(routeSequence, departure, landing, sortieNumber) {
-  const xml = G1000Service.generateSortieFlightPlan({
-    routeLabel: 'VR114',
-    sortieNumber,
-    departureAirport: departure,
-    destinationAirport: landing,
-    fragmentWaypoints: routeSequence.map((name) => ({ g1000Name: name, latitude: 0, longitude: 0 })),
-    routeSequence,
-  })
   const route = xml.slice(xml.indexOf('<route>'), xml.indexOf('</route>'))
   return [...route.matchAll(/<waypoint-identifier>([^<]+)<\/waypoint-identifier>\s*<waypoint-type>([^<]*)<\/waypoint-type>/g)]
     .filter((match) => match[2].includes('USER'))

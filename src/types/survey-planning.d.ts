@@ -326,6 +326,10 @@ declare module '@survey-planning/surveySortiePlanner.js' {
 declare module '@survey-planning/g1000Names.js' {
   export const G1000_USER_WAYPOINT_ID_MAX_LEN: number
   export const G1000_ROUTE_NAME_MAX_LEN: number
+  export const G1000_FPL_FILENAME_MAX_LEN: number
+  export function g1000RouteNameFromFilename(filename: string): string
+  export function manualRouteName(filename: string, side: 'inner' | 'outer'): string
+  export function singleAircrewFullRouteFilename(departure: string, planName: string, destination: string): string
   export function assignOffsetWaypointNames(
     inputs: Array<{ originalName: string; side: 'inner' | 'outer'; sequence?: number }>
   ): { names: Array<{ g1000Name: string }>; error: string | null }

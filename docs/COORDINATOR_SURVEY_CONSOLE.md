@@ -76,7 +76,7 @@ For one **side** and one **assigned waypoint chain**:
 3. The file turns the airplane around by the order of those waypoints. The pilot does not set a G1000 offset.
 4. Land at the sortie’s destination (home, or the refuel stop on sortie 1 when one is set).
 
-Default spacing, when the coordinator has not typed a different list: first lane **3 NM**, then a **6 NM** step, and no lane past that side’s published width. The distances in the file are the real distances for that plan.
+Default spacing, when the coordinator has not typed a different list: first offset **2.5 NM**, then every **5 NM**, and no lane past that side’s published width. The distances in the file are the real distances for that plan.
 
 **Along-route NM** for one sortie on one side (one contiguous assignment):
 
@@ -139,7 +139,7 @@ Return: **same departure airport**, or the shared refuel stop when staged refuel
 - Flight plan / waypoint sequence (from existing plan or route load)
 - Route type + number (for width API)
 - 1 team: departure airport, survey side, sortie NM cap
-- Lane spacing defaults: first lane 3 NM, then a 6 NM step. A lane past that side’s published width is not flown. There is no extra mile past the published width.
+- Lane spacing defaults: first offset 2.5 NM, then every 5 NM. A lane past that side’s published width is not flown. There is no extra mile past the published width.
 
 ### Phase 2+
 

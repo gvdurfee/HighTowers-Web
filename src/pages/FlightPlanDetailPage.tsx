@@ -10,6 +10,7 @@ import type {
   PendingWaypoint,
   FlightPlanCreationLoadMethod,
 } from '@/db/schema'
+import { singleAircrewFullRouteFilename } from '@survey-planning/g1000Names.js'
 import { G1000Service } from '@/services/g1000'
 import { assignG1000WaypointNames } from '@/utils/g1000WaypointName'
 import { sortie2Explanation } from '@/services/offsetRouteFpl'
@@ -278,10 +279,11 @@ export function FlightPlanDetailPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    const depCode = departure?.identifier ?? 'UNK'
-    const destCode = destination?.identifier ?? 'UNK'
-    const routePart = plan.name.replace(/\s/g, '_')
-    a.download = `${depCode}-${routePart}-${destCode}.fpl`
+    a.download = singleAircrewFullRouteFilename(
+      departure?.identifier ?? 'UNK',
+      plan.name,
+      destination?.identifier ?? 'UNK'
+    )
     a.click()
     URL.revokeObjectURL(url)
     setShowExport(false)

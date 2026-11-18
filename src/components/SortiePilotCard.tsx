@@ -1,4 +1,5 @@
 import type { SortieFplPilotBrief } from '@/services/sortieFplExport'
+import { laneTurnSentence } from '@/services/teamPlanRecord'
 
 type SortiePilotCardProps = {
   brief: SortieFplPilotBrief
@@ -72,7 +73,7 @@ export function SortiePilotCard({ brief, isOpen, onClose }: SortiePilotCardProps
           <section>
             <h3 className="font-semibold text-gray-900 mb-1">Offset lanes</h3>
             <p className="text-sm text-gray-700 mb-2">
-              Lane numbers are fixed: lane 1 = 2.5 NM from centerline on every sortie. Expect turns up to about {brief.turnDeg ?? 155}° at lane entry and exit; join the lane, don&apos;t cut the corner.
+              {laneTurnSentence(brief.turnDeg)}
             </p>
             <p className="mb-2">Each sortie lists its side; fly the side shown.</p>
             {brief.sideNote && <p className="mb-2">{brief.sideNote}</p>}

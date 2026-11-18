@@ -14,6 +14,14 @@ export const INNER_SIDE_HELP = 'Inner is the inside of that piece of the route.'
 export const TWO_AIRCRAFT_SIDE_HELP =
   'Each aircraft stays on the side of the centerline you pick for all of its sorties. The other aircraft flies the other side.'
 
+export const TWO_TEAM_LANDING_NOTE =
+  'With 2 teams, each crew stays on the side of the centerline it picks for every sortie and lands here. The other crew flies the other side. The final sortie returns home — combined with any remaining survey legs when total NM fits the budget, otherwise a separate return-only sortie.'
+
+/** The 2-team side note applies only when the plan has exactly two aircraft. */
+export function twoTeamLandingNote(aircraftCount: number): string | null {
+  return aircraftCount === 2 ? TWO_TEAM_LANDING_NOTE : null
+}
+
 export const BOTH_SIDES_HELP =
   'Each sortie lists its side; fly the side shown.'
 

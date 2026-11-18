@@ -7,6 +7,69 @@ export const G1000_USER_WAYPOINT_ID_MAX_LEN = 6
  */
 export const G1000_ROUTE_NAME_MAX_LEN = 22
 
+/** Garmin's .fpl file name, including the extension, fits the card root. */
+export const G1000_FPL_FILENAME_MAX_LEN = 32
+
+const ROUTE_NAME_PATTERN = /^[A-Z0-9 /]{1,22}$/
+
+/**
+ * Team Dispatch route name: the file name without .fpl, underscores as spaces.
+ * @param {string} filename
+ */
+export function g1000RouteNameFromFilename(filename) {
+  const name = String(filename ?? '')
+    .replace(/\.fpl$/i, '')
+    .replace(/_/g, ' ')
+    .toUpperCase()
+    .slice(0, G1000_ROUTE_NAME_MAX_LEN)
+  if (!ROUTE_NAME_PATTERN.test(name)) return name.replace(/[^A-Z0-9 /]/g, '').slice(0, G1000_ROUTE_NAME_MAX_LEN)
+  return name
+}
+
+/**
+ * Manual export route name from the finished file name. A repeat's _2 stays at the end.
+ * The first file adds the side so it does not reuse a planner route name.
+ * @param {string} filename
+ * @param {'inner' | 'outer'} side
+ */
+export function manualRouteName(filename, side) {
+  const raw = String(filename ?? '').replace(/\.fpl$/i, '')
+  const dup = raw.match(/_(\d+)$/)
+  const duplicate = Boolean(dup && Number(dup[1]) >= 2)
+  const suffix = duplicate ? ` ${dup[1]}` : side === 'outer' ? ' O' : ' I'
+  const base = (duplicate ? raw.slice(0, -dup[0].length) : raw)
+    .replace(/_/g, ' ')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, '')
+    .replace(/ +/g, ' ')
+    .trim()
+  const room = Math.max(1, G1000_ROUTE_NAME_MAX_LEN - suffix.length)
+  return `${base.slice(0, room).trimEnd()}${suffix}`
+}
+
+/**
+ * Single-aircrew full-route file name. Uppercase letters, digits, and hyphens, at most 32 characters.
+ * @param {string} departure
+ * @param {string} planName
+ * @param {string} destination
+ */
+export function singleAircrewFullRouteFilename(departure, planName, destination) {
+  const token = (value) =>
+    String(value ?? '')
+      .toUpperCase()
+      .replace(/[\s_]+/g, '-')
+      .replace(/[^A-Z0-9-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+  const dep = token(departure) || 'UNK'
+  const dest = token(destination) || 'UNK'
+  const plan = token(planName)
+  const room = G1000_FPL_FILENAME_MAX_LEN - '.fpl'.length - dep.length - dest.length - 2
+  const middle = room > 0 ? plan.slice(0, room).replace(/-+$/g, '') : ''
+  const stem = (middle ? `${dep}-${middle}-${dest}` : `${dep}-${dest}`).slice(0, G1000_FPL_FILENAME_MAX_LEN - 4)
+  return `${stem}.fpl`
+}
+
 /**
  * @param {string} value
  */

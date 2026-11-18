@@ -22,11 +22,14 @@ import { isSingleAircrewPlan, mapEmptyPathNotice, singleAircrewSortieHint } from
 import {
   drawSavedTeam,
   formatSortieHeader,
+  laneTurnSentence,
   legacySortieNote,
   mapSortieButtons,
+  maxCourseChangeDeg,
   NO_TEAM_PLAN_NOTE,
   progressSummaryLines,
   teamProgressCatalog,
+  teamSortieOffsetRoute,
 } from '@/services/teamPlanRecord'
 import { COVERED_LINE, coverageLines, REMAINING_LINE, type SortieProgress } from '@/services/teamPlanProgress'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
@@ -44,6 +47,7 @@ import {
   buildSerpentineDisplay,
   crewAirportNotes,
   DEFAULT_MAP_SORTIE,
+  sortieNumberAfterCrewChange,
   labelPixelOffset,
   labelPlacement,
   markerPlacementAway,
@@ -349,6 +353,7 @@ export function MissionMapPage() {
 
   useEffect(() => {
     setSelectedCrew('team1')
+    setSelectedSortie(DEFAULT_MAP_SORTIE)
   }, [selectedPlanId])
 
   const savedTeamPlan = useLiveQuery(
@@ -594,6 +599,27 @@ export function MissionMapPage() {
     () => progressSummaryLines(progressCatalog, sortieProgress),
     [progressCatalog, sortieProgress]
   )
+  const sortieTurnDeg = useMemo(() => {
+    const team = savedTeamPlan?.teams.find((item) => item.id === selectedCrew)
+    const widths = legWidths && planningRoute ? planningRoute.widths : null
+    if (!savedTeamPlan || !planningRoute || !team || !widths) return null
+    const route = teamSortieOffsetRoute({
+      team,
+      points: planningRoute.points,
+      legWidths: widths,
+      sortieNumber: shownSortie,
+      firstOffsetNm: savedTeamPlan.firstOffsetNm,
+      stepNm: savedTeamPlan.stepNm,
+      homeIdent: team.departure?.identifier,
+      homes: savedTeamPlan.teams.map((item) => item.departure?.identifier ?? '').filter(Boolean),
+    })
+    if (!('waypoints' in route) || route.waypoints.length < 2) return null
+    return maxCourseChangeDeg([
+      { lat: route.departure.latitude, lon: route.departure.longitude },
+      ...route.waypoints.map((point) => ({ lat: point.lat, lon: point.lon })),
+      { lat: route.landing.latitude, lon: route.landing.longitude },
+    ])
+  }, [savedTeamPlan, selectedCrew, planningRoute, legWidths, shownSortie])
   const shownProgress = progressCatalog.find((row) => row.teamId === selectedCrew && row.number === shownSortie)
   const shownCoverage = shownProgress ? coverageLines(shownProgress.stops, sortieProgress[shownProgress.id]) : null
   const saveSortieProgress = (id: string, mark: SortieProgress | null) => {
@@ -893,7 +919,10 @@ export function MissionMapPage() {
               singleAircrew={singleAircrew}
               crews={crewOverlays}
               selectedCrew={selectedCrew}
-              onSelectCrew={setSelectedCrew}
+              onSelectCrew={(id) => {
+                setSelectedSortie((current) => sortieNumberAfterCrewChange(selectedCrew, id, current))
+                setSelectedCrew(id)
+              }}
               sorties={selectorSorties}
               selectedSortie={drawnSortie}
               onSelectSortie={setSelectedSortie}
@@ -1027,7 +1056,7 @@ export function MissionMapPage() {
             {formatSortieHeader(activeSortie, headerRefuelIdent)}
             {savedTeamPlan ? (
               <span className="block">
-                Lane numbers are fixed: lane 1 = 2.5 NM from centerline on every sortie. Expect turns up to about 155° at lane entry and exit; join the lane, don&apos;t cut the corner.
+                {laneTurnSentence(sortieTurnDeg)}
               </span>
             ) : null}
           </p>

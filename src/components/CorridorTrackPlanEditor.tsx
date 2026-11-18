@@ -105,7 +105,7 @@ export function CorridorTrackPlanEditor({
               values (e.g. <code className="text-xs bg-gray-100 px-1 rounded">3, 9, 15</code>).
               <br />
               <br />
-              Default spacing is a 3 NM first lane and a 6 NM step. A pass past that side&apos;s published width is
+              Default spacing is a 2.5 NM first offset, then every 5 NM. A pass past that side&apos;s published width is
               dropped. Use <strong>Reset offsets</strong> on a row to rebuild from the current spacing and width.
             </>
           }

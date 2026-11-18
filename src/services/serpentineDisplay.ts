@@ -121,8 +121,12 @@ export type TransitLeg = {
 export const NO_DEPARTURE_AIRPORT_NOTE = 'No departure airport set.'
 export const NO_LANDING_AIRPORT_NOTE = 'No landing airport set.'
 
-/** Map View opens on Sortie 1. The page remembers a later choice until it closes. */
+/** Map View opens on Sortie 1. A later sortie stays selected until the crew changes. */
 export const DEFAULT_MAP_SORTIE = 1 as const
+
+export function sortieNumberAfterCrewChange(previousCrew: string, nextCrew: string, sortie: number): number {
+  return previousCrew === nextCrew ? sortie : DEFAULT_MAP_SORTIE
+}
 
 export type MapSortieNumber = number
 

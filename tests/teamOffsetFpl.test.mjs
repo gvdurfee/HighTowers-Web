@@ -156,9 +156,13 @@ describe('team sortie files use offset coordinates', () => {
           homeIdent: team.departure.identifier,
           offsets: [...new Set(built.waypoints.map((waypoint) => waypoint.offsetNm))].sort((a, b) => a - b),
         })
-        const body = (xml) => xml.replace(/<created>[^<]*<\/created>/, '')
+        const body = (xml) =>
+          xml.replace(/<created>[^<]*<\/created>/, '').replace(/<route-name>[^<]*<\/route-name>/, '<route-name></route-name>')
+        const routeName = (xml) => xml.match(/<route-name>([^<]*)<\/route-name>/)?.[1]
         expect(body(shared.xml)).toBe(body(file.xml))
         expect(body(explicit.xml)).toBe(body(file.xml))
+        expect(routeName(shared.xml)).toBe('VR114 KABQ BE S1'.replace('KABQ', team.departure.identifier).replace('BE', `${team.segmentFrom}${team.segmentTo}`).replace(/S1$/, `S${number}`))
+        expect(routeName(file.xml)).toBe(`VR114 ${team.departure.identifier} S${number}`)
         expect(shared.filename).toBe(
           `VR114_${team.departure.identifier}_${team.segmentFrom}${team.segmentTo}_S${number}.fpl`
         )
