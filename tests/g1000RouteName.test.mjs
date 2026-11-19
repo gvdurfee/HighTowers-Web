@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   g1000RouteNameFromFilename,
   manualRouteName,
+  plannerRouteName,
   singleAircrewFullRouteFilename,
 } from '../shared/survey-planning/g1000Names.js'
 import { uniqueSortieFilename } from '../src/services/teamPlanRecord.ts'
@@ -114,38 +115,42 @@ function vrFiles() {
 describe('manual export route names', () => {
   it('gives Inner and Outer different names, neither matching the planner', () => {
     const planner = [
-      'VR114 KSKX AB S1',
-      'VR114 KSKX AB S2',
-      'VR114 KSKX AB S3',
-      'VR114 KABQ BE S1',
-      'VR114 KABQ BE S2',
-      'VR114 KABQ BE S3',
-      'VR114 KLRU EM1 S1',
-      'VR114 KLRU EM1 S2',
+      'VR114 KSKX AB S1 I',
+      'VR114 KSKX AB S2 O',
+      'VR114 KSKX AB S3 O',
+      'VR114 KABQ BE S1 O',
+      'VR114 KABQ BE S2 O',
+      'VR114 KABQ BE S3 I',
+      'VR114 KLRU EM1 S1 I',
+      'VR114 KLRU EM1 S2 O',
     ]
     const used = new Map()
     const innerFile = uniqueSortieFilename('VR114_KSKX_AB_S1.fpl', used)
     const outerFile = uniqueSortieFilename('VR114_KSKX_AB_S1.fpl', used)
-    const innerName = manualRouteName(innerFile, 'inner')
-    const outerName = manualRouteName(outerFile, 'outer')
+    const againFile = uniqueSortieFilename('VR114_KSKX_AB_S1.fpl', used)
+    const innerName = manualRouteName(innerFile, 'inner', planner)
+    const outerName = manualRouteName(outerFile, 'outer', planner)
+    const againName = manualRouteName(againFile, 'inner', planner)
     expect(innerFile).toBe('VR114_KSKX_AB_S1.fpl')
     expect(outerFile).toBe('VR114_KSKX_AB_S1_2.fpl')
-    expect(innerName).toBe('VR114 KSKX AB S1 I')
-    expect(outerName).toBe('VR114 KSKX AB S1 2')
-    for (const name of [innerName, outerName]) expect(name).toMatch(ROUTE_NAME)
-    expect(planner).not.toContain(innerName)
-    expect(planner).not.toContain(outerName)
-    expect(innerName).not.toBe(outerName)
+    expect(againFile).toBe('VR114_KSKX_AB_S1_3.fpl')
+    expect(innerName).toBe('VR114 KSKX AB S1 I2')
+    expect(outerName).toBe('VR114 KSKX AB S1 O2')
+    expect(againName).toBe('VR114 KSKX AB S1 I3')
+    for (const name of [innerName, outerName, againName]) expect(name).toMatch(ROUTE_NAME)
+    for (const name of [innerName, outerName, againName]) expect(planner).not.toContain(name)
+    expect(new Set([innerName, outerName, againName]).size).toBe(3)
   })
 
-  it('keeps the repeat suffix when the name is cut to 22 characters', () => {
+  it('keeps the side and counter when the name is cut to 22 characters', () => {
     const used = new Map()
     const base = 'VR114_KSKX_LONGPIECE_S1.fpl'
     const first = manualRouteName(uniqueSortieFilename(base, used), 'inner')
     const second = manualRouteName(uniqueSortieFilename(base, used), 'outer')
     expect(first.length).toBeLessThanOrEqual(22)
     expect(second.length).toBeLessThanOrEqual(22)
-    expect(second.endsWith(' 2')).toBe(true)
+    expect(first.endsWith(' I')).toBe(true)
+    expect(second.endsWith('O2')).toBe(true)
     expect(first).not.toBe(second)
   })
 })
@@ -156,13 +161,20 @@ describe('G1000 route names', () => {
     expect(files).toHaveLength(8)
     const names = files.map((file) => {
       expectGarminFile(file.filename, file.xml)
-      expect(file.routeName).toBe(g1000RouteNameFromFilename(file.filename))
+      expect(file.routeName).toMatch(/ [IO]$/)
+      expect(file.routeName.startsWith(`${g1000RouteNameFromFilename(file.filename)} `)).toBe(true)
       expect(file.xml).toContain(`<route-name>${file.routeName}</route-name>`)
-      expect(file.xml).not.toContain('<route-name>VR114_')
+      const laneLetters = new Set(
+        [...file.xml.matchAll(/<identifier>([A-Z0-9]*[IO])<\/identifier>\s*<type>USER WAYPOINT<\/type>/g)].map((match) =>
+          match[1].slice(-1)
+        )
+      )
+      expect(laneLetters.size).toBe(1)
+      expect(file.routeName.endsWith(laneLetters.has('I') ? ' I' : ' O')).toBe(true)
       return file.routeName
     })
     expect(new Set(names).size).toBe(names.length)
-    expect(files.find((file) => file.filename === 'VR114_KSKX_AB_S1.fpl')?.routeName).toBe('VR114 KSKX AB S1')
+    expect(files.find((file) => file.filename === 'VR114_KSKX_AB_S1.fpl')?.routeName).toBe('VR114 KSKX AB S1 I')
   })
 
   it('gives a manual export the same crew route name as its file', () => {
@@ -188,7 +200,7 @@ describe('G1000 route names', () => {
       })
       expectGarminFile(file.filename, file.xml)
       const name = routeNameOf(file.xml)
-      expect(name).toBe(g1000RouteNameFromFilename(file.filename))
+      expect(name).toBe(plannerRouteName(file.filename, 'inner'))
       names.push(name)
     }
     expect(names.length).toBeGreaterThan(1)

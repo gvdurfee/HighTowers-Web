@@ -1,4 +1,4 @@
-import { g1000RouteNameFromFilename } from '@survey-planning/g1000Names.js'
+import { plannerRouteName } from '@survey-planning/g1000Names.js'
 import { buildSortieOffsetFpl } from '@/services/offsetRouteFpl'
 import { routeCurveSide } from '@survey-planning/offsetRoutePlan.js'
 import { nauticalMilesBetween } from '@survey-planning/surveyGeometry.js'
@@ -101,9 +101,12 @@ function offsetFile(opts: {
   filename?: string
 }): { xml: string; filename: string } {
   const filename = opts.filename ?? teamSortieFilename(opts.routeLabel, opts.homeIdent, opts.sortieNumber)
+  const laneLetters = new Set(
+    opts.waypoints.map((point) => point.g1000Name.slice(-1)).filter((letter) => letter === 'I' || letter === 'O')
+  )
   const file = buildSortieOffsetFpl({
     routeLabel: opts.routeLabel,
-    routeName: g1000RouteNameFromFilename(filename),
+    routeName: plannerRouteName(filename, laneLetters.size > 1 ? null : opts.side),
     sortieNumber: opts.sortieNumber,
     side: opts.side,
     waypoints: opts.waypoints,

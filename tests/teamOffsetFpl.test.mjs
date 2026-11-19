@@ -161,8 +161,11 @@ describe('team sortie files use offset coordinates', () => {
         const routeName = (xml) => xml.match(/<route-name>([^<]*)<\/route-name>/)?.[1]
         expect(body(shared.xml)).toBe(body(file.xml))
         expect(body(explicit.xml)).toBe(body(file.xml))
-        expect(routeName(shared.xml)).toBe('VR114 KABQ BE S1'.replace('KABQ', team.departure.identifier).replace('BE', `${team.segmentFrom}${team.segmentTo}`).replace(/S1$/, `S${number}`))
-        expect(routeName(file.xml)).toBe(`VR114 ${team.departure.identifier} S${number}`)
+        const letter = built.side === 'outer' ? 'O' : 'I'
+        expect(routeName(shared.xml)).toBe(
+          `VR114 ${team.departure.identifier} ${team.segmentFrom}${team.segmentTo} S${number} ${letter}`
+        )
+        expect(routeName(file.xml)).toBe(`VR114 ${team.departure.identifier} S${number} ${letter}`)
         expect(shared.filename).toBe(
           `VR114_${team.departure.identifier}_${team.segmentFrom}${team.segmentTo}_S${number}.fpl`
         )

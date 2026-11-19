@@ -1,5 +1,5 @@
 import { buildCoordinatorCrewOffsetFile } from '@/services/coordinatorOffsetExport'
-import { g1000RouteNameFromFilename } from '@survey-planning/g1000Names.js'
+import { plannerRouteName } from '@survey-planning/g1000Names.js'
 import { buildSortieOffsetFpl } from '@/services/offsetRouteFpl'
 import {
   emptyCrewOverlay,
@@ -390,7 +390,10 @@ export function buildTeamSortieFile(opts: {
       packed.toPt,
       opts.sortieNumber
     )
-    const routeName = g1000RouteNameFromFilename(filename)
+    const laneLetters = new Set(
+      route.waypoints.map((point) => point.g1000Name.slice(-1)).filter((letter) => letter === 'I' || letter === 'O')
+    )
+    const routeName = plannerRouteName(filename, laneLetters.size > 1 ? null : route.side)
     const file = buildSortieOffsetFpl({
       routeLabel: opts.routeLabel,
       routeName,

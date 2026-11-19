@@ -81,7 +81,8 @@ import { spanWidthsFromRows, teamPlanSpanWidths } from '@/services/teamPlanCorri
 import { CoordinatorOffsetPlans } from '@/components/CoordinatorOffsetPlans'
 import { crewOffsetAirports } from '@/services/coordinatorOffsetExport'
 import { type SortieSide } from '@/services/offsetRouteFpl'
-import { buildTeamSortieFile, draftTeamPlan, ferryCrossingNote, legacySortieNote, packedDownloadLabel, progressSummaryLines, teamProgressCatalog, teamSortieOffsetRoute, type PackedTeamSortie, type TeamPlanAirport, type TeamRoutePoint } from '@/services/teamPlanRecord'
+import { plannerRouteName } from '@survey-planning/g1000Names.js'
+import { buildTeamSortieFile, draftTeamPlan, ferryCrossingNote, legacySortieNote, packedDownloadLabel, packedSortieFilename, progressSummaryLines, teamProgressCatalog, teamSortieOffsetRoute, type PackedTeamSortie, type TeamPlanAirport, type TeamRoutePoint } from '@/services/teamPlanRecord'
 import { progressClearNotice, reconcileSortieProgress, sortieProgressId } from '@/services/teamPlanProgress'
 import { resolvePublishedLegWidths, routeCurveSide, segmentCurveSide } from '@survey-planning/offsetRoutePlan.js'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
@@ -3329,6 +3330,26 @@ export function CoordinatorSurveyConsolePage() {
               }
               onPilotBrief={setPilotBrief}
               trackPolicy={{ firstOffsetNm, stepNm }}
+              reservedRouteNames={
+                dispatchPlan && !('error' in dispatchPlan)
+                  ? dispatchPlan.teams.flatMap((team) =>
+                      team.sorties
+                        .filter((sortie) => (sortie.side === 'inner' || sortie.side === 'outer') && sortie.offsetsNm.length > 0)
+                        .map((sortie) =>
+                          plannerRouteName(
+                            packedSortieFilename(
+                              routeMeta ? `${routeMeta.routeType}${routeMeta.routeNumber}` : planBundle.plan.name,
+                              team.ident,
+                              sortie.fromPt,
+                              sortie.toPt,
+                              sortie.number
+                            ),
+                            sortie.side
+                          )
+                        )
+                    )
+                  : []
+              }
             />
               {geographicPlan && !geographicPlan.validation.ok && (
                   <div role="alert">

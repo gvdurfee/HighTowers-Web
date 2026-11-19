@@ -39,6 +39,7 @@ type Props = {
   onPilotBrief: (brief: SortieFplPilotBrief) => void
   trackPolicy?: { firstOffsetNm?: number; stepNm?: number }
   distanceLimitNm?: number
+  reservedRouteNames?: string[]
 }
 
 /**
@@ -55,6 +56,7 @@ export function SortieFragmentExportCard({
   onPilotBrief,
   trackPolicy,
   distanceLimitNm = 400,
+  reservedRouteNames = [],
 }: Props) {
   const { isSeen, markSeen } = useHintsSeen()
   const [showSortieExport, setShowSortieExport] = useState(false)
@@ -208,7 +210,7 @@ export function SortieFragmentExportCard({
         namePrefix: crewWaypointPrefix(teamDeparture.identifier, [teamDeparture.identifier]),
       })
       const filename = uniqueSortieFilename(file.filename, exportNames.current)
-      const routeName = manualRouteName(filename, sortieSide)
+      const routeName = manualRouteName(filename, sortieSide, reservedRouteNames)
       const xml = file.xml.replace(/<route-name>[^<]*<\/route-name>/, `<route-name>${routeName}</route-name>`)
       downloadSortieFpl(xml, filename)
       const userBlock = file.xml.split('<waypoint>').find((part) => part.includes('USER WAYPOINT'))

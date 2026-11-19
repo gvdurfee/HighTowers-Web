@@ -12,39 +12,62 @@ export const G1000_FPL_FILENAME_MAX_LEN = 32
 
 const ROUTE_NAME_PATTERN = /^[A-Z0-9 /]{1,22}$/
 
-/**
- * Team Dispatch route name: the file name without .fpl, underscores as spaces.
- * @param {string} filename
- */
-export function g1000RouteNameFromFilename(filename) {
-  const name = String(filename ?? '')
+function routeStem(filename) {
+  return String(filename ?? '')
     .replace(/\.fpl$/i, '')
-    .replace(/_/g, ' ')
-    .toUpperCase()
-    .slice(0, G1000_ROUTE_NAME_MAX_LEN)
-  if (!ROUTE_NAME_PATTERN.test(name)) return name.replace(/[^A-Z0-9 /]/g, '').slice(0, G1000_ROUTE_NAME_MAX_LEN)
-  return name
-}
-
-/**
- * Manual export route name from the finished file name. A repeat's _2 stays at the end.
- * The first file adds the side so it does not reuse a planner route name.
- * @param {string} filename
- * @param {'inner' | 'outer'} side
- */
-export function manualRouteName(filename, side) {
-  const raw = String(filename ?? '').replace(/\.fpl$/i, '')
-  const dup = raw.match(/_(\d+)$/)
-  const duplicate = Boolean(dup && Number(dup[1]) >= 2)
-  const suffix = duplicate ? ` ${dup[1]}` : side === 'outer' ? ' O' : ' I'
-  const base = (duplicate ? raw.slice(0, -dup[0].length) : raw)
     .replace(/_/g, ' ')
     .toUpperCase()
     .replace(/[^A-Z0-9 ]/g, '')
     .replace(/ +/g, ' ')
     .trim()
-  const room = Math.max(1, G1000_ROUTE_NAME_MAX_LEN - suffix.length)
-  return `${base.slice(0, room).trimEnd()}${suffix}`
+}
+
+function fitRouteName(stem, tail) {
+  const room = Math.max(1, G1000_ROUTE_NAME_MAX_LEN - tail.length)
+  const name = `${stem.slice(0, room).trimEnd()}${tail}`
+  return ROUTE_NAME_PATTERN.test(name) ? name : name.replace(/[^A-Z0-9 /]/g, '').slice(0, G1000_ROUTE_NAME_MAX_LEN)
+}
+
+/**
+ * Team Dispatch route name: the file name without .fpl, underscores as spaces.
+ * @param {string} filename
+ */
+export function g1000RouteNameFromFilename(filename) {
+  return fitRouteName(routeStem(filename), '')
+}
+
+/**
+ * Planner route name. I is Inner and O is Outer. A missing side adds no letter.
+ * @param {string} filename
+ * @param {'inner' | 'outer' | null | undefined} side
+ */
+export function plannerRouteName(filename, side) {
+  const tail = side === 'inner' ? ' I' : side === 'outer' ? ' O' : ''
+  return fitRouteName(routeStem(filename), tail)
+}
+
+/**
+ * Manual export route name. The first file ends in " I" or " O".
+ * A repeat keeps the side and adds the count with no extra space: " O2", " I3".
+ * If that name is already a planner route name, the counter form is used.
+ * @param {string} filename
+ * @param {'inner' | 'outer'} side
+ * @param {string[]} [reserved]
+ */
+export function manualRouteName(filename, side, reserved = []) {
+  const raw = String(filename ?? '').replace(/\.fpl$/i, '')
+  const dup = raw.match(/_(\d+)$/)
+  const count = dup && Number(dup[1]) >= 2 ? Number(dup[1]) : 1
+  const stem = routeStem(count > 1 ? raw.slice(0, -dup[0].length) : raw)
+  const letter = side === 'outer' ? 'O' : 'I'
+  const taken = new Set(reserved)
+  let number = count === 1 ? 0 : count
+  let name = fitRouteName(stem, number === 0 ? ` ${letter}` : ` ${letter}${number}`)
+  while (taken.has(name) && number < 99) {
+    number = number === 0 ? 2 : number + 1
+    name = fitRouteName(stem, ` ${letter}${number}`)
+  }
+  return name
 }
 
 /**

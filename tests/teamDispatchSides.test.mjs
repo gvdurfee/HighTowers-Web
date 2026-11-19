@@ -249,7 +249,7 @@ describe('packed sortie files', () => {
         expect('xml' in file).toBe(true)
         if (!('xml' in file)) continue
         expect(file.filename).toBe(filename)
-        expect(file.xml).toContain(filename.replace(/\.fpl$/i, '').replace(/_/g, ' '))
+        expect(file.xml).toContain(`${filename.replace(/\.fpl$/i, '').replace(/_/g, ' ')} ${sortie.side === 'outer' ? 'O' : 'I'}`)
         const flown = pathNm(file.xml)
         if (Math.round(Math.abs(flown - sortie.distanceNm) * 10) / 10 > 0.1) {
           throw new Error(`${file.filename} file ${flown} saved ${sortie.distanceNm} lanes ${sortie.offsetsNm.join('/')}`)
