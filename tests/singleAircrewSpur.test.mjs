@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { buildOffsetRoutes, crossTrackNm } from '../shared/survey-planning/offsetRoutePlan.js'
 import { assignG1000WaypointNames } from '../shared/survey-planning/g1000Names.js'
@@ -70,6 +72,14 @@ function fileOf(waypoints, sortieNumber, side) {
 function identifiers(xml) {
   return [...xml.matchAll(/<waypoint-identifier>([^<]+)<\/waypoint-identifier>/g)].map((match) => match[1])
 }
+
+function listHash(routeName, ids) {
+  return createHash('sha256').update(`${routeName}\n${ids.join(',')}`).digest('hex')
+}
+
+const SR213_CENTERLINE = ['G001', 'H002', 'G003', 'A004', 'B005', 'C006', 'D007', 'E008', 'F009', 'G010', 'H011']
+const SR213_S1 = ['G001I', 'H002I', 'H003O', 'G004I', 'A005I', 'B006I', 'C007I', 'D008I', 'E009I', 'F010I', 'G011I', 'H012I']
+const SR213_S2 = ['H001O', 'G002O', 'F003O', 'E004O', 'D005O', 'C006O', 'B007O', 'A008O', 'G009O']
 
 describe('single-aircrew spur once in Sortie 1', () => {
   it('flies SR213 out and back on Sortie 1 and leaves the spur out of Sortie 2', () => {
@@ -187,5 +197,99 @@ describe('single-aircrew spur once in Sortie 1', () => {
         reversal
       )
     ).toHaveLength(1)
+  })
+
+  it('pins the SR213 sortie files and keeps the detail-page centerline names', () => {
+    const { points, built } = sr213Tracks()
+    expect(points.map((point) => point.g1000Name)).toEqual(SR213_CENTERLINE)
+    expect(points.every((point) => !/[IO]$/.test(point.g1000Name))).toBe(true)
+
+    const pinned = [
+      { sortieNumber: 1, ids: SR213_S1, routeName: 'SR213 S1 INNER', filename: 'SR213-S1-INNER.fpl', hash: '860393adabb9f9038dcd7338cabfabd68af9525f1fd0f8dddcf021b0c383d8db' },
+      { sortieNumber: 2, ids: SR213_S2, routeName: 'SR213 S2 OUTER', filename: 'SR213-S2-OUTER.fpl', hash: '0a61816d4d568a9f33d53247f5d2da763fb64b064c4a6aeb0236e116bf715abb' },
+    ]
+    for (const pin of pinned) {
+      const track = singleAircrewSortieTrack({
+        centerline: points,
+        inner: built.inner.waypoints,
+        outer: built.outer.waypoints,
+        sortie1Side: 'inner',
+        sortieNumber: pin.sortieNumber,
+      })
+      const file = fileOf(track.waypoints, pin.sortieNumber, track.side)
+      expect(identifiers(file.xml)).toEqual(pin.ids)
+      expect(file.routeName).toBe(pin.routeName)
+      expect(file.filename).toBe(pin.filename)
+      expect(listHash(file.routeName, identifiers(file.xml))).toBe(pin.hash)
+      expect(track.waypoints.map((point) => point.g1000Name)).toEqual(pin.ids)
+    }
+  })
+
+  it('uses the sortie file identifiers for Map View and Show names, spur and non-spur', () => {
+    const { points, built } = sr213Tracks()
+    const letterCenterline = points.map((point) => ({
+      ...point,
+      ptIdent: point.originalName.replace(/^(?:SR|VR)\d+-?/, ''),
+    }))
+    const namedCenterline = points.map((point) => ({ ...point, ptIdent: point.g1000Name }))
+    for (const sortieNumber of [1, 2]) {
+      const drawn = singleAircrewSortieTrack({
+        centerline: letterCenterline,
+        inner: built.inner.waypoints,
+        outer: built.outer.waypoints,
+        sortie1Side: 'inner',
+        sortieNumber,
+      })
+      const fileIds = identifiers(fileOf(drawn.waypoints, sortieNumber, drawn.side).xml)
+      const labels = drawn.waypoints.map((point) => point.g1000Name)
+      expect(labels).toEqual(fileIds)
+      expect(labels).toEqual(sortieNumber === 1 ? SR213_S1 : SR213_S2)
+    }
+    const skipped = singleAircrewSortieTrack({
+      centerline: namedCenterline,
+      inner: built.inner.waypoints,
+      outer: built.outer.waypoints,
+      sortie1Side: 'inner',
+      sortieNumber: 1,
+    })
+    expect(skipped.waypoints.map((point) => point.g1000Name)).toEqual([
+      'G001I', 'H002I', 'G003I', 'A004I', 'B005I', 'C006I', 'D007I', 'E008I', 'F009I', 'G010I', 'H011I',
+    ])
+    expect(skipped.waypoints.some((point) => point.g1000Name === 'H003O')).toBe(false)
+
+    const vr114 = routePoints([
+      { originalName: 'VR114-A', lat: 35, lon: -106 },
+      { originalName: 'VR114-B', lat: 36, lon: -106 },
+      { originalName: 'VR114-C', lat: 36, lon: -105 },
+      { originalName: 'VR114-D', lat: 35, lon: -105 },
+    ])
+    const widths = vr114.slice(0, -1).map(() => ({ leftNm: 6, rightNm: 6 }))
+    const builtVr = buildOffsetRoutes(vr114, widths)
+    for (const sortieNumber of [1, 2]) {
+      const drawn = singleAircrewSortieTrack({
+        centerline: vr114,
+        inner: builtVr.inner.waypoints,
+        outer: builtVr.outer.waypoints,
+        sortie1Side: 'inner',
+        sortieNumber,
+      })
+      const fileIds = identifiers(fileOf(drawn.waypoints, sortieNumber, drawn.side).xml)
+      expect(drawn.waypoints.map((point) => point.g1000Name)).toEqual(fileIds)
+      expect(fileIds.every((name) => name.endsWith(sortieNumber === 1 ? 'I' : 'O'))).toBe(true)
+    }
+
+    const page = readFileSync(new URL('../src/pages/MissionMapPage.tsx', import.meta.url), 'utf8')
+    const overlays = page.slice(page.indexOf('const crewOverlays'), page.indexOf('const activeOverlay'))
+    expect(overlays).toContain('parseWaypointCode(wp.originalName)?.waypointLetter ?? wp.g1000Name')
+    const panel = readFileSync(new URL('../src/components/OffsetRoutePanel.tsx', import.meta.url), 'utf8')
+    const names = panel.slice(panel.indexOf('function sortieWaypoints'), panel.indexOf('const exportFreshness'))
+    expect(names).toContain('singleAircrewSortieTrack')
+    const table = panel.slice(panel.indexOf('<tbody>'), panel.indexOf('</tbody>'))
+    expect(table).toContain('singleAircrew')
+    expect(table).toContain('sortie2List[index]')
+    const detail = readFileSync(new URL('../src/pages/FlightPlanDetailPage.tsx', import.meta.url), 'utf8')
+    expect(detail).toContain('assignG1000WaypointNames')
+    expect(detail).not.toContain('singleAircrewSortieTrack')
+    expect(detail).not.toContain('assignOffsetWaypointNames')
   })
 })

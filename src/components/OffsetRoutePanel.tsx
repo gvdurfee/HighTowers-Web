@@ -624,6 +624,15 @@ export function OffsetRoutePanel(props: {
 
   function sortieWaypoints(sortieNumber: 1 | 2) {
     if (!built || !sortie1Side) return null
+    if (singleAircrew) {
+      return singleAircrewSortieTrack({
+        centerline: points,
+        inner: built.inner.waypoints,
+        outer: built.outer.waypoints,
+        sortie1Side,
+        sortieNumber,
+      })
+    }
     return orderSortieTrack({
       inner: built.inner.waypoints,
       outer: built.outer.waypoints,
@@ -631,6 +640,12 @@ export function OffsetRoutePanel(props: {
       sortieNumber,
     })
   }
+
+  const sortie1List = sortie1Side ? sortieWaypoints(1)?.waypoints : null
+  const sortie2List = sortie1Side ? sortieWaypoints(2)?.waypoints : null
+  const nameRowCount = singleAircrew
+    ? Math.max(points.length, sortie1List?.length ?? 0, sortie2List?.length ?? 0)
+    : points.length
 
   const exportFreshness: OffsetFreshnessInput | null = activeWidths
     ? {
@@ -755,17 +770,18 @@ export function OffsetRoutePanel(props: {
                 </tr>
               </thead>
               <tbody>
-                {points.map((point, index) => {
+                {Array.from({ length: nameRowCount }, (_, index) => {
+                  const point = points[index]
                   const center = centerlineNames[index]
-                  const sortie1List = sortie1Side ? sortieWaypoints(1)?.waypoints : null
-                  const sortie2List = sortie1Side ? sortieWaypoints(2)?.waypoints : null
                   const sortie1 = sortie1List ? sortie1List[index] : built?.inner.waypoints[index]
                   const sortie2 = sortie2List
-                    ? sortie2List[sortie2List.length - 1 - index]
+                    ? singleAircrew
+                      ? sortie2List[index]
+                      : sortie2List[sortie2List.length - 1 - index]
                     : built?.outer.waypoints[index]
                   return (
-                    <tr key={`${point.ptIdent}-${index}`} className="border-t border-white/10 font-mono">
-                      <td className="px-2 py-1">{point.originalName || point.ptIdent}</td>
+                    <tr key={`name-${index}`} className="border-t border-white/10 font-mono">
+                      <td className="px-2 py-1">{point ? point.originalName || point.ptIdent : ''}</td>
                       <td className="px-2 py-1">{nameError ? '—' : center?.g1000Name}</td>
                       <td className="px-2 py-1">{nameError ? '—' : sortie1?.g1000Name}</td>
                       <td className="px-2 py-1">{nameError ? '—' : sortie2?.g1000Name}</td>

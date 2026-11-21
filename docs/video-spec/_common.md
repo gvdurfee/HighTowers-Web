@@ -27,6 +27,25 @@ The 2.000 s hold is the presentation hold. A load or save wait is separate. It d
 
 An italic cue emphasizes the named control. It does not cause the navigation click and it does not insert the hold before the command word. Script line 31.
 
+### Holds in the Aircrew training video
+
+The 2.000 s hold applies to each of these view changes:
+
+- Chapter 2: create to detail (before Create Flight Plan), detail to Map View, and Map View to detail (Return to Flight Plan).
+- Chapter 5: Map View to Export Reported Data. Beat 02 finishes on Map View, Export Reported Data is outlined, the view holds 2.000 s, and then it is clicked. This applies from Chapter 5 v6 on.
+
+### How a hold is measured
+
+Greg, 2026-11-21, 11:14 AM MT: a hold is measured from the end of the outgoing narration to the last frame of the button outline. It is not measured to the arrival of the new view. Measure the end of narration at −50 and −60 dBFS (−40 dBFS may also be reported).
+
+- This rule applies from the next recording on. Do not re-cut or re-take accepted files because of it.
+- Greg accepted full-v5 as-is. Under this rule, Chapter 2 v4's Return and Create holds are 13–48 ms under 2.0 s at −50/−60 dBFS.
+- Earlier QA reports (v3–v5) measured holds to the new view. Those numbers are kept as recorded and are not the rule.
+
+### Cue tolerance
+
+A cue may be up to 1.0 s from its word, measured from frames. Greg decided this on 2026-11-17.
+
 ## Button outline class
 
 The script states the outline rule and does not name the CSS. The Chapter 2 capture adds class `ht-tour-hl` in `playwright/record-ch2-cues.cjs` lines 338–347: `box-shadow: inset 0 0 0 2px #FFD911`. The outline is cleared in `clearEmphasis` at lines 349–353.

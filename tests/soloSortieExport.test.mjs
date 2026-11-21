@@ -5,7 +5,6 @@ import { assignG1000WaypointNames } from '../shared/survey-planning/g1000Names.j
 import { G1000Service } from '../src/services/g1000.ts'
 import {
   blankTrackRecord,
-  freshnessForSavedPlan,
   OFFSET_PLAN_VERSION,
   offsetPlanFingerprint,
   offsetSequenceSignature,
@@ -15,7 +14,6 @@ import {
   oppositeSideSentence,
   sideOfRouteLabel,
   soloSortieDownload,
-  soloSortiePanel,
 } from '../src/services/soloSortieExport.ts'
 
 const clockwise = [
@@ -99,47 +97,8 @@ describe('saved-plan sortie downloads', () => {
   const named = points.map((point) => ({ originalName: point.originalName, lat: point.lat, lon: point.lon }))
   const signature = offsetSequenceSignature(named)
   const saved = savedFrom(built, signature, widths, named)
-  const freshness = freshnessForSavedPlan({
-    waypoints: named,
-    saved,
-    sortie1Side: 'inner',
-    departureIdent: 'KABQ',
-    destinationIdent: 'KAEG',
-  })
-  const curve = routeCurveSide(points)
-
-  it('keeps downloads off when the saved plan does not match the waypoint list', () => {
-    const panel = soloSortiePanel({
-      isAnchorPlan: false,
-      saved,
-      freshness: { ...freshness, waypoints: [...named, { originalName: 'VR114-Z', lat: 34, lon: -104 }] },
-      sortie1Side: 'inner',
-      curve,
-      departureIdent: 'KABQ',
-      destinationIdent: 'KAEG',
-    })
-    expect(panel.status).toBe('stale')
-    expect(panel.cards.every((card) => card.enabled === false)).toBe(true)
-    expect(panel.cards[0].order).toEqual([])
-  })
 
   it('gives Sortie 2 the opposite track in flying order, not a reversal of Sortie 1', () => {
-    const panel = soloSortiePanel({
-      isAnchorPlan: false,
-      saved,
-      freshness,
-      sortie1Side: 'inner',
-      curve,
-      departureIdent: 'KABQ',
-      destinationIdent: 'KAEG',
-    })
-    expect(panel.status).toBe('ready')
-    expect(panel.cards[0].label).toContain('Inner')
-    expect(panel.cards[1].label).toContain('Outer')
-    expect(panel.cards[0].fromIdent).toBe('KABQ')
-    expect(panel.cards[0].toIdent).toBe('KAEG')
-    expect(panel.cards[1].fromIdent).toBe('KAEG')
-    expect(panel.cards[1].toIdent).toBe('KABQ')
     const first = soloSortieDownload({
       routeLabel: 'VR114 sample',
       sortieNumber: 1,
@@ -183,24 +142,6 @@ describe('saved-plan sortie downloads', () => {
     return record
   }
 
-  function panelFor(record, side) {
-    return soloSortiePanel({
-      isAnchorPlan: false,
-      saved: record,
-      freshness: freshnessForSavedPlan({
-        waypoints: named,
-        saved: record,
-        sortie1Side: side,
-        departureIdent: 'KABQ',
-        destinationIdent: 'KAEG',
-      }),
-      sortie1Side: side,
-      curve,
-      departureIdent: 'KABQ',
-      destinationIdent: 'KAEG',
-    })
-  }
-
   function fileFor(record, sortieNumber, side) {
     return soloSortieDownload({
       routeLabel: 'VR114 sample',
@@ -216,13 +157,6 @@ describe('saved-plan sortie downloads', () => {
 
   it('keeps downloads available when a side is chosen after a save that had no side', () => {
     const record = savedChoosing(null)
-    const waiting = panelFor(record, null)
-    expect(waiting.status).toBe('choose-side')
-    expect(waiting.cards.every((card) => card.enabled === false)).toBe(true)
-    const chosen = panelFor(record, 'inner')
-    expect(chosen.status).toBe('ready')
-    expect(chosen.cards.map((card) => card.role)).toEqual(['inner', 'outer'])
-    expect(chosen.cards.every((card) => card.enabled)).toBe(true)
     const first = fileFor(record, 1, 'inner')
     const second = fileFor(record, 2, 'inner')
     expect(first.side).toBe('inner')
@@ -235,9 +169,6 @@ describe('saved-plan sortie downloads', () => {
     const record = savedChoosing(null)
     const first = fileFor(record, 1, 'outer')
     const second = fileFor(record, 2, 'outer')
-    const panel = panelFor(record, 'outer')
-    expect(panel.status).toBe('ready')
-    expect(panel.cards.map((card) => card.role)).toEqual(['outer', 'inner'])
     expect(first.side).toBe('outer')
     expect(second.side).toBe('inner')
     expect(coords(first)).toEqual(built.outer.waypoints.map((point) => `${point.lat.toFixed(6)},${point.lon.toFixed(6)}`))
@@ -245,49 +176,6 @@ describe('saved-plan sortie downloads', () => {
     expect(coords(first)).not.toEqual(coords(fileFor(record, 1, 'inner')))
   })
 
-  it('still disables downloads when a coordinate, corridor, or track offset changes', () => {
-    const record = savedChoosing('inner')
-    const base = freshnessForSavedPlan({
-      waypoints: named,
-      saved: record,
-      sortie1Side: 'inner',
-      departureIdent: 'KABQ',
-      destinationIdent: 'KAEG',
-    })
-    const cases = [
-      { ...base, waypoints: named.map((point, index) => (index === 0 ? { ...point, lat: point.lat + 0.1 } : point)) },
-      { ...base, widths: base.widths.map((width, index) => (index === 0 ? { ...width, leftNm: width.leftNm + 1 } : width)) },
-      {
-        ...base,
-        trackOffsets: base.trackOffsets.map((track, index) =>
-          index === 0 ? { ...track, leftMode: 'explicit', leftNm: 2.5 } : track
-        ),
-      },
-    ]
-    for (const freshness of cases) {
-      const panel = soloSortiePanel({
-        isAnchorPlan: false,
-        saved: record,
-        freshness,
-        sortie1Side: 'inner',
-        curve,
-        departureIdent: 'KABQ',
-        destinationIdent: 'KAEG',
-      })
-      expect(panel.status).toBe('stale')
-      expect(panel.cards.every((card) => card.enabled === false)).toBe(true)
-    }
-  })
-
-  it('keeps an unversioned plan stale', () => {
-    const record = savedChoosing('inner')
-    delete record.planVersion
-    delete record.fingerprint
-    const panel = panelFor(record, 'outer')
-    expect(panel.status).toBe('stale')
-    expect(panel.reason).toBe('legacy')
-    expect(panel.cards.every((card) => card.enabled === false)).toBe(true)
-  })
 })
 
 const sr213 = [
@@ -409,14 +297,21 @@ describe('SR213 lead-in uses the existing offset tracks', () => {
   })
 })
 
-describe('full route export stays the existing control', () => {
-  it('keeps the full flight plan card and its button label', () => {
-    const source = fs.readFileSync(new URL('../src/pages/FlightPlanDetailPage.tsx', import.meta.url), 'utf8')
-    expect(source).toContain('Full flight plan')
-    expect(source).toContain('Export full route (.fpl)')
-    expect(source).toContain('showFullFlightPlanSection')
-    expect(source).not.toContain('Offset sortie files are downloaded from Map View.')
-    expect(source).toContain("Email each sortie")
-    expect(source).not.toContain('Centerline reference')
+describe('aircrew sortie downloads stay on Map View', () => {
+  it('drops the detail-page Offset sortie files section and keeps the Map View buttons', () => {
+    const detail = fs.readFileSync(new URL('../src/pages/FlightPlanDetailPage.tsx', import.meta.url), 'utf8')
+    const map = fs.readFileSync(new URL('../src/components/OffsetRoutePanel.tsx', import.meta.url), 'utf8')
+    expect(detail).not.toContain('Offset sortie files')
+    expect(detail).not.toContain('offset-sortie-files')
+    expect(detail).toContain('Choose the side flown first')
+    expect(detail).toContain('<SpurPlanNotice')
+    expect(detail).toContain('Full flight plan')
+    expect(detail).toContain('Export full route (.fpl)')
+    expect(detail).toContain('showFullFlightPlanSection')
+    expect(detail).toContain('Email each sortie')
+    expect(detail).not.toContain('Centerline reference')
+    expect(map).toContain('Download sortie ${number}')
+    expect(map).toContain("number === 1")
+    expect(map).toContain("number === 2")
   })
 })

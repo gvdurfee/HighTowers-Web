@@ -6,8 +6,6 @@ import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
 import { SpurReviewSection } from '../src/components/SpurReviewSection.tsx'
 
-const OFFSET_HINT =
-  "Sortie 1 and Sortie 2 fly opposite sides of the route. Each downloads as its own file, already in flying order, so don't invert Sortie 2 on the G1000. Downloads turn on after Map View saves the offset plan."
 const SPUR_HINT =
   'Optional and advisory. This only matters when a route goes out and back along the same leg. Nothing here changes your sortie files.'
 
@@ -73,8 +71,9 @@ describe('spur review disclosure', () => {
     const page = fs.readFileSync(path.join(process.cwd(), 'src/pages/FlightPlanDetailPage.tsx'), 'utf8')
     const copy = fs.readFileSync(path.join(process.cwd(), 'src/content/spurHints.ts'), 'utf8')
     const section = fs.readFileSync(path.join(process.cwd(), 'src/components/SpurReviewSection.tsx'), 'utf8')
-    expect(copy).toContain(OFFSET_HINT)
-    expect(page).toContain('offsetSortieFilesHint')
+    expect(copy).not.toContain('offsetSortieFilesHint')
+    expect(page).not.toContain('Offset sortie files')
+    expect(page).toContain('SpurPlanNotice')
     expect(page).not.toContain('Each file uses the offset plan saved in Map View.')
     expect(section).toContain(SPUR_HINT)
     expect(section).not.toContain('This is a preview for the solo plan.')

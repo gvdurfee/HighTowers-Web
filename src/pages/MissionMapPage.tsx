@@ -435,7 +435,7 @@ export function MissionMapPage() {
         lat: wp.latitude,
         lon: wp.longitude,
         originalName: wp.originalName,
-        ptIdent: wp.g1000Name,
+        ptIdent: parseWaypointCode(wp.originalName)?.waypointLetter ?? wp.g1000Name,
       }))
     const crewLabel = singleAircrew ? 'Sortie 1' : 'Team 1'
     const team1 =
@@ -832,8 +832,8 @@ export function MissionMapPage() {
               Compare this graphical flight plan with your ForeFlight map. If the two pictures match,
               you have a visual confirmation that the waypoint list is right. If you see a mistake,
               press <strong>Return to Flight Plan</strong> and use{' '}
-              <strong>Correct waypoint sequence</strong>. Otherwise press Return to Flight Plan in
-              order to load the SD card.
+              <strong>Correct waypoint sequence</strong>. With details open, and after the offset plan
+              is saved, download both sortie files here.
             </>
           }
           isSeen={isSeen('mapView.routeCheck')}

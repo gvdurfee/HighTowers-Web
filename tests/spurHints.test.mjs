@@ -3,12 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
 import { SpurPlanNotice } from '../src/components/SpurPlanNotice.tsx'
-import {
-  OFFSET_SORTIE_FILES_HINT,
-  OFFSET_SORTIE_FILES_SPUR_LEAD,
-  SINGLE_AIRCREW_SPUR_HINT,
-  offsetSortieFilesHint,
-} from '../src/content/spurHints.ts'
+import { SINGLE_AIRCREW_SPUR_HINT } from '../src/content/spurHints.ts'
 
 const sr213 = [
   { originalName: 'SR213-G', lat: 34.866667, lon: -106.591667 },
@@ -49,15 +44,6 @@ function renderNotice(props) {
 }
 
 describe('spur hint copy', () => {
-  it('keeps the offset paragraph and replaces only its first sentence for a spur', () => {
-    expect(offsetSortieFilesHint(false)).toBe(OFFSET_SORTIE_FILES_HINT)
-    const withSpur = offsetSortieFilesHint(true)
-    expect(withSpur.startsWith(OFFSET_SORTIE_FILES_SPUR_LEAD)).toBe(true)
-    expect(withSpur).toContain("Each downloads as its own file, already in flying order, so don't invert Sortie 2 on the G1000.")
-    expect(withSpur).toContain('Downloads turn on after Map View saves the offset plan.')
-    expect(withSpur).not.toContain('Sortie 1 and Sortie 2 fly opposite sides of the route. Each')
-  })
-
   it('shows the SR213 single-aircrew spur hint and no Spur review', () => {
     const { host, cleanup } = renderNotice({ singleAircrew: true, waypoints: sr213 })
     expect(host.textContent).toContain(SINGLE_AIRCREW_SPUR_HINT)

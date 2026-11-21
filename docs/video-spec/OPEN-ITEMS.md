@@ -70,4 +70,9 @@ Extra script narration that the beat files do not contain, from the sections rea
 
 ## Acceptance numbers that are not established
 
-Any allowed difference between a cue time and a beat start, and any allowed extra settle after the 2.000 s hold (`record-ch2-cues.cjs` lines 378–386 records a settle when the wait runs long): PROPOSED - Video Director to set, Greg to approve.
+Any allowed extra settle after the 2.000 s hold (`record-ch2-cues.cjs` lines 378–386 records a settle when the wait runs long): PROPOSED - Video Director to set, Greg to approve.
+
+## Decided
+
+- Cue and trailing tolerance: 1.0 s, measured from frames. DECIDED by Greg on 2026-11-17. Earlier this section listed the allowed difference between a cue time and a beat start as PROPOSED.
+- How a hold is measured: from the end of the outgoing narration to the last frame of the button outline, not to the arrival of the new view. DECIDED by Greg on 2026-11-21 at 11:14 AM MT. It applies from the next recording on. Greg accepted full-v5 as-is. Under this rule, Chapter 2 v4's Return and Create holds are 13–48 ms under 2.0 s at −50/−60 dBFS. QA reports for v3–v5 measured to the new view, and those numbers are kept as recorded. See `_common.md`.
