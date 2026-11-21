@@ -12,6 +12,7 @@ import { TowerLeaderMarker, TOWER_MAP_COLOR } from '@/components/TowerLeaderMark
 import { GuidedHint } from '@/components/GuidedHint'
 import { SortieProgressPanel } from '@/components/SortieProgressPanel'
 import { MapViewCrewControls } from '@/components/MapViewCrewControls'
+import { ShowAllSortieOverlaysButton } from '@/components/ShowAllSortieOverlaysButton'
 import { OffsetRoutePanel, type OffsetMapGeometry } from '@/components/OffsetRoutePanel'
 import { confirmLeaveOffsetPlan } from '@/services/offsetPlanLeaveGuard'
 import { teamDispatchHasUnsaved, teamSortiesAreStale } from '@/services/teamDispatchUnsaved'
@@ -32,6 +33,7 @@ import {
   teamSortieOffsetRoute,
 } from '@/services/teamPlanRecord'
 import { COVERED_LINE, coverageLines, REMAINING_LINE, type SortieProgress } from '@/services/teamPlanProgress'
+import { crewOverlayColor, crewOverlayGroups, overlayFitCoordinates, type OverlayCrew } from '@/services/teamOverlayDisplay'
 import { useHintsSeen } from '@/hooks/useHintsSeen'
 import {
   emptyCrewOverlay,
@@ -229,6 +231,7 @@ export function MissionMapPage() {
   const [selectedSortie, setSelectedSortie] = useState<MapSortieNumber>(DEFAULT_MAP_SORTIE)
   const [mapZoom, setMapZoom] = useState(7)
   const [detailsOpen, setDetailsOpen] = useState(readMapDetailsOpen)
+  const [showAllOverlays, setShowAllOverlays] = useState(false)
   const [detailsHintSeen, setDetailsHintSeen] = useState(readMapDetailsHintSeen)
   const [unsavedSeen, setUnsavedSeen] = useState(0)
   const bellowsLock = useRef(false)
@@ -575,6 +578,27 @@ export function MissionMapPage() {
     }
     return { departure: mark(ends.departure), landing: mark(ends.landing) }
   }, [shownSortie, crewAirports, savedTeamPlan, selectedCrew, activeSortie])
+  const overlayCrews = useMemo((): OverlayCrew[] => {
+    if (!teamDraws || !savedTeamPlan) return []
+    return teamDraws.map((draw) => {
+      const team = savedTeamPlan.teams.find((item) => item.id === draw.overlay.id)
+      return {
+        id: draw.overlay.id,
+        passes: draw.overlay.passes.map((pass) => ({ number: pass.number, coordinates: pass.coordinates })),
+        airports: [team?.departure, team?.refuelStop, team?.landing],
+      }
+    })
+  }, [teamDraws, savedTeamPlan])
+  const backgroundOverlays = useMemo(
+    () =>
+      crewOverlayGroups({
+        crews: overlayCrews,
+        selectedCrewId: selectedCrew,
+        selectedSortie: shownSortie,
+        showAll: showAllOverlays,
+      }),
+    [overlayCrews, selectedCrew, shownSortie, showAllOverlays]
+  )
   const serpentine = useMemo(() => {
     if (shownPasses.length === 0) return null
     return buildSerpentineDisplay(
@@ -664,8 +688,11 @@ export function MissionMapPage() {
     for (const leg of serpentine?.airportLegs ?? []) {
       for (const coord of leg.coordinates) c.push(coord)
     }
+    if (showAllOverlays) {
+      for (const coord of overlayFitCoordinates(overlayCrews)) c.push(coord)
+    }
     return c
-  }, [routeCoords, towerOverlayData, offsetGeometry, serpentine])
+  }, [routeCoords, towerOverlayData, offsetGeometry, serpentine, showAllOverlays, overlayCrews])
 
   const bounds = useMemo(
     () =>
@@ -941,6 +968,11 @@ export function MissionMapPage() {
                   </button>
                 </p>
               )}
+              <ShowAllSortieOverlaysButton
+                visible={Boolean(teamDraws) && !singleAircrew}
+                pressed={showAllOverlays}
+                onToggle={() => setShowAllOverlays((open) => !open)}
+              />
               <button
                 type="button"
                 className="inline-flex items-center gap-1 px-2 py-2 text-sm text-white rounded-lg border border-white/40 hover:bg-white/15"
@@ -1199,6 +1231,21 @@ export function MissionMapPage() {
               />
             </Source>
           )}
+          {backgroundOverlays.map((group) => (
+            <Source
+              key={`crew-overlay-${group.crewIndex}`}
+              id={`crew-overlay-${group.crewIndex}`}
+              type="geojson"
+              data={lineCollection(group.lines)}
+            >
+              <Layer
+                id={`crew-overlay-${group.crewIndex}-line`}
+                type="line"
+                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                paint={{ 'line-color': group.color, 'line-width': 2 }}
+              />
+            </Source>
+          ))}
           {teamDraws && serpentine && serpentine.flows.length > 0 && !shownCoverage && (
             <Source id="serpentine-flow" type="geojson" data={lineCollection(serpentine.flows)}>
               <Layer
@@ -1452,6 +1499,22 @@ export function MissionMapPage() {
           ))}
 
         </Map>
+        {showAllOverlays && teamDraws && (
+          <div
+            data-testid="crew-overlay-legend"
+            className="absolute left-3 bottom-8 z-10 rounded bg-black/70 px-2 py-1 text-xs text-white space-y-1"
+          >
+            {teamDraws.map((draw, index) => (
+              <div key={draw.overlay.id} className="flex items-center gap-2">
+                <span className="inline-block h-1 w-8" style={{ background: crewOverlayColor(index) }} />
+                <span>
+                  {draw.overlay.label}
+                  {draw.overlay.airport ? ` · ${draw.overlay.airport}` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
