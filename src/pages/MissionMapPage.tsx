@@ -584,7 +584,11 @@ export function MissionMapPage() {
       const team = savedTeamPlan.teams.find((item) => item.id === draw.overlay.id)
       return {
         id: draw.overlay.id,
-        passes: draw.overlay.passes.map((pass) => ({ number: pass.number, coordinates: pass.coordinates })),
+        passes: draw.overlay.passes.map((pass) => ({
+          number: pass.number,
+          offsetNm: pass.offsetNm,
+          coordinates: pass.coordinates,
+        })),
         airports: [team?.departure, team?.refuelStop, team?.landing],
       }
     })

@@ -12,7 +12,7 @@ export function crewOverlayColor(index: number): string {
 
 export type OverlayCrew = {
   id: string
-  passes: Array<{ number: number; coordinates: LonLat[] }>
+  passes: Array<{ number: number; offsetNm?: number; coordinates: LonLat[] }>
   airports: Array<{ identifier: string; latitude: number; longitude: number } | null | undefined>
 }
 
@@ -35,6 +35,7 @@ export function crewOverlayGroups(opts: {
       crewIndex,
       color: crewOverlayColor(crewIndex),
       lines: crew.passes
+        .filter((pass) => pass.offsetNm != null)
         .filter((pass) => !(crew.id === opts.selectedCrewId && pass.number === opts.selectedSortie))
         .map((pass) => pass.coordinates)
         .filter((line) => line.length >= 2),

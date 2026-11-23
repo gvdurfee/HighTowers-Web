@@ -15,7 +15,7 @@ import {
 } from '../src/services/teamOverlayDisplay.ts'
 
 function line(number, lon) {
-  return { number, coordinates: [[lon, 35], [lon, 36]] }
+  return { number, offsetNm: 2.5, coordinates: [[lon, 35], [lon, 36]] }
 }
 
 const crews = [
@@ -78,6 +78,26 @@ describe('Show all Sortie Overlays', () => {
     expect(drawn.filter((line) => line.color === CREW_OVERLAY_LIME)).toHaveLength(2)
     expect(drawn.some((line) => line.coordinates[0][0] === -106)).toBe(false)
     expect(on.map((group) => group.color)).toEqual([CREW_OVERLAY_MAGENTA, CREW_OVERLAY_CYAN, CREW_OVERLAY_LIME])
+  })
+
+  it('omits a KABQ–KTCC return-home ferry and keeps that crew’s survey track', () => {
+    const kabq = {
+      id: 'team1',
+      passes: [
+        { number: 1, offsetNm: 2.5, coordinates: [[-106.2, 34.9], [-105.4, 35.1]] },
+        { number: 2, coordinates: [[-106.6, 35.04], [-103.6, 35.18]] },
+      ],
+      airports: [
+        { identifier: 'KABQ', latitude: 35.04, longitude: -106.6 },
+        { identifier: 'KTCC', latitude: 35.18, longitude: -103.6 },
+      ],
+    }
+    const groups = crewOverlayGroups({ crews: [kabq], selectedCrewId: 'team3', selectedSortie: 1, showAll: true })
+    const lines = groups.flatMap((group) => group.lines)
+    expect(lines).toEqual([[[-106.2, 34.9], [-105.4, 35.1]]])
+    const fit = overlayFitCoordinates([kabq])
+    expect(fit).toContainEqual([-106.6, 35.04])
+    expect(fit).toContainEqual([-103.6, 35.18])
   })
 
   it('includes every overlay and the ferry airports in the fit', () => {
