@@ -11,3 +11,5 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+declare const __HTW_BUILD_ID__: string

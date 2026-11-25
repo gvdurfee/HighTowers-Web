@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { ClearAllDataDialog } from '@/components/ClearAllDataDialog'
+import { VersionUpdateBanner } from '@/components/VersionUpdateBanner'
 import { db } from '@/db/schema'
+import { clearAllMissionData } from '@/services/clearAllMissionData'
 import { confirmLeaveOffsetPlan } from '@/services/offsetPlanLeaveGuard'
 
 type DetailView =
@@ -34,6 +37,8 @@ export function MainLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [clearOpen, setClearOpen] = useState(false)
+  const [clearCounts, setClearCounts] = useState({ missions: 0, teamPlans: 0 })
 
   const nav = (view: DetailView) => {
     const target = routeMap[view]
@@ -63,6 +68,7 @@ export function MainLayout() {
     }`
 
   return (
+    <>
     <div className="flex h-screen min-h-0 bg-cap-ultramarine">
       {/* Sidebar */}
       <aside
@@ -181,17 +187,9 @@ export function MainLayout() {
               <button
                 type="button"
                 onClick={async () => {
-                  if (!window.confirm('Clear all data? This cannot be undone.')) return
-                  await db.transaction('rw', ['towerReports', 'towerLocations', 'cameraData', 'missions', 'waypoints', 'airports', 'flightPlans', 'offsetPlans'], async () => {
-                    await db.towerReports.clear()
-                    await db.towerLocations.clear()
-                    await db.cameraData.clear()
-                    await db.missions.clear()
-                    await db.waypoints.clear()
-                    await db.airports.clear()
-                    await db.flightPlans.clear()
-                    await db.offsetPlans.clear()
-                  })
+                  const [missions, teamPlans] = await Promise.all([db.missions.count(), db.teamPlans.count()])
+                  setClearCounts({ missions, teamPlans })
+                  setClearOpen(true)
                 }}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-cap-pimento hover:bg-white/10 border border-transparent hover:border-cap-pimento/40"
               >
@@ -213,8 +211,24 @@ export function MainLayout() {
       </aside>
       {/* Main content */}
       <main className="flex-1 flex flex-col min-h-0 overflow-auto bg-cap-ultramarine">
+        <VersionUpdateBanner />
         <Outlet />
       </main>
     </div>
+    {clearOpen && (
+      <ClearAllDataDialog
+        missionCount={clearCounts.missions}
+        teamPlanCount={clearCounts.teamPlans}
+        onCancel={() => setClearOpen(false)}
+        onConfirm={() => {
+          void clearAllMissionData().then(() => {
+            setClearOpen(false)
+            navigate('/workflow')
+            window.location.reload()
+          })
+        }}
+      />
+    )}
+    </>
   )
 }
