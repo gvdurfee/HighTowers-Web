@@ -85,7 +85,7 @@ describe('Show all Sortie Overlays', () => {
       id: 'team1',
       passes: [
         { number: 1, offsetNm: 2.5, coordinates: [[-106.2, 34.9], [-105.4, 35.1]] },
-        { number: 2, coordinates: [[-106.6, 35.04], [-103.6, 35.18]] },
+        { number: 2, transitOnly: true, coordinates: [[-106.6, 35.04], [-103.6, 35.18]] },
       ],
       airports: [
         { identifier: 'KABQ', latitude: 35.04, longitude: -106.6 },

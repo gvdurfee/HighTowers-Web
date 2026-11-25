@@ -587,6 +587,7 @@ export function MissionMapPage() {
         passes: draw.overlay.passes.map((pass) => ({
           number: pass.number,
           offsetNm: pass.offsetNm,
+          transitOnly: pass.transitOnly,
           coordinates: pass.coordinates,
         })),
         airports: [team?.departure, team?.refuelStop, team?.landing],

@@ -2,6 +2,7 @@
 
 | Date | Spec | Change | Reason | Approved by |
 |---|---|---|---|---|
+| 2026-11-25 | Team Dispatch Map View | A return-home-only sortie, such as KTCC to KABQ, is marked transit-only and draws as a dashed white leg. A short solo search leg stays a yellow pass. | That hop has no offset lanes. A two-point shape alone is not enough to tell them apart. | Greg, 2026-11-25. |
 | 2026-11-25 | Clear All Data | Clear All Data also removes Team Dispatch plans. It asks you to type CLEAR, and it says that only this computer is erased and that undownloaded reports, packs, and .fpl files are lost. A refresh banner appears when a new GitHub Pages build is available. | A season reset was leaving team plans behind, and a new Pages build stayed hidden until a manual refresh. | Greg, 2026-11-25. |
 | 2026-11-23 | Team Dispatch Map View | With all overlays on, a non-selected ferry-only or return-home leg (for example a KABQ–KTCC hop) is no longer drawn as solid survey track. The selected sortie's dashed legs and the .fpl files are unchanged. | That hop is the trip between airports, not a search track. | Greg, 2026-11-23. |
 | 2026-11-21 | Team Dispatch Map View | Map View has a Show all Sortie Overlays / Clear all Sortie Overlays toggle. On, every crew's sorties draw at once in that crew's color. The selected sortie stays yellow and labeled. Picture only. The Team Dispatch video beat for it comes later. | A dispatcher needs to see missing coverage and overlapping tracks before cautioning aircrews. | Greg, 2026-11-21. |

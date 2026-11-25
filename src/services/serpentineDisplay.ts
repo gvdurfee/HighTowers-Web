@@ -195,6 +195,7 @@ type DisplayPass = {
   laneGroup?: number
   offsetNm?: number
   surveySide?: 'left' | 'right'
+  transitOnly?: boolean
 }
 
 function comparePasses(a: DisplayPass, b: DisplayPass): number {
@@ -573,6 +574,41 @@ function legArrowFor(
   }
 }
 
+function emptySerpentine(): SerpentineDisplay {
+  return {
+    groundspeedKnots: SERPENTINE_FLYBY.groundspeedKnots,
+    standardRadiusNm: standardRateRadiusNm(),
+    flow: [],
+    flows: [],
+    shades: [],
+    turns: [],
+    crossoverLegs: [],
+    arrows: [],
+    legArrows: [],
+    skippedLegArrows: [],
+    labels: [],
+    laneCaptions: [],
+    airportLegs: [],
+    airportNotes: [],
+  }
+}
+
+function isTransitPass(pass: DisplayPass): boolean {
+  return pass.transitOnly === true
+}
+
+function transitPassLeg(pass: DisplayPass): TransitLeg | null {
+  const from = pass.waypoints[0]
+  const to = pass.waypoints[pass.waypoints.length - 1]
+  if (!from || !to) return null
+  return transitLeg(
+    'departure',
+    { identifier: from.name, latitude: from.lat, longitude: from.lon },
+    to,
+    true
+  )
+}
+
 export function buildSerpentineDisplay(
   passes: DisplayPass[],
   corridor?: {
@@ -581,6 +617,13 @@ export function buildSerpentineDisplay(
   },
   airports?: { departure?: TransitAirport | null; landing?: TransitAirport | null }
 ): SerpentineDisplay {
+  const transit = passes.filter(isTransitPass)
+  if (transit.length > 0) {
+    const survey = passes.filter((pass) => !isTransitPass(pass))
+    const built = survey.length > 0 ? buildSerpentineDisplay(survey, corridor, airports) : emptySerpentine()
+    const legs = transit.map(transitPassLeg).filter((leg): leg is TransitLeg => leg != null)
+    return { ...built, airportLegs: [...built.airportLegs, ...legs] }
+  }
   const groups = splitLaneGroups(passes)
   if (groups.length > 1) {
     const parts = groups.map((group) => buildSerpentineDisplay(group, corridor))

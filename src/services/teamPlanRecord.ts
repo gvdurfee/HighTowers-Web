@@ -905,6 +905,7 @@ function drawPackedTeam(opts: {
             { lat: departure.latitude, lon: departure.longitude, name: departure.identifier },
             { lat: landing.latitude, lon: landing.longitude, name: landing.identifier },
           ],
+          transitOnly: true,
         })
       }
       sorties.push(summary)

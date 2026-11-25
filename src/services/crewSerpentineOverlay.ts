@@ -20,6 +20,8 @@ export type SerpentinePass = {
   laneGroup?: number
   offsetNm?: number
   surveySide?: 'left' | 'right'
+  /** Airport-to-airport hop with no search lanes. Drawn dashed, not as a yellow pass. */
+  transitOnly?: boolean
 }
 
 /**
