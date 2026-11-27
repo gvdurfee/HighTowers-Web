@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { ClearAllDataDialog } from '@/components/ClearAllDataDialog'
-import { VersionUpdateBanner } from '@/components/VersionUpdateBanner'
 import { db } from '@/db/schema'
 import { clearAllMissionData } from '@/services/clearAllMissionData'
 import { confirmLeaveOffsetPlan } from '@/services/offsetPlanLeaveGuard'
@@ -211,7 +210,6 @@ export function MainLayout() {
       </aside>
       {/* Main content */}
       <main className="flex-1 flex flex-col min-h-0 overflow-auto bg-cap-ultramarine">
-        <VersionUpdateBanner />
         <Outlet />
       </main>
     </div>

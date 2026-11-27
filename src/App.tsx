@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { VersionUpdateBanner } from '@/components/VersionUpdateBanner'
 import { MainLayout } from '@/layouts/MainLayout'
 import { WorkflowGuidePage } from '@/pages/WorkflowGuidePage'
 import { FlightPlanListPage } from '@/pages/FlightPlanListPage'
@@ -19,6 +20,7 @@ function App() {
   return (
     <BrowserRouter basename={basename}>
       <div className="h-full">
+      <VersionUpdateBanner />
       <Routes>
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Navigate to="/workflow" replace />} />

@@ -33,14 +33,19 @@ export function VersionUpdateBanner() {
 
   if (!bannerRecommended(BUNDLED_ID, publishedId) || dismissedId === publishedId) return null
   return (
-    <div className="shrink-0 px-4 py-2 text-sm text-gray-900 bg-cap-yellow flex flex-wrap items-center gap-3" role="status">
-      <span>A new version of HighTowers-Web is available. Refresh to update.</span>
-      <button type="button" className="underline font-medium" onClick={() => window.location.reload()}>
-        Refresh
-      </button>
-      <button type="button" className="underline" onClick={() => setDismissedId(publishedId)}>
-        Dismiss
-      </button>
+    <div className="pointer-events-none fixed top-4 left-1/2 z-[70] w-[min(100%-2rem,40rem)] -translate-x-1/2">
+      <div
+        className="pointer-events-auto px-4 py-3 text-sm text-gray-900 bg-cap-yellow rounded-lg shadow-xl flex flex-wrap items-center gap-3"
+        role="status"
+      >
+        <span>A new version of HighTowers-Web is available. Refresh to update.</span>
+        <button type="button" className="underline font-medium" onClick={() => window.location.reload()}>
+          Refresh
+        </button>
+        <button type="button" className="underline" onClick={() => setDismissedId(publishedId)}>
+          Dismiss
+        </button>
+      </div>
     </div>
   )
 }
